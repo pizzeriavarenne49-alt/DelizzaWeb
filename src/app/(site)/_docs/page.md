@@ -11,15 +11,34 @@ Page principale app-like affichant le menu en mode découverte, les promos et le
 5. **Section Suggestions** — grille 2 colonnes de ProductCards (photo 4:3, nom clamp-1, description clamp-2, prix, bouton "+")
 6. **CTA Section** — redirection vers le menu complet via `/go`
 
-## Data & types
-- `heroSlides` → `HeroSlide[]` (filtré `active: true`, trié par `order`)
-- `categories` → `Category[]`
-- `products` → `Product[]` (filtré `active: true`, "Populaire" = `isPopular: true`)
+## Data Source — Directus CMS
+Données lues via `src/data/repository.ts` avec fallback mock automatique.
+
+| Donnée | Méthode repository | Collection Directus | Filtres |
+|---|---|---|---|
+| Hero slides | `repo.getHomeHeroSlides()` | `home_hero_slides` | `active=true`, tri `order ASC` |
+| Catégories | `repo.getCategories()` | `categories` | `active=true`, tri `order ASC` |
+| Produits | `repo.getProducts()` | `products` | `active=true` |
+
+### Mapping Directus → UI
+| Champ Directus | Affichage UI |
+|---|---|
+| `home_hero_slides.title` | Titre du slide |
+| `home_hero_slides.subtitle` | Sous-titre gold |
+| `home_hero_slides.badge` | Badge gold (top-left) |
+| `home_hero_slides.price_cents` | Pastille prix (divisé par 100) |
+| `home_hero_slides.cta_label` | Texte bouton CTA |
+| `home_hero_slides.cta_target` | Lien CTA |
+| `products.name` | Nom produit |
+| `products.description_short` | Description sous le nom |
+| `products.price_cents` | Prix (divisé par 100, format `XX.XX €`) |
+| `products.is_popular` | Filtre "Populaire" |
+| `categories.name` | Label du chip |
 
 ## Redirections / events
 | Action | URL | Event analytics |
 |---|---|---|
-| CTA "Commander" (carousel) | `/go?trigger=hero_cta_<slideId>` | `click_hero_cta` |
+| CTA "Commander" (carousel) | `slide.cta_target` | `click_hero_cta` |
 | Bouton "+" (product card) | `/go?trigger=add_<productId>` | `click_add_product` |
 | "Voir le menu complet" | `/go?trigger=see_menu` | — |
 | "Voir tout" (section header) | `/menu` | — |
@@ -27,7 +46,7 @@ Page principale app-like affichant le menu en mode découverte, les promos et le
 
 ## TODO Placeholders
 - [ ] Remplacer "Bonjour Alex" par nom réel utilisateur (auth)
-- [ ] Connecter données produits au CMS (Directus/Strapi)
+- [x] Connecter données produits au CMS (Directus)
 - [ ] Implémenter deep links réels dans `/go`
 - [ ] Ajouter images réelles pour les slides et produits
 - [ ] Implémenter skeleton loading pendant chargement CMS
@@ -38,8 +57,11 @@ Page principale app-like affichant le menu en mode découverte, les promos et le
 3. Vérifier que le carousel auto-play change de slide toutes les 5s
 4. Vérifier que les dots de pagination reflètent le slide actif
 5. Tester la recherche : taper "truffe" doit filtrer les résultats
-6. Vérifier le filtre "Populaire" : uniquement les produits avec `isPopular: true`
+6. Vérifier le filtre "Populaire" : uniquement les produits avec `is_popular: true`
 7. Vérifier que le bouton "+" redirige vers `/go?trigger=add_<id>`
 8. Vérifier les focus-visible outlines sur tous les éléments interactifs
 9. Vérifier les événements analytics dans la console (view_home, click_hero_cta, etc.)
 10. Vérifier que le bandeau install N'apparaît PAS immédiatement (12s ou 50% scroll)
+11. **CMS** : Désactiver un produit dans Directus → disparaît de la home sans redéploiement
+12. **CMS** : Modifier l'ordre d'un hero slide → reflété sur la home
+13. **CMS** : Si Directus down → fallback mock, pas de crash

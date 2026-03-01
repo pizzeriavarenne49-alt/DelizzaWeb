@@ -1,0 +1,309 @@
+{
+  "version": 1,
+  "directus": "10.x",
+  "collections": [
+    {
+      "collection": "categories",
+      "meta": {
+        "collection": "categories",
+        "icon": "category",
+        "note": "Menu categories (Pizzas, Entrées, Desserts…)",
+        "sort_field": "order"
+      },
+      "schema": {
+        "name": "categories"
+      }
+    },
+    {
+      "collection": "products",
+      "meta": {
+        "collection": "products",
+        "icon": "restaurant_menu",
+        "note": "All menu items (pizzas, salads, desserts…)"
+      },
+      "schema": {
+        "name": "products"
+      }
+    },
+    {
+      "collection": "offers",
+      "meta": {
+        "collection": "offers",
+        "icon": "local_offer",
+        "note": "Promotional offers with optional date windows"
+      },
+      "schema": {
+        "name": "offers"
+      }
+    },
+    {
+      "collection": "home_hero_slides",
+      "meta": {
+        "collection": "home_hero_slides",
+        "icon": "view_carousel",
+        "note": "Home page hero carousel slides",
+        "sort_field": "order"
+      },
+      "schema": {
+        "name": "home_hero_slides"
+      }
+    }
+  ],
+  "fields": [
+    {
+      "collection": "categories",
+      "field": "id",
+      "type": "uuid",
+      "meta": { "special": ["uuid"], "interface": "input", "readonly": true, "hidden": true },
+      "schema": { "is_primary_key": true, "has_auto_increment": false }
+    },
+    {
+      "collection": "categories",
+      "field": "name",
+      "type": "string",
+      "meta": { "interface": "input", "required": true, "note": "Category display name" },
+      "schema": { "is_nullable": false }
+    },
+    {
+      "collection": "categories",
+      "field": "slug",
+      "type": "string",
+      "meta": { "interface": "input", "required": true, "note": "URL-friendly identifier (unique)" },
+      "schema": { "is_nullable": false, "is_unique": true }
+    },
+    {
+      "collection": "categories",
+      "field": "order",
+      "type": "integer",
+      "meta": { "interface": "input", "required": true, "note": "Display order (ASC)" },
+      "schema": { "is_nullable": false, "default_value": 0 }
+    },
+    {
+      "collection": "categories",
+      "field": "active",
+      "type": "boolean",
+      "meta": { "interface": "boolean", "required": true, "note": "Show in menu?" },
+      "schema": { "is_nullable": false, "default_value": true }
+    },
+
+    {
+      "collection": "products",
+      "field": "id",
+      "type": "uuid",
+      "meta": { "special": ["uuid"], "interface": "input", "readonly": true, "hidden": true },
+      "schema": { "is_primary_key": true, "has_auto_increment": false }
+    },
+    {
+      "collection": "products",
+      "field": "name",
+      "type": "string",
+      "meta": { "interface": "input", "required": true },
+      "schema": { "is_nullable": false }
+    },
+    {
+      "collection": "products",
+      "field": "slug",
+      "type": "string",
+      "meta": { "interface": "input", "required": true, "note": "URL slug (unique)" },
+      "schema": { "is_nullable": false, "is_unique": true }
+    },
+    {
+      "collection": "products",
+      "field": "description_short",
+      "type": "string",
+      "meta": { "interface": "input", "note": "Short description (1-2 lines)" },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "products",
+      "field": "ingredients",
+      "type": "json",
+      "meta": { "interface": "tags", "note": "List of ingredients (JSON array of strings)", "special": ["cast-json"] },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "products",
+      "field": "price_cents",
+      "type": "integer",
+      "meta": { "interface": "input", "required": true, "note": "Price in CENTS (e.g. 1190 = 11.90 €)" },
+      "schema": { "is_nullable": false }
+    },
+    {
+      "collection": "products",
+      "field": "active",
+      "type": "boolean",
+      "meta": { "interface": "boolean", "required": true, "note": "Visible on the menu?" },
+      "schema": { "is_nullable": false, "default_value": true }
+    },
+    {
+      "collection": "products",
+      "field": "is_popular",
+      "type": "boolean",
+      "meta": { "interface": "boolean", "note": "Show in 'Popular' section?" },
+      "schema": { "is_nullable": false, "default_value": false }
+    },
+    {
+      "collection": "products",
+      "field": "tags",
+      "type": "json",
+      "meta": { "interface": "tags", "note": "Optional tags (JSON array of strings)", "special": ["cast-json"] },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "products",
+      "field": "category",
+      "type": "uuid",
+      "meta": { "interface": "select-dropdown-m2o", "special": ["m2o"], "note": "Parent category" },
+      "schema": { "is_nullable": true, "foreign_key_table": "categories", "foreign_key_column": "id" }
+    },
+    {
+      "collection": "products",
+      "field": "image",
+      "type": "uuid",
+      "meta": { "interface": "file-image", "special": ["file"], "note": "Product photo" },
+      "schema": { "is_nullable": true }
+    },
+
+    {
+      "collection": "offers",
+      "field": "id",
+      "type": "uuid",
+      "meta": { "special": ["uuid"], "interface": "input", "readonly": true, "hidden": true },
+      "schema": { "is_primary_key": true, "has_auto_increment": false }
+    },
+    {
+      "collection": "offers",
+      "field": "title",
+      "type": "string",
+      "meta": { "interface": "input", "required": true },
+      "schema": { "is_nullable": false }
+    },
+    {
+      "collection": "offers",
+      "field": "content",
+      "type": "text",
+      "meta": { "interface": "input-multiline", "note": "Rich description of the offer" },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "offers",
+      "field": "start_at",
+      "type": "timestamp",
+      "meta": { "interface": "datetime", "note": "Start date (optional, null = always active)" },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "offers",
+      "field": "end_at",
+      "type": "timestamp",
+      "meta": { "interface": "datetime", "note": "End date (optional, null = no expiry)" },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "offers",
+      "field": "active",
+      "type": "boolean",
+      "meta": { "interface": "boolean", "required": true },
+      "schema": { "is_nullable": false, "default_value": true }
+    },
+    {
+      "collection": "offers",
+      "field": "image",
+      "type": "uuid",
+      "meta": { "interface": "file-image", "special": ["file"], "note": "Banner image" },
+      "schema": { "is_nullable": true }
+    },
+
+    {
+      "collection": "home_hero_slides",
+      "field": "id",
+      "type": "uuid",
+      "meta": { "special": ["uuid"], "interface": "input", "readonly": true, "hidden": true },
+      "schema": { "is_primary_key": true, "has_auto_increment": false }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "title",
+      "type": "string",
+      "meta": { "interface": "input", "required": true },
+      "schema": { "is_nullable": false }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "subtitle",
+      "type": "string",
+      "meta": { "interface": "input", "note": "Subtitle line (optional)" },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "badge",
+      "type": "string",
+      "meta": { "interface": "input", "note": "Badge text, e.g. 'Spéciale de la semaine'" },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "cta_label",
+      "type": "string",
+      "meta": { "interface": "input", "note": "CTA button text, e.g. 'Commander'" },
+      "schema": { "is_nullable": true, "default_value": "Commander" }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "cta_target",
+      "type": "string",
+      "meta": { "interface": "input", "note": "CTA link target, e.g. '/go?trigger=hero_cta'" },
+      "schema": { "is_nullable": true, "default_value": "/go?trigger=hero_cta" }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "price_cents",
+      "type": "integer",
+      "meta": { "interface": "input", "note": "Price in cents (optional, shown as pill)" },
+      "schema": { "is_nullable": true }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "active",
+      "type": "boolean",
+      "meta": { "interface": "boolean", "required": true },
+      "schema": { "is_nullable": false, "default_value": true }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "order",
+      "type": "integer",
+      "meta": { "interface": "input", "required": true, "note": "Display order (ASC)" },
+      "schema": { "is_nullable": false, "default_value": 0 }
+    },
+    {
+      "collection": "home_hero_slides",
+      "field": "image",
+      "type": "uuid",
+      "meta": { "interface": "file-image", "special": ["file"], "required": true, "note": "Hero background image" },
+      "schema": { "is_nullable": true }
+    }
+  ],
+  "relations": [
+    {
+      "collection": "products",
+      "field": "category",
+      "related_collection": "categories",
+      "meta": {
+        "many_collection": "products",
+        "many_field": "category",
+        "one_collection": "categories",
+        "one_field": null,
+        "one_deselect_action": "nullify"
+      },
+      "schema": {
+        "table": "products",
+        "column": "category",
+        "foreign_key_table": "categories",
+        "foreign_key_column": "id",
+        "on_delete": "SET NULL"
+      }
+    }
+  ]
+}

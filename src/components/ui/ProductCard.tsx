@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import type { Product } from "@/types";
+import { formatPrice } from "@/types";
 import { buildGoUrl } from "@/lib/redirect";
 import { track } from "@/analytics";
 import Link from "next/link";
@@ -46,13 +47,13 @@ export default function ProductCard({ product }: ProductCardProps) {
             {product.name}
           </h3>
           <p className="mt-0.5 text-[12px] text-[#A0A0A0] line-clamp-2 leading-snug">
-            {product.description}
+            {product.description_short}
           </p>
         </div>
 
         <div className="flex items-center justify-between pt-1">
           <span className="text-[15px] font-bold text-[#D4A053]">
-            {product.price.toFixed(2)}&nbsp;€
+            {formatPrice(product.price_cents)}&nbsp;€
           </span>
           <Link
             href={buildGoUrl("add_" + product.id)}

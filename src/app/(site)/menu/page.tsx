@@ -5,29 +5,43 @@ import SearchBar from "@/components/ui/SearchBar";
 import Chip from "@/components/ui/Chip";
 import ProductCard from "@/components/ui/ProductCard";
 import SectionHeader from "@/components/ui/SectionHeader";
-import { categories, products } from "@/data/mock";
+import type { Product, Category } from "@/types";
+import { repo, withFallback, mockRepo, POPULAR_CATEGORY } from "@/data/repository";
 import { track } from "@/analytics";
-
-const activeProducts = products.filter((p) => p.active);
 
 export default function MenuPage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("popular");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     track({ name: "view_menu" });
+    async function load() {
+      try {
+        const [cats, prods] = await Promise.all([
+          withFallback(() => repo.getCategories(), () => mockRepo.getCategories()),
+          withFallback(() => repo.getProducts(), () => mockRepo.getProducts()),
+        ]);
+        setCategories([POPULAR_CATEGORY, ...cats]);
+        setProducts(prods);
+      } catch (err) {
+        console.error("[Menu] Failed to load data:", err);
+      }
+    }
+    load();
   }, []);
 
   const byCategory =
     activeCategory === "popular"
-      ? activeProducts
-      : activeProducts.filter((p) => p.categoryId === activeCategory);
+      ? products
+      : products.filter((p) => p.category === activeCategory);
 
   const results = search
     ? byCategory.filter(
         (p) =>
           p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.description.toLowerCase().includes(search.toLowerCase()),
+          p.description_short.toLowerCase().includes(search.toLowerCase()),
       )
     : byCategory;
 
@@ -50,7 +64,7 @@ export default function MenuPage() {
         {categories.map((cat) => (
           <Chip
             key={cat.id}
-            label={cat.label}
+            label={cat.name}
             icon={cat.icon}
             active={activeCategory === cat.id}
             onClick={() => setActiveCategory(cat.id)}
@@ -62,7 +76,7 @@ export default function MenuPage() {
         title={
           activeCategory === "popular"
             ? "Tous les plats"
-            : categories.find((c) => c.id === activeCategory)?.label ?? ""
+            : categories.find((c) => c.id === activeCategory)?.name ?? ""
         }
       />
 
