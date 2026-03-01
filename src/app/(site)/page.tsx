@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Carousel from "@/components/ui/Carousel";
 import SearchBar from "@/components/ui/SearchBar";
 import Chip from "@/components/ui/Chip";
@@ -13,6 +14,7 @@ import { buildGoUrl } from "@/lib/redirect";
 export default function HomePage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("popular");
+  const router = useRouter();
 
   const filtered =
     activeCategory === "popular"
@@ -68,7 +70,7 @@ export default function HomePage() {
         <SectionHeader
           title="Suggestions"
           action="Voir tout"
-          onAction={() => {}}
+          onAction={() => router.push("/menu")}
         />
         <div className="grid grid-cols-2 gap-3">
           {searched.map((product) => (
