@@ -8,6 +8,9 @@ export interface Product {
   image: string;
   categoryId: string;
   badge?: string;
+  active: boolean;
+  isPopular: boolean;
+  tags: string[];
 }
 
 export interface Category {
@@ -24,6 +27,8 @@ export interface HeroSlide {
   badge: string;
   price: number;
   ctaLabel: string;
+  active: boolean;
+  order: number;
 }
 
 export interface Offer {
@@ -34,4 +39,9 @@ export interface Offer {
   code: string;
   discount: string;
   validUntil: string;
+  startAt: string;
+  endAt: string;
 }
+
+/** Detected platform for smart redirects */
+export type Platform = "ios" | "android" | "desktop";

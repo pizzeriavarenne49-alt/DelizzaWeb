@@ -9,6 +9,8 @@ export const offers: Offer[] = [
     code: "DUO20",
     discount: "-20%",
     validUntil: "2026-04-30",
+    startAt: "2026-03-01",
+    endAt: "2026-04-30",
   },
   {
     id: "o2",
@@ -18,6 +20,8 @@ export const offers: Offer[] = [
     code: "FREELIV",
     discount: "Gratuit",
     validUntil: "2026-03-31",
+    startAt: "2026-02-15",
+    endAt: "2026-03-31",
   },
   {
     id: "o3",
@@ -27,6 +31,8 @@ export const offers: Offer[] = [
     code: "HAPPY30",
     discount: "-30%",
     validUntil: "2026-05-15",
+    startAt: "2026-03-01",
+    endAt: "2026-05-15",
   },
   {
     id: "o4",
@@ -36,5 +42,7 @@ export const offers: Offer[] = [
     code: "SWEET",
     discount: "Offert",
     validUntil: "2026-03-15",
+    startAt: "2026-02-01",
+    endAt: "2026-03-15",
   },
 ];

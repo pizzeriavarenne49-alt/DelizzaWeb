@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import type { Product } from "@/types";
 import { buildGoUrl } from "@/lib/redirect";
+import { track } from "@/analytics";
 import Link from "next/link";
 
 interface ProductCardProps {
@@ -12,6 +13,10 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const handleAdd = () => {
+    track({ name: "click_add_product", payload: { productId: product.id } });
+  };
+
   return (
     <motion.div
       whileTap={{ scale: 0.97 }}
@@ -25,6 +30,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           fill
           sizes="(max-width: 768px) 50vw, 200px"
           className="object-cover"
+          loading="lazy"
         />
         {product.badge && (
           <span className="absolute top-2 left-2 rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] px-2.5 py-0.5 text-[11px] font-semibold text-[#0D0D0D]">
@@ -36,7 +42,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       {/* Info */}
       <div className="flex flex-1 flex-col justify-between p-3 gap-2">
         <div>
-          <h3 className="text-[15px] font-semibold text-[#F5F5F5] leading-tight">
+          <h3 className="text-[15px] font-semibold text-[#F5F5F5] leading-tight line-clamp-1">
             {product.name}
           </h3>
           <p className="mt-0.5 text-[12px] text-[#A0A0A0] line-clamp-2 leading-snug">
@@ -50,11 +56,14 @@ export default function ProductCard({ product }: ProductCardProps) {
           </span>
           <Link
             href={buildGoUrl("add_" + product.id)}
+            onClick={handleAdd}
+            aria-label={`Ajouter ${product.name}`}
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-full",
               "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
               "text-[18px] font-bold leading-none shadow-[0_4px_20px_rgba(212,160,83,0.3)]",
               "active:scale-90 transition-transform",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
             )}
           >
             +

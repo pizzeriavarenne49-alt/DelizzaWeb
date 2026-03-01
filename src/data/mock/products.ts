@@ -9,6 +9,9 @@ export const products: Product[] = [
     image: "/images/pizza-margherita.svg",
     categoryId: "pizzas",
     badge: "Best-seller",
+    active: true,
+    isPopular: true,
+    tags: ["classique", "végétarienne"],
   },
   {
     id: "p2",
@@ -17,6 +20,9 @@ export const products: Product[] = [
     price: 14.5,
     image: "/images/pizza-pepperoni.svg",
     categoryId: "pizzas",
+    active: true,
+    isPopular: true,
+    tags: ["épicée", "viande"],
   },
   {
     id: "p3",
@@ -26,6 +32,9 @@ export const products: Product[] = [
     image: "/images/pizza-truffle.svg",
     categoryId: "pizzas",
     badge: "Premium",
+    active: true,
+    isPopular: true,
+    tags: ["premium", "truffe"],
   },
   {
     id: "p4",
@@ -34,6 +43,9 @@ export const products: Product[] = [
     price: 15.5,
     image: "/images/pizza-4cheese.svg",
     categoryId: "pizzas",
+    active: true,
+    isPopular: false,
+    tags: ["fromage", "végétarienne"],
   },
   {
     id: "p5",
@@ -42,6 +54,9 @@ export const products: Product[] = [
     price: 8.9,
     image: "/images/bruschetta.svg",
     categoryId: "entrees",
+    active: true,
+    isPopular: false,
+    tags: ["entrée", "végétarienne"],
   },
   {
     id: "p6",
@@ -50,6 +65,9 @@ export const products: Product[] = [
     price: 10.5,
     image: "/images/salade-cesar.svg",
     categoryId: "entrees",
+    active: true,
+    isPopular: true,
+    tags: ["salade", "poulet"],
   },
   {
     id: "p7",
@@ -58,6 +76,9 @@ export const products: Product[] = [
     price: 7.9,
     image: "/images/tiramisu.svg",
     categoryId: "desserts",
+    active: true,
+    isPopular: true,
+    tags: ["dessert", "café"],
   },
   {
     id: "p8",
@@ -66,5 +87,8 @@ export const products: Product[] = [
     price: 6.9,
     image: "/images/pannacotta.svg",
     categoryId: "desserts",
+    active: true,
+    isPopular: false,
+    tags: ["dessert", "vanille"],
   },
 ];

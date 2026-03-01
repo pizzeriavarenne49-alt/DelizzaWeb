@@ -9,6 +9,8 @@ export const heroSlides: HeroSlide[] = [
     badge: "Nouveauté",
     price: 18.9,
     ctaLabel: "Commander",
+    active: true,
+    order: 1,
   },
   {
     id: "slide2",
@@ -18,6 +20,8 @@ export const heroSlides: HeroSlide[] = [
     badge: "Populaire",
     price: 14.5,
     ctaLabel: "Commander",
+    active: true,
+    order: 2,
   },
   {
     id: "slide3",
@@ -27,5 +31,7 @@ export const heroSlides: HeroSlide[] = [
     badge: "Offre",
     price: 29.9,
     ctaLabel: "En profiter",
+    active: true,
+    order: 3,
   },
 ];

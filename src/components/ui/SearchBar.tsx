@@ -14,14 +14,15 @@ export default function SearchBar({
   placeholder = "Rechercher…",
 }: SearchBarProps) {
   return (
-    <div className="relative">
+    <div className="relative" role="search">
       {/* Search icon */}
       <svg
-        className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B6B6B]"
+        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B6B6B]"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={2}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"
@@ -30,14 +31,16 @@ export default function SearchBar({
         />
       </svg>
       <input
-        type="text"
+        type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         className={cn(
           "w-full rounded-[18px] bg-[#252525]/80 backdrop-blur-sm pl-11 pr-4 py-3",
           "text-[15px] text-[#F5F5F5] placeholder:text-[#6B6B6B]",
-          "border border-white/5 focus:border-[#D4A053]/40 focus:outline-none transition-colors",
+          "border border-white/5 transition-all duration-200",
+          "focus:border-[#D4A053]/50 focus:shadow-[0_0_0_3px_rgba(212,160,83,0.15)] focus:outline-none",
         )}
       />
     </div>

@@ -1,20 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import SearchBar from "@/components/ui/SearchBar";
 import Chip from "@/components/ui/Chip";
 import ProductCard from "@/components/ui/ProductCard";
 import SectionHeader from "@/components/ui/SectionHeader";
 import { categories, products } from "@/data/mock";
+import { track } from "@/analytics";
+
+const activeProducts = products.filter((p) => p.active);
 
 export default function MenuPage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("popular");
 
+  useEffect(() => {
+    track({ name: "view_menu" });
+  }, []);
+
   const byCategory =
     activeCategory === "popular"
-      ? products
-      : products.filter((p) => p.categoryId === activeCategory);
+      ? activeProducts
+      : activeProducts.filter((p) => p.categoryId === activeCategory);
 
   const results = search
     ? byCategory.filter(
@@ -35,7 +42,11 @@ export default function MenuPage() {
       />
 
       {/* Category chips */}
-      <div className="no-scrollbar flex gap-2 overflow-x-auto -mx-4 px-4">
+      <div
+        className="no-scrollbar flex gap-2 overflow-x-auto -mx-4 px-4"
+        role="tablist"
+        aria-label="Catégories"
+      >
         {categories.map((cat) => (
           <Chip
             key={cat.id}
