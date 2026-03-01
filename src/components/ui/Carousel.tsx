@@ -80,7 +80,7 @@ export default function Carousel({ slides }: CarouselProps) {
               src={slide.image}
               alt={slide.title}
               fill
-              sizes="(max-width: 768px) 100vw, 600px"
+              sizes="(max-width: 768px) 100vw, 800px"
               className="object-cover"
               priority={current === 0}
             />

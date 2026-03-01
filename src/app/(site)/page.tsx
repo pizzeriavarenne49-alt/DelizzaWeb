@@ -104,7 +104,7 @@ export default function HomePage() {
           action="Voir tout"
           onAction={() => router.push("/menu")}
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {searched.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
