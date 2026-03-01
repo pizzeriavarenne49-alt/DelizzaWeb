@@ -4,8 +4,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import type { HeroSlide } from "@/types";
+import { formatPrice } from "@/types";
 import { cn } from "@/lib/cn";
-import { buildGoUrl } from "@/lib/redirect";
 import { track } from "@/analytics";
 import Link from "next/link";
 
@@ -90,14 +90,18 @@ export default function Carousel({ slides }: CarouselProps) {
         </AnimatePresence>
 
         {/* Badge */}
-        <span className="absolute top-3 left-3 z-10 rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] px-3 py-1 text-[11px] font-bold text-[#0D0D0D] shadow-[0_2px_8px_rgba(212,160,83,0.4)]">
-          {slide.badge}
-        </span>
+        {slide.badge && (
+          <span className="absolute top-3 left-3 z-10 rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] px-3 py-1 text-[11px] font-bold text-[#0D0D0D] shadow-[0_2px_8px_rgba(212,160,83,0.4)]">
+            {slide.badge}
+          </span>
+        )}
 
         {/* Price pill */}
-        <span className="absolute top-3 right-3 z-10 rounded-full bg-[#0D0D0D]/70 backdrop-blur-sm border border-[#D4A053]/20 px-3 py-1 text-[13px] font-bold text-[#D4A053]">
-          {slide.price.toFixed(2)}&nbsp;€
-        </span>
+        {slide.price_cents != null && (
+          <span className="absolute top-3 right-3 z-10 rounded-full bg-[#0D0D0D]/70 backdrop-blur-sm border border-[#D4A053]/20 px-3 py-1 text-[13px] font-bold text-[#D4A053]">
+            {formatPrice(slide.price_cents)}&nbsp;€
+          </span>
+        )}
       </div>
 
       {/* Bottom content */}
@@ -111,7 +115,7 @@ export default function Carousel({ slides }: CarouselProps) {
 
         <div className="mt-3 flex items-center justify-between">
           <Link
-            href={buildGoUrl("hero_cta_" + slide.id)}
+            href={slide.cta_target}
             onClick={handleCtaClick}
             className={cn(
               "inline-flex items-center justify-center rounded-[18px] px-6 py-2.5",
@@ -120,7 +124,7 @@ export default function Carousel({ slides }: CarouselProps) {
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
             )}
           >
-            {slide.ctaLabel}
+            {slide.cta_label}
           </Link>
 
           {/* Dots */}

@@ -7,32 +7,45 @@ import SearchBar from "@/components/ui/SearchBar";
 import Chip from "@/components/ui/Chip";
 import SectionHeader from "@/components/ui/SectionHeader";
 import ProductCard from "@/components/ui/ProductCard";
-import { heroSlides, categories, products } from "@/data/mock";
+import type { Product, Category, HeroSlide } from "@/types";
+import { repo, withFallback, mockRepo } from "@/data/repository";
 import Link from "next/link";
 import { buildGoUrl } from "@/lib/redirect";
 import { track } from "@/analytics";
 
-const activeProducts = products.filter((p) => p.active);
-
 export default function HomePage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("popular");
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     track({ name: "view_home" });
+    async function load() {
+      const [slides, cats, prods] = await Promise.all([
+        withFallback(() => repo.getHomeHeroSlides(), () => mockRepo.getHomeHeroSlides()),
+        withFallback(() => repo.getCategories(), () => mockRepo.getCategories()),
+        withFallback(() => repo.getProducts(), () => mockRepo.getProducts()),
+      ]);
+      setHeroSlides(slides);
+      setCategories([{ id: "popular", name: "Populaire", slug: "populaire", order: -1, active: true, icon: "🔥" }, ...cats]);
+      setProducts(prods);
+    }
+    load();
   }, []);
 
   const filtered =
     activeCategory === "popular"
-      ? activeProducts.filter((p) => p.isPopular)
-      : activeProducts.filter((p) => p.categoryId === activeCategory);
+      ? products.filter((p) => p.is_popular)
+      : products.filter((p) => p.category === activeCategory);
 
   const searched = search
     ? filtered.filter(
         (p) =>
           p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.description.toLowerCase().includes(search.toLowerCase()),
+          p.description_short.toLowerCase().includes(search.toLowerCase()),
       )
     : filtered;
 
@@ -72,7 +85,7 @@ export default function HomePage() {
         {categories.map((cat) => (
           <Chip
             key={cat.id}
-            label={cat.label}
+            label={cat.name}
             icon={cat.icon}
             active={activeCategory === cat.id}
             onClick={() => setActiveCategory(cat.id)}
