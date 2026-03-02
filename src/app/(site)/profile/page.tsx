@@ -27,7 +27,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Options */}
-      <div className="flex flex-col gap-2" role="menu" aria-label="Options du profil">
+      <nav className="flex flex-col gap-2" aria-label="Options du profil">
         {[
           { label: "Mes commandes", icon: "📦" },
           { label: "Adresses", icon: "📍" },
@@ -60,7 +60,7 @@ export default function ProfilePage() {
             </svg>
           </button>
         ))}
-      </div>
+      </nav>
 
       {/* Download CTA */}
       <Link

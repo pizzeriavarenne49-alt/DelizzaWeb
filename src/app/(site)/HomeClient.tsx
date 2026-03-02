@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Carousel from "@/components/ui/Carousel";
 import SearchBar from "@/components/ui/SearchBar";
@@ -20,6 +21,7 @@ interface HomeClientProps {
 export default function HomeClient({ heroSlides, categories, products }: HomeClientProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("popular");
+  const router = useRouter();
 
   useEffect(() => {
     track({ name: "view_home" });
@@ -87,9 +89,7 @@ export default function HomeClient({ heroSlides, categories, products }: HomeCli
         <SectionHeader
           title="Suggestions"
           action="Voir tout"
-          onAction={() => {
-            window.location.href = "/menu";
-          }}
+          onAction={() => router.push("/menu")}
         />
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {searched.map((product) => (
