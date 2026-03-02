@@ -24,6 +24,7 @@ export default function Carousel({ slides }: CarouselProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetTimer = useCallback(() => {
+    if (activeSlides.length === 0) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       setCurrent((p) => (p + 1) % activeSlides.length);
@@ -31,11 +32,12 @@ export default function Carousel({ slides }: CarouselProps) {
   }, [activeSlides.length]);
 
   useEffect(() => {
+    if (activeSlides.length === 0) return;
     resetTimer();
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [current, resetTimer]);
+  }, [current, resetTimer, activeSlides.length]);
 
   const goTo = useCallback(
     (idx: number) => {
