@@ -3,6 +3,14 @@
 @theme inline {
   --color-background: #0D0D0D;
   --color-foreground: #F5F5F5;
+  --color-surface: #1A1A1A;
+  --color-surface-2: #252525;
+  --color-surface-3: #2F2F2F;
+  --color-gold: #D4A053;
+  --color-gold-light: #E8C078;
+  --color-gold-dark: #B8863A;
+  --color-text-secondary: #A0A0A0;
+  --color-text-muted: #6B6B6B;
 }
 
 html {

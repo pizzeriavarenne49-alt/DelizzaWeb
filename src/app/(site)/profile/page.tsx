@@ -27,7 +27,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Options */}
-      <div className="flex flex-col gap-2" role="list">
+      <nav className="flex flex-col gap-2" aria-label="Options du profil">
         {[
           { label: "Mes commandes", icon: "📦" },
           { label: "Adresses", icon: "📍" },
@@ -35,13 +35,13 @@ export default function ProfilePage() {
           { label: "Notifications", icon: "🔔" },
           { label: "Aide", icon: "❓" },
         ].map((item) => (
-          <div
+          <button
             key={item.label}
-            role="listitem"
-            className="flex items-center gap-3 rounded-[18px] bg-[#1A1A1A] px-4 py-4"
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-3 rounded-[18px] bg-[#1A1A1A] px-4 py-4 hover:bg-[#252525] active:scale-[0.98] transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#D4A053]"
           >
             <span className="text-[20px]" aria-hidden="true">{item.icon}</span>
-            <span className="flex-1 text-[15px] font-medium text-[#F5F5F5]">
+            <span className="flex-1 text-left text-[15px] font-medium text-[#F5F5F5]">
               {item.label}
             </span>
             <svg
@@ -58,9 +58,9 @@ export default function ProfilePage() {
                 d="M9 5l7 7-7 7"
               />
             </svg>
-          </div>
+          </button>
         ))}
-      </div>
+      </nav>
 
       {/* Download CTA */}
       <Link
