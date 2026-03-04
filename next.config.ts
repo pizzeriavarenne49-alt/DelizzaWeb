@@ -9,9 +9,17 @@ const nextConfig: NextConfig = {
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    remotePatterns: directusHostname
-      ? [{ protocol: "https", hostname: directusHostname }, { protocol: "http", hostname: directusHostname }]
-      : [],
+    remotePatterns: [
+      // Firebase Storage (WLHORIZON catalog images)
+      { protocol: "https", hostname: "firebasestorage.googleapis.com" },
+      // Directus (if configured)
+      ...(directusHostname
+        ? [
+            { protocol: "https" as const, hostname: directusHostname },
+            { protocol: "http" as const, hostname: directusHostname },
+          ]
+        : []),
+    ],
   },
 };
 
