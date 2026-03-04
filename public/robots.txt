@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /go
+Sitemap: https://delizza.fr/sitemap.xml

@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import type { Product } from "@/types";
 import { formatPrice } from "@/types";
-import { buildGoUrl } from "@/lib/redirect";
 import { track } from "@/analytics";
 import Link from "next/link";
 
@@ -56,9 +55,9 @@ export default function ProductCard({ product }: ProductCardProps) {
             {formatPrice(product.price_cents)}&nbsp;€
           </span>
           <Link
-            href={buildGoUrl("add_" + product.id)}
+            href="/download"
             onClick={handleAdd}
-            aria-label={`Ajouter ${product.name}`}
+            aria-label={`Commander ${product.name} sur l'app`}
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-full",
               "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" fill="#1A1A1A"/>
+  <rect x="1" y="1" width="598" height="398" fill="none" stroke="#2A2A2A" stroke-width="2"/>
+  <!-- Pizza icon -->
+  <circle cx="300" cy="185" r="72" fill="#2A2A2A" stroke="#D4A053" stroke-width="2.5"/>
+  <circle cx="300" cy="185" r="52" fill="none" stroke="#D4A053" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <!-- Slice lines -->
+  <line x1="300" y1="113" x2="300" y2="257" stroke="#D4A053" stroke-width="1.5" opacity="0.5"/>
+  <line x1="238" y1="149" x2="362" y2="221" stroke="#D4A053" stroke-width="1.5" opacity="0.5"/>
+  <line x1="238" y1="221" x2="362" y2="149" stroke="#D4A053" stroke-width="1.5" opacity="0.5"/>
+  <!-- Toppings dots -->
+  <circle cx="300" cy="155" r="5" fill="#D4A053" opacity="0.7"/>
+  <circle cx="276" cy="195" r="4" fill="#D4A053" opacity="0.6"/>
+  <circle cx="322" cy="200" r="4.5" fill="#D4A053" opacity="0.65"/>
+  <circle cx="295" cy="220" r="3.5" fill="#D4A053" opacity="0.5"/>
+  <!-- Label -->
+  <text x="300" y="308" font-family="system-ui, sans-serif" font-size="15" fill="#6B6B6B" text-anchor="middle" letter-spacing="2">IMAGE INDISPONIBLE</text>
+</svg>

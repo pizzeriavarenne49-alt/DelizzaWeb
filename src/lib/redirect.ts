@@ -9,13 +9,13 @@ import type { Platform } from "@/types";
 const DISMISS_KEY = "delizza_app_banner_dismissed";
 const DISMISS_DAYS = 7;
 
-/** Deep link scheme placeholder */
-const DEEP_LINK_SCHEME = "delizza://";
+/** Deep link scheme */
+const DEEP_LINK_SCHEME = "com.wlhorizon.delizza://";
 
-/** Placeholder store URLs */
+/** Store URLs — all point to /download (coming soon) */
 const STORE_URLS: Record<Platform, string> = {
-  ios: "#apple-store-placeholder",
-  android: "#google-play-placeholder",
+  ios: "/download",
+  android: "/download",
   desktop: "/download",
 };
 

@@ -48,7 +48,7 @@ export default function HomeClient({ heroSlides, categories, products }: HomeCli
           <h1 className="text-[22px] font-bold text-[#F5F5F5]">
             Deli&apos;Zza
           </h1>
-          <p className="text-[13px] text-[#A0A0A0]">Bonjour Alex,</p>
+          <p className="text-[13px] text-[#A0A0A0]">Bienvenue !</p>
         </div>
         <Link
           href="/profile"

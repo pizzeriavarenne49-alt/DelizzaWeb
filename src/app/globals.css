@@ -23,7 +23,7 @@ html {
 body {
   background: #0D0D0D;
   color: #F5F5F5;
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-family: "Poppins", system-ui, -apple-system, sans-serif;
   overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
 }
