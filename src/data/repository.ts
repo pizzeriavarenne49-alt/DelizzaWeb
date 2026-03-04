@@ -1,12 +1,15 @@
 /**
  * Data repository — stable API consumed by pages.
  *
- * Implementations:
- *  - DirectusRepository (reads from Directus REST API)
- *  - MockRepository     (local mock data, fallback)
+ * Implementations (priority order):
+ *  1. FirebaseRepository  (reads from Firestore — same data as WLHORIZON app)
+ *  2. DirectusRepository  (reads from Directus REST API)
+ *  3. MockRepository      (local mock data, final fallback)
  *
- * The exported `repo` singleton auto-selects Directus when
- * NEXT_PUBLIC_DIRECTUS_URL is set, otherwise falls back to mock.
+ * The exported `repo` singleton auto-selects the first available source:
+ *   FIREBASE_PROJECT_ID + WL_APP_ID  → Firebase
+ *   NEXT_PUBLIC_DIRECTUS_URL          → Directus
+ *   (none)                            → Mock
  */
 
 import type { Product, Category, HeroSlide, Offer } from "@/types";
@@ -242,11 +245,24 @@ class MockRepository implements DataRepository {
 // Singleton with fallback
 // ---------------------------------------------------------------------------
 
+import { FirebaseRepository } from "./firebase-repository";
+
 function createRepository(): DataRepository {
+  // Priority 1: Firebase (same data as WLHORIZON mobile app)
+  if (
+    process.env.FIREBASE_PROJECT_ID &&
+    process.env.FIREBASE_CLIENT_EMAIL &&
+    process.env.FIREBASE_PRIVATE_KEY &&
+    process.env.WL_APP_ID
+  ) {
+    return new FirebaseRepository();
+  }
+  // Priority 2: Directus (standalone CMS)
   if (DIRECTUS_URL) {
     return new DirectusRepository();
   }
-  console.warn("[CMS] NEXT_PUBLIC_DIRECTUS_URL not set — using mock data");
+  // Priority 3: Mock data
+  console.warn("[CMS] No data source configured — using mock data");
   return new MockRepository();
 }
 
