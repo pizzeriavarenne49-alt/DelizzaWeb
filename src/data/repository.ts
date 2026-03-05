@@ -281,6 +281,9 @@ class MockRepository implements DataRepository {
 
 import { FirebaseRepository } from "./firebase-repository";
 
+/** Detect which data source is active for logging purposes */
+let activeSource: "firebase" | "directus" | "mock" = "mock";
+
 function createRepository(): DataRepository {
   // Priority 1: Firebase (same data as WLHORIZON mobile app)
   if (
@@ -289,13 +292,18 @@ function createRepository(): DataRepository {
     process.env.FIREBASE_PRIVATE_KEY &&
     process.env.WL_APP_ID
   ) {
+    activeSource = "firebase";
+    console.info("[CMS] Using Firebase (WLHORIZON) as data source");
     return new FirebaseRepository();
   }
   // Priority 2: Directus (standalone CMS)
   if (DIRECTUS_URL) {
+    activeSource = "directus";
+    console.info("[CMS] Using Directus as data source");
     return new DirectusRepository();
   }
   // Priority 3: Mock data
+  activeSource = "mock";
   console.warn("[CMS] No data source configured — using mock data");
   return new MockRepository();
 }
@@ -303,7 +311,7 @@ function createRepository(): DataRepository {
 export const repo: DataRepository = createRepository();
 
 /**
- * Safe wrapper: calls the Directus repo and falls back to mock on error.
+ * Safe wrapper: calls the primary repo and falls back to mock on error.
  * Used in pages to guarantee resilience.
  */
 export async function withFallback<T>(
@@ -313,7 +321,10 @@ export async function withFallback<T>(
   try {
     return await primary();
   } catch (err) {
-    console.warn("[CMS] Directus unavailable, using mock fallback:", err);
+    console.warn(
+      `[CMS] Primary source (${activeSource}) unavailable, using mock fallback:`,
+      err instanceof Error ? err.message : err,
+    );
     return fallback();
   }
 }
