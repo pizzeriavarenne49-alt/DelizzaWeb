@@ -3,9 +3,10 @@ import MenuClient from "./MenuClient";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Notre Menu — Pizza Deli'Zza",
+  title: "Menu pizzas artisanales — Pizza Deli'Zza à La Varenne",
   description:
-    "Parcourez notre menu de pizzas artisanales, entrées et desserts. Des ingrédients frais pour des saveurs authentiques.",
+    "Découvrez notre menu : pizzas artisanales, entrées et desserts préparés avec des ingrédients frais et locaux. Commandez en ligne pour un retrait à La Varenne.",
+  alternates: { canonical: "/menu" },
 };
 
 export default async function MenuPage() {

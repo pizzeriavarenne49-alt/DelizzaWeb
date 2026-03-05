@@ -5,9 +5,10 @@ import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Pizza Deli'Zza — Pizzeria artisanale",
+  title: "Pizza Deli'Zza — Pizzeria artisanale à emporter à La Varenne",
   description:
-    "Découvrez les pizzas artisanales premium de Deli'Zza, préparées avec des ingrédients frais. Commandez depuis notre application mobile.",
+    "Pizzeria artisanale à La Varenne (Orée d'Anjou). Pâte à longue fermentation, ingrédients frais et locaux. Commandez en click & collect ou passez nous voir !",
+  alternates: { canonical: "/" },
 };
 
 export default async function HomePage() {

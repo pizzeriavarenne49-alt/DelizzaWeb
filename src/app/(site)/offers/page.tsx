@@ -2,9 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Nos Offres — Pizza Deli'Zza",
+  title: "Offres et promotions — Pizza Deli'Zza",
   description:
-    "Les offres et promotions seront bientôt disponibles. Téléchargez l'application pour être notifié !",
+    "Retrouvez les offres et promotions de Pizza Deli'Zza, votre pizzeria artisanale à La Varenne. Téléchargez l'application pour ne rien manquer !",
+  alternates: { canonical: "/offers" },
 };
 
 export default function OffersPage() {

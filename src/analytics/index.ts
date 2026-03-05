@@ -20,6 +20,9 @@ export type AnalyticsEvent =
   | { name: "click_add_product"; payload: { productId: string } }
   | { name: "click_menu" }
   | { name: "click_offers" }
+  | { name: "click_tel" }
+  | { name: "click_directions" }
+  | { name: "click_order"; payload?: { from?: string } }
   | { name: "open_go"; payload: { trigger: string; os: string } }
   | { name: "close_install_banner" }
   | { name: "show_install_banner"; payload?: { reason: string } };
