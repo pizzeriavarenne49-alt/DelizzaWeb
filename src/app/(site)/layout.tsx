@@ -1,6 +1,7 @@
 import BottomNav from "@/components/ui/BottomNav";
 import DesktopNav from "@/components/ui/DesktopNav";
 import AppBanner from "@/components/ui/AppBanner";
+import { Providers } from "@/components/ui/SiteProviders";
 
 export default function SiteLayout({
   children,
@@ -8,7 +9,7 @@ export default function SiteLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <Providers>
       <AppBanner />
       <div className="mx-auto max-w-md md:max-w-6xl md:flex">
         <DesktopNav />
@@ -17,6 +18,6 @@ export default function SiteLayout({
         </main>
       </div>
       <BottomNav />
-    </>
+    </Providers>
   );
 }
