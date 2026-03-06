@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
 import { track } from "@/analytics";
+import { CartButton } from "@/components/ui/SiteProviders";
 
 const items = [
   {
@@ -88,6 +89,15 @@ export default function BottomNav() {
             </Link>
           );
         })}
+
+        {/* Cart */}
+        <motion.div
+          whileTap={{ scale: 0.85 }}
+          className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-[#6B6B6B]"
+        >
+          <CartButton />
+          <span className="text-[10px] font-medium">Panier</span>
+        </motion.div>
       </div>
     </nav>
   );

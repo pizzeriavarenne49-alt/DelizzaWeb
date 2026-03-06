@@ -6,15 +6,18 @@ import Image from "next/image";
 import type { Product } from "@/types";
 import { formatPrice } from "@/types";
 import { track } from "@/analytics";
-import Link from "next/link";
+import { useCart } from "@/contexts/CartContext";
 
 interface ProductCardProps {
   product: Product;
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const { addItem } = useCart();
+
   const handleAdd = () => {
     track({ name: "click_add_product", payload: { productId: product.id } });
+    addItem(product);
   };
 
   return (
@@ -54,10 +57,10 @@ export default function ProductCard({ product }: ProductCardProps) {
           <span className="text-[15px] font-bold text-[#D4A053]">
             {formatPrice(product.price_cents)}&nbsp;€
           </span>
-          <Link
-            href="/download"
+          <button
+            type="button"
             onClick={handleAdd}
-            aria-label={`Commander ${product.name} sur l'app`}
+            aria-label={`Ajouter ${product.name} au panier`}
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-full",
               "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
@@ -67,7 +70,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             )}
           >
             +
-          </Link>
+          </button>
         </div>
       </div>
     </motion.div>

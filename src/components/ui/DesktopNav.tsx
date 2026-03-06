@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { track } from "@/analytics";
+import { CartButton } from "@/components/ui/SiteProviders";
 
 const items = [
   {
@@ -87,6 +88,14 @@ export default function DesktopNav() {
           );
         })}
       </nav>
+
+      {/* Cart */}
+      <div className="mt-auto pt-4 border-t border-white/5">
+        <div className="flex items-center gap-3 rounded-xl px-3 py-3 text-[#6B6B6B] hover:bg-[#1A1A1A] hover:text-[#F5F5F5] transition-colors cursor-pointer">
+          <CartButton />
+          <span className="text-[15px] font-medium">Panier</span>
+        </div>
+      </div>
     </aside>
   );
 }
