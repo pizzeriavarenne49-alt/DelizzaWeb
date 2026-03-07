@@ -59,7 +59,12 @@ export function formatPrice(cents: number): string {
 
 /** Compute TTC (tax-included) amount from HT cents and tax rate in basis points */
 export function computeTtcCents(htCents: number, taxRateBps: number): number {
-  return htCents + Math.round(htCents * taxRateBps / 10000);
+  return htCents + computeTaxCents(htCents, taxRateBps);
+}
+
+/** Compute tax amount from HT cents and tax rate in basis points */
+export function computeTaxCents(htCents: number, taxRateBps: number): number {
+  return Math.round(htCents * taxRateBps / 10000);
 }
 
 /** Format a tax rate in bps as a display percentage (e.g. 1000 → "10", 550 → "5,5") */

@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { CartItem } from "@/types/cart";
 import type { Product } from "@/types";
+import { computeTaxCents } from "@/types";
 
 const STORAGE_KEY = "delizza_cart";
 
@@ -146,7 +147,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const getTaxCents = useCallback(
     () =>
       items.reduce(
-        (sum, i) => sum + Math.round(i.totalCents * i.taxRateBps / 10000),
+        (sum, i) => sum + computeTaxCents(i.totalCents, i.taxRateBps),
         0,
       ),
     [items],
@@ -161,7 +162,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const map = new Map<number, number>();
     for (const item of items) {
       const rate = item.taxRateBps;
-      const tax = Math.round(item.totalCents * rate / 10000);
+      const tax = computeTaxCents(item.totalCents, rate);
       map.set(rate, (map.get(rate) ?? 0) + tax);
     }
     return Array.from(map.entries())
