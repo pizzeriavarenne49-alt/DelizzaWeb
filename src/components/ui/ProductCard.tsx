@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import type { Product } from "@/types";
-import { formatPrice } from "@/types";
+import { formatPrice, computeTtcCents } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
 
@@ -55,7 +55,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         <div className="flex items-center justify-between pt-1">
           <span className="text-[15px] font-bold text-[#D4A053]">
-            {formatPrice(product.price_cents)}&nbsp;€
+            {formatPrice(computeTtcCents(product.price_cents, product.tax_rate_bps))}&nbsp;€
           </span>
           <button
             type="button"

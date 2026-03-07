@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import type { Product } from "@/types";
-import { formatPrice } from "@/types";
+import { formatPrice, computeTtcCents } from "@/types";
 import { cn } from "@/lib/cn";
 import { track } from "@/analytics";
 import Link from "next/link";
@@ -101,7 +101,7 @@ export default function Carousel({ products }: CarouselProps) {
         {/* Price pill */}
         {product.price_cents > 0 && (
           <span className="absolute top-3 right-3 z-10 rounded-full bg-[#0D0D0D]/70 backdrop-blur-sm border border-[#D4A053]/20 px-3 py-1 text-[13px] font-bold text-[#D4A053]">
-            {formatPrice(product.price_cents)}&nbsp;€
+            {formatPrice(computeTtcCents(product.price_cents, product.tax_rate_bps))}&nbsp;€
           </span>
         )}
       </div>

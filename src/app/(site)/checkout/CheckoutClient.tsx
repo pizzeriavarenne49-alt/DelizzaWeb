@@ -7,7 +7,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { createOrder, createPaymentIntent } from "@/services/order-service";
-import { formatPrice } from "@/types";
+import { formatPrice, computeTtcCents, formatTaxRate } from "@/types";
 import type { FulfillmentData } from "@/types/order";
 
 // Dynamically import Stripe component to avoid SSR issues
@@ -229,13 +229,13 @@ function Step2Summary({
   const {
     items,
     getSubtotalCents,
-    getTaxCents,
     getTotalCents,
+    getTaxBreakdown,
   } = useCart();
 
   const subtotal = getSubtotalCents();
-  const tax = getTaxCents();
   const total = getTotalCents();
+  const taxBreakdown = getTaxBreakdown();
 
   return (
     <div className="flex flex-col gap-5">
@@ -250,7 +250,7 @@ function Step2Summary({
                 {item.nameSnapshot}
               </span>
               <span className="text-[#A0A0A0] whitespace-nowrap">
-                {formatPrice(item.totalCents)}&nbsp;€
+                {formatPrice(computeTtcCents(item.totalCents, item.taxRateBps))}&nbsp;€
               </span>
             </li>
           ))}
@@ -258,15 +258,17 @@ function Step2Summary({
 
         <div className="border-t border-white/5 pt-3 flex flex-col gap-1.5">
           <div className="flex justify-between text-[13px] text-[#A0A0A0]">
-            <span>Sous-total</span>
+            <span>Sous-total HT</span>
             <span>{formatPrice(subtotal)}&nbsp;€</span>
           </div>
-          <div className="flex justify-between text-[13px] text-[#A0A0A0]">
-            <span>Taxes (10%)</span>
-            <span>{formatPrice(tax)}&nbsp;€</span>
-          </div>
+          {taxBreakdown.map((entry) => (
+            <div key={entry.rateBps} className="flex justify-between text-[13px] text-[#A0A0A0]">
+              <span>TVA ({formatTaxRate(entry.rateBps)}%)</span>
+              <span>{formatPrice(entry.taxCents)}&nbsp;€</span>
+            </div>
+          ))}
           <div className="flex justify-between text-[16px] font-bold text-[#F5F5F5] mt-1">
-            <span>Total</span>
+            <span>Total TTC</span>
             <span className="text-[#D4A053]">{formatPrice(total)}&nbsp;€</span>
           </div>
         </div>

@@ -132,6 +132,7 @@ function mapProduct(raw: DirectusRecord): Product {
     description_short: str(raw.description_short),
     ingredients: arr(raw.ingredients),
     price_cents: num(raw.price_cents),
+    tax_rate_bps: num(raw.tax_rate_bps, 1000),
     image: raw.image ? assetUrl(str(raw.image), { width: 600, fit: "cover" }) : PLACEHOLDER_IMAGE,
     category: str(raw.category),
     badge: raw.badge ? str(raw.badge) : undefined,

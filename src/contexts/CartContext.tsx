@@ -10,11 +10,17 @@ import {
 } from "react";
 import type { CartItem } from "@/types/cart";
 import type { Product } from "@/types";
+import { computeTaxCents } from "@/types";
 
 const STORAGE_KEY = "delizza_cart";
 
-/** Tax rate aligned with WLHORIZON (10%) */
-const TAX_RATE = 0.1;
+/** Default tax rate (bps) used when a cart item has no taxRateBps (legacy data) */
+const DEFAULT_TAX_RATE_BPS = 1000;
+
+export interface TaxBreakdownEntry {
+  rateBps: number;
+  taxCents: number;
+}
 
 interface CartContextValue {
   items: CartItem[];
@@ -25,11 +31,21 @@ interface CartContextValue {
   getSubtotalCents: () => number;
   getTaxCents: () => number;
   getTotalCents: () => number;
+  getTaxBreakdown: () => TaxBreakdownEntry[];
   itemCount: number;
   isEmpty: boolean;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
+
+/** Ensure legacy cart items without taxRateBps get a sensible default */
+function migrateLegacyItems(items: CartItem[]): CartItem[] {
+  return items.map((item) =>
+    typeof item.taxRateBps === "number"
+      ? item
+      : { ...item, taxRateBps: DEFAULT_TAX_RATE_BPS },
+  );
+}
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
@@ -39,7 +55,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as CartItem[];
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return migrateLegacyItems(parsed);
       }
     } catch {
       // Ignore malformed data
@@ -75,6 +91,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           quantity: 1,
           unitPriceCents: product.price_cents,
           totalCents: product.price_cents,
+          taxRateBps: product.tax_rate_bps,
         },
       ];
     });
@@ -128,14 +145,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const getTaxCents = useCallback(
-    () => Math.round(getSubtotalCents() * TAX_RATE),
-    [getSubtotalCents],
+    () =>
+      items.reduce(
+        (sum, i) => sum + computeTaxCents(i.totalCents, i.taxRateBps),
+        0,
+      ),
+    [items],
   );
 
   const getTotalCents = useCallback(
     () => getSubtotalCents() + getTaxCents(),
     [getSubtotalCents, getTaxCents],
   );
+
+  const getTaxBreakdown = useCallback((): TaxBreakdownEntry[] => {
+    const map = new Map<number, number>();
+    for (const item of items) {
+      const rate = item.taxRateBps;
+      const tax = computeTaxCents(item.totalCents, rate);
+      map.set(rate, (map.get(rate) ?? 0) + tax);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([rateBps, taxCents]) => ({ rateBps, taxCents }));
+  }, [items]);
 
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const isEmpty = items.length === 0;
@@ -151,6 +184,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         getSubtotalCents,
         getTaxCents,
         getTotalCents,
+        getTaxBreakdown,
         itemCount,
         isEmpty,
       }}

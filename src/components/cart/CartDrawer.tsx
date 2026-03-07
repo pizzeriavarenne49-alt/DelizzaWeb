@@ -3,7 +3,7 @@
 import { useCart } from "@/contexts/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { formatPrice } from "@/types";
+import { formatPrice, computeTtcCents, formatTaxRate } from "@/types";
 
 interface CartDrawerProps {
   open: boolean;
@@ -17,14 +17,14 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
     updateQuantity,
     clearCart,
     getSubtotalCents,
-    getTaxCents,
     getTotalCents,
+    getTaxBreakdown,
     isEmpty,
   } = useCart();
 
   const subtotal = getSubtotalCents();
-  const tax = getTaxCents();
   const total = getTotalCents();
+  const taxBreakdown = getTaxBreakdown();
 
   return (
     <AnimatePresence>
@@ -95,12 +95,12 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                           {item.nameSnapshot}
                         </span>
                         <span className="text-[14px] font-semibold text-[#D4A053] whitespace-nowrap">
-                          {formatPrice(item.totalCents)}&nbsp;€
+                          {formatPrice(computeTtcCents(item.totalCents, item.taxRateBps))}&nbsp;€
                         </span>
                       </div>
                       <div className="mt-2 flex items-center justify-between">
                         <span className="text-[12px] text-[#A0A0A0]">
-                          {formatPrice(item.unitPriceCents)}&nbsp;€ / unité
+                          {formatPrice(computeTtcCents(item.unitPriceCents, item.taxRateBps))}&nbsp;€ / unité
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -139,15 +139,17 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                 {/* Totals */}
                 <div className="flex flex-col gap-1.5 mb-4">
                   <div className="flex justify-between text-[13px] text-[#A0A0A0]">
-                    <span>Sous-total</span>
+                    <span>Sous-total HT</span>
                     <span>{formatPrice(subtotal)}&nbsp;€</span>
                   </div>
-                  <div className="flex justify-between text-[13px] text-[#A0A0A0]">
-                    <span>Taxes (10%)</span>
-                    <span>{formatPrice(tax)}&nbsp;€</span>
-                  </div>
+                  {taxBreakdown.map((entry) => (
+                    <div key={entry.rateBps} className="flex justify-between text-[13px] text-[#A0A0A0]">
+                      <span>TVA ({formatTaxRate(entry.rateBps)}%)</span>
+                      <span>{formatPrice(entry.taxCents)}&nbsp;€</span>
+                    </div>
+                  ))}
                   <div className="flex justify-between text-[16px] font-bold text-[#F5F5F5] mt-1">
-                    <span>Total</span>
+                    <span>Total TTC</span>
                     <span className="text-[#D4A053]">
                       {formatPrice(total)}&nbsp;€
                     </span>

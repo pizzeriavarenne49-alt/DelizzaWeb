@@ -104,6 +104,7 @@ function mapProduct(id: string, data: FirestoreDoc): Product {
     description_short: str(data.description),
     ingredients: arr(data.ingredients),
     price_cents: priceCents,
+    tax_rate_bps: num(data.taxRateBps, 1000),
     image: resolveImage(
       data.imagePath as string | null,
       data.imageUrl as string | null,
