@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
 import { track } from "@/analytics";
 import { CartButton } from "@/components/ui/SiteProviders";
+import CartBadge from "@/components/cart/CartBadge";
 
 const items = [
   {
@@ -91,12 +92,17 @@ export default function BottomNav() {
         })}
 
         {/* Cart */}
-        <motion.div
-          whileTap={{ scale: 0.85 }}
-          className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-[#6B6B6B]"
-        >
-          <CartButton />
-          <span className="text-[10px] font-medium">Panier</span>
+        <motion.div whileTap={{ scale: 0.85 }}>
+          <CartButton className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-[#6B6B6B]">
+            <span className="relative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                <path d="M3 6h18M16 10a4 4 0 01-8 0" />
+              </svg>
+              <CartBadge />
+            </span>
+            <span className="text-[10px] font-medium">Panier</span>
+          </CartButton>
         </motion.div>
       </div>
     </nav>
