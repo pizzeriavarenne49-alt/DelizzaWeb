@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import type { CartItem } from "@/types/cart";
+import type { CartItem, SelectedOption } from "@/types/cart";
 import type { Product } from "@/types";
 import { computeTaxCents } from "@/types";
 
@@ -25,8 +25,9 @@ export interface TaxBreakdownEntry {
 interface CartContextValue {
   items: CartItem[];
   addItem: (product: Product) => void;
-  removeItem: (catalogItemId: string) => void;
-  updateQuantity: (catalogItemId: string, quantity: number) => void;
+  addItemWithOptions: (product: Product, selectedOptions: SelectedOption[], quantity: number) => void;
+  removeItem: (cartKey: string) => void;
+  updateQuantity: (cartKey: string, quantity: number) => void;
   clearCart: () => void;
   getSubtotalCents: () => number;
   getTaxCents: () => number;
@@ -38,13 +39,24 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-/** Ensure legacy cart items without taxRateBps get a sensible default */
+/** Generate a stable cartKey from a productId and sorted selectedOptions */
+function buildCartKey(productId: string, selectedOptions: SelectedOption[]): string {
+  if (selectedOptions.length === 0) return productId;
+  const hash = selectedOptions
+    .slice()
+    .sort((a, b) => a.optionId.localeCompare(b.optionId))
+    .map((o) => `${o.optionId}:${o.choiceIds.slice().sort().join(",")}`)
+    .join("|");
+  return `${productId}__${hash}`;
+}
+
+/** Ensure legacy cart items without taxRateBps or cartKey get sensible defaults */
 function migrateLegacyItems(items: CartItem[]): CartItem[] {
-  return items.map((item) =>
-    typeof item.taxRateBps === "number"
-      ? item
-      : { ...item, taxRateBps: DEFAULT_TAX_RATE_BPS },
-  );
+  return items.map((item) => ({
+    ...item,
+    taxRateBps: typeof item.taxRateBps === "number" ? item.taxRateBps : DEFAULT_TAX_RATE_BPS,
+    cartKey: item.cartKey ?? item.catalogItemId,
+  }));
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -70,11 +82,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const addItem = useCallback((product: Product) => {
+    const cartKey = buildCartKey(product.id, []);
     setItems((prev) => {
-      const existing = prev.find((i) => i.catalogItemId === product.id);
+      const existing = prev.find((i) => i.cartKey === cartKey);
       if (existing) {
         return prev.map((i) =>
-          i.catalogItemId === product.id
+          i.cartKey === cartKey
             ? {
                 ...i,
                 quantity: i.quantity + 1,
@@ -92,18 +105,53 @@ export function CartProvider({ children }: { children: ReactNode }) {
           unitPriceCents: product.price_cents,
           totalCents: product.price_cents,
           taxRateBps: product.tax_rate_bps,
+          cartKey,
         },
       ];
     });
   }, []);
 
-  const removeItem = useCallback((catalogItemId: string) => {
+  const addItemWithOptions = useCallback(
+    (product: Product, selectedOptions: SelectedOption[], quantity: number) => {
+      const cartKey = buildCartKey(product.id, selectedOptions);
+      const deltasCents = selectedOptions.reduce((sum, o) => sum + o.priceDeltaCents, 0);
+      const unitPriceCents = product.price_cents + deltasCents;
+
+      setItems((prev) => {
+        const existing = prev.find((i) => i.cartKey === cartKey);
+        if (existing) {
+          const newQty = existing.quantity + quantity;
+          return prev.map((i) =>
+            i.cartKey === cartKey
+              ? { ...i, quantity: newQty, totalCents: i.unitPriceCents * newQty }
+              : i,
+          );
+        }
+        return [
+          ...prev,
+          {
+            catalogItemId: product.id,
+            nameSnapshot: product.name,
+            quantity,
+            unitPriceCents,
+            totalCents: unitPriceCents * quantity,
+            taxRateBps: product.tax_rate_bps,
+            cartKey,
+            selectedOptions: selectedOptions.length > 0 ? selectedOptions : undefined,
+          },
+        ];
+      });
+    },
+    [],
+  );
+
+  const removeItem = useCallback((cartKey: string) => {
     setItems((prev) => {
-      const existing = prev.find((i) => i.catalogItemId === catalogItemId);
+      const existing = prev.find((i) => i.cartKey === cartKey);
       if (!existing) return prev;
       if (existing.quantity > 1) {
         return prev.map((i) =>
-          i.catalogItemId === catalogItemId
+          i.cartKey === cartKey
             ? {
                 ...i,
                 quantity: i.quantity - 1,
@@ -112,21 +160,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
             : i,
         );
       }
-      return prev.filter((i) => i.catalogItemId !== catalogItemId);
+      return prev.filter((i) => i.cartKey !== cartKey);
     });
   }, []);
 
   const updateQuantity = useCallback(
-    (catalogItemId: string, quantity: number) => {
+    (cartKey: string, quantity: number) => {
       if (quantity <= 0) {
-        setItems((prev) =>
-          prev.filter((i) => i.catalogItemId !== catalogItemId),
-        );
+        setItems((prev) => prev.filter((i) => i.cartKey !== cartKey));
         return;
       }
       setItems((prev) =>
         prev.map((i) =>
-          i.catalogItemId === catalogItemId
+          i.cartKey === cartKey
             ? { ...i, quantity, totalCents: i.unitPriceCents * quantity }
             : i,
         ),
@@ -178,6 +224,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       value={{
         items,
         addItem,
+        addItemWithOptions,
         removeItem,
         updateQuantity,
         clearCart,
@@ -201,3 +248,4 @@ export function useCart(): CartContextValue {
   }
   return ctx;
 }
+

@@ -1,4 +1,32 @@
 import type { Product } from "@/types";
+import type { ProductOption } from "@/types/product-options";
+
+const pizzaOptions: ProductOption[] = [
+  {
+    id: "opt_taille",
+    name: "Taille",
+    type: "single",
+    required: true,
+    order: 0,
+    choices: [
+      { id: "taille_petite", name: "Petite", priceModifier: { amountCents: 0, currency: "EUR" }, isActive: true },
+      { id: "taille_moyenne", name: "Moyenne", priceModifier: { amountCents: 200, currency: "EUR" }, isActive: true },
+      { id: "taille_grande", name: "Grande", priceModifier: { amountCents: 400, currency: "EUR" }, isActive: true },
+    ],
+  },
+  {
+    id: "opt_supplements",
+    name: "Suppléments",
+    type: "multiple",
+    required: false,
+    order: 1,
+    choices: [
+      { id: "supp_fromage", name: "Fromage", priceModifier: { amountCents: 150, currency: "EUR" }, isActive: true },
+      { id: "supp_jambon", name: "Jambon", priceModifier: { amountCents: 200, currency: "EUR" }, isActive: true },
+      { id: "supp_champignons", name: "Champignons", priceModifier: { amountCents: 150, currency: "EUR" }, isActive: true },
+    ],
+  },
+];
 
 export const products: Product[] = [
   {
@@ -15,6 +43,7 @@ export const products: Product[] = [
     active: true,
     is_popular: true,
     tags: ["classique", "végétarienne"],
+    options: pizzaOptions,
   },
   {
     id: "p2",
@@ -29,6 +58,7 @@ export const products: Product[] = [
     active: true,
     is_popular: true,
     tags: ["épicée", "viande"],
+    options: pizzaOptions,
   },
   {
     id: "p3",
@@ -44,6 +74,7 @@ export const products: Product[] = [
     active: true,
     is_popular: true,
     tags: ["premium", "truffe"],
+    options: pizzaOptions,
   },
   {
     id: "p4",
@@ -58,6 +89,7 @@ export const products: Product[] = [
     active: true,
     is_popular: false,
     tags: ["fromage", "végétarienne"],
+    options: pizzaOptions,
   },
   {
     id: "p5",
@@ -72,6 +104,7 @@ export const products: Product[] = [
     active: true,
     is_popular: false,
     tags: ["entrée", "végétarienne"],
+    options: [],
   },
   {
     id: "p6",
@@ -86,6 +119,7 @@ export const products: Product[] = [
     active: true,
     is_popular: true,
     tags: ["salade", "poulet"],
+    options: [],
   },
   {
     id: "p7",
@@ -100,6 +134,7 @@ export const products: Product[] = [
     active: true,
     is_popular: true,
     tags: ["dessert", "café"],
+    options: [],
   },
   {
     id: "p8",
@@ -114,5 +149,6 @@ export const products: Product[] = [
     active: true,
     is_popular: false,
     tags: ["dessert", "vanille"],
+    options: [],
   },
 ];

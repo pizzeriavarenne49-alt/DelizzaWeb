@@ -90,13 +90,24 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                 <ul className="flex flex-col gap-3">
                   {items.map((item) => (
                     <li
-                      key={item.catalogItemId}
+                      key={item.cartKey}
                       className="rounded-[16px] bg-[#252525] px-4 py-3"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="flex-1 text-[14px] font-medium text-[#F5F5F5] leading-snug">
-                          {item.nameSnapshot}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[14px] font-medium text-[#F5F5F5] leading-snug">
+                            {item.nameSnapshot}
+                          </span>
+                          {item.selectedOptions && item.selectedOptions.length > 0 && (
+                            <div className="mt-0.5 flex flex-col gap-0.5">
+                              {item.selectedOptions.map((opt) => (
+                                <span key={opt.optionId} className="text-[12px] text-[#A0A0A0] leading-snug">
+                                  {opt.optionName}: {opt.choiceNames.join(", ")}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <span className="text-[14px] font-semibold text-[#D4A053] whitespace-nowrap">
                           {formatPrice(computeTtcCents(item.totalCents, item.taxRateBps))}&nbsp;€
                         </span>
@@ -107,7 +118,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                         </span>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => removeItem(item.catalogItemId)}
+                            onClick={() => removeItem(item.cartKey)}
                             aria-label="Diminuer la quantité"
                             className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors text-[16px] font-bold leading-none"
                           >
@@ -119,7 +130,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                           <button
                             onClick={() =>
                               updateQuantity(
-                                item.catalogItemId,
+                                item.cartKey,
                                 item.quantity + 1,
                               )
                             }
