@@ -117,7 +117,7 @@ export default function Carousel({ products }: CarouselProps) {
 
         <div className="mt-3 flex items-center justify-between">
           <Link
-            href="/download"
+            href="/menu"
             onClick={handleCtaClick}
             className={cn(
               "inline-flex items-center justify-center rounded-[18px] px-6 py-2.5",
@@ -126,7 +126,7 @@ export default function Carousel({ products }: CarouselProps) {
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
             )}
           >
-            Commander
+            Voir le menu
           </Link>
 
           {/* Dots */}

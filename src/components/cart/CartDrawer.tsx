@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useCart } from "@/contexts/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -26,7 +27,9 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
   const total = getTotalCents();
   const taxBreakdown = getTaxBreakdown();
 
-  return (
+  if (typeof window === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -37,7 +40,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm"
             aria-hidden="true"
           />
 
@@ -48,7 +51,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
-            className="fixed right-0 top-0 bottom-0 z-50 flex w-full max-w-sm flex-col bg-[#1A1A1A] shadow-[-8px_0_32px_rgba(0,0,0,0.5)]"
+            className="fixed right-0 top-0 bottom-0 z-[9999] flex w-full max-w-sm flex-col bg-[#1A1A1A] shadow-[-8px_0_32px_rgba(0,0,0,0.5)]"
             aria-label="Panier"
           >
             {/* Header */}
@@ -177,6 +180,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
           </motion.aside>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
