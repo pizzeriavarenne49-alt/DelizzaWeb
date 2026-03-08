@@ -139,6 +139,7 @@ function mapProduct(raw: DirectusRecord): Product {
     active: bool(raw.active),
     is_popular: bool(raw.is_popular),
     tags: arr(raw.tags),
+    options: [],
   };
 }
 

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import LoginForm from "@/components/auth/LoginForm";
+import AuthPageClient from "./AuthPageClient";
 
 export const metadata: Metadata = {
   title: "Connexion — Deli'Zza",
@@ -14,7 +14,7 @@ export default function AuthPage() {
           Deli&apos;Zza
         </span>
       </div>
-      <LoginForm />
+      <AuthPageClient />
     </div>
   );
 }

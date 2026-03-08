@@ -1,5 +1,10 @@
 /** Core domain types — aligned with Directus schema */
 
+import type { ProductOption } from "@/types/product-options";
+
+export type { ProductOption };
+export type { OptionChoice, OptionType } from "@/types/product-options";
+
 export interface Product {
   id: string;
   name: string;
@@ -15,6 +20,8 @@ export interface Product {
   active: boolean;
   is_popular: boolean;
   tags: string[];
+  /** Customization options (size, toppings, etc.) embedded in Firestore document */
+  options: ProductOption[];
 }
 
 export interface Category {

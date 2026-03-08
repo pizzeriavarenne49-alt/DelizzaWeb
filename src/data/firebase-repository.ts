@@ -10,6 +10,7 @@
  */
 
 import type { Product, Category, HeroSlide, Offer } from "@/types";
+import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
 import type { DataRepository } from "@/data/repository";
 import { buildFeaturedProducts } from "@/data/repository";
 import { getDb, WL_APP_ID, FIREBASE_STORAGE_BUCKET } from "@/config/firebase";
@@ -59,6 +60,48 @@ function bool(v: unknown, fallback = false): boolean {
 }
 function arr(v: unknown): string[] {
   return Array.isArray(v) ? (v as string[]) : [];
+}
+
+/** Parse a raw Firestore options array into typed ProductOption[] */
+function parseOptions(raw: unknown): ProductOption[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[])
+    .map((opt): ProductOption | null => {
+      if (typeof opt !== "object" || opt === null) return null;
+      const o = opt as Record<string, unknown>;
+      const choices: OptionChoice[] = Array.isArray(o.choices)
+        ? (o.choices as unknown[])
+            .map((c): OptionChoice | null => {
+              if (typeof c !== "object" || c === null) return null;
+              const ch = c as Record<string, unknown>;
+              const modifier =
+                typeof ch.priceModifier === "object" && ch.priceModifier !== null
+                  ? (ch.priceModifier as Record<string, unknown>)
+                  : undefined;
+              return {
+                id: str(ch.id),
+                name: str(ch.name),
+                priceModifier: {
+                  amountCents: typeof modifier?.amountCents === "number" ? modifier.amountCents : 0,
+                  currency: str(modifier?.currency, "EUR"),
+                },
+                isActive: bool(ch.isActive, false),
+              };
+            })
+            .filter((c): c is OptionChoice => c !== null)
+            .filter((c) => c.isActive)
+        : [];
+      return {
+        id: str(o.id),
+        name: str(o.name),
+        type: (o.type === "single" || o.type === "multiple") ? (o.type as OptionType) : "single",
+        required: bool(o.required, false),
+        choices,
+        order: num(o.order, 0),
+      };
+    })
+    .filter((opt): opt is ProductOption => opt !== null)
+    .sort((a, b) => a.order - b.order);
 }
 
 /** Filter offers by active status + date window */
@@ -114,6 +157,7 @@ function mapProduct(id: string, data: FirestoreDoc): Product {
     active: bool(data.isActive, true),
     is_popular: bool(data.isPopular, false),
     tags: arr(data.tags),
+    options: parseOptions(data.options),
   };
 }
 
