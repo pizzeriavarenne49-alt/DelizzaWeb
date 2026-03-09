@@ -27,7 +27,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
       : products.filter((p) => p.category === activeCategory);
 
   const results = search
-    ? byCategory.filter(
+    ? products.filter(
         (p) =>
           p.name.toLowerCase().includes(search.toLowerCase()) ||
           p.description_short.toLowerCase().includes(search.toLowerCase()),

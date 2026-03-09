@@ -63,9 +63,24 @@ export default function Carousel({ products }: CarouselProps) {
       role="region"
       aria-label="Offres à la une"
       aria-roledescription="carousel"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") prev();
+        else if (e.key === "ArrowRight") next();
+      }}
     >
       {/* Image area */}
       <div className="relative aspect-[16/10]">
+        <motion.div
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.2}
+          onDragEnd={(_e, info) => {
+            if (info.offset.x < -50) next();
+            else if (info.offset.x > 50) prev();
+          }}
+          aria-hidden="true"
+          className="absolute inset-0 cursor-grab active:cursor-grabbing"
+        >
         <AnimatePresence mode="wait">
           <motion.div
             key={product.id}
@@ -90,6 +105,7 @@ export default function Carousel({ products }: CarouselProps) {
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
           </motion.div>
         </AnimatePresence>
+        </motion.div>
 
         {/* Badge */}
         {product.badge && (

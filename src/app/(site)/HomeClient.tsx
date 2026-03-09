@@ -10,6 +10,7 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import ProductCard from "@/components/ui/ProductCard";
 import type { Product, Category } from "@/types";
 import { track } from "@/analytics";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface HomeClientProps {
   featuredProducts: Product[];
@@ -21,10 +22,22 @@ export default function HomeClient({ featuredProducts, categories, products }: H
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("popular");
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
     track({ name: "view_home" });
   }, []);
+
+  const greeting = (() => {
+    if (!user) return "Bienvenue !";
+    const rawName = user.displayName
+      ? user.displayName.split(" ")[0]
+      : user.email
+        ? user.email.split("@")[0]
+        : null;
+    const name = rawName && /^[a-zA-ZÀ-ÿ]/.test(rawName) ? rawName : null;
+    return name ? `Bonjour ${name} !` : "Bienvenue !";
+  })();
 
   const filtered =
     activeCategory === "popular"
@@ -32,7 +45,7 @@ export default function HomeClient({ featuredProducts, categories, products }: H
       : products.filter((p) => p.category === activeCategory);
 
   const searched = search
-    ? filtered.filter(
+    ? products.filter(
         (p) =>
           p.name.toLowerCase().includes(search.toLowerCase()) ||
           p.description_short.toLowerCase().includes(search.toLowerCase()),
@@ -47,7 +60,7 @@ export default function HomeClient({ featuredProducts, categories, products }: H
           <h1 className="text-[22px] font-bold text-[#F5F5F5]">
             Deli&apos;Zza
           </h1>
-          <p className="text-[13px] text-[#A0A0A0]">Bienvenue !</p>
+          <p className="text-[13px] text-[#A0A0A0]">{greeting}</p>
         </div>
         <Link
           href="/profile"

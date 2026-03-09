@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
+import { ToastProvider } from "@/contexts/ToastContext";
+import ToastContainer from "@/components/ui/Toast";
 import CartDrawer from "@/components/cart/CartDrawer";
 import CartBadge from "@/components/cart/CartBadge";
 
@@ -14,7 +16,12 @@ interface ProvidersProps {
 export function Providers({ children }: ProvidersProps) {
   return (
     <AuthProvider>
-      <CartProvider>{children}</CartProvider>
+      <CartProvider>
+        <ToastProvider>
+          {children}
+          <ToastContainer />
+        </ToastProvider>
+      </CartProvider>
     </AuthProvider>
   );
 }

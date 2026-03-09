@@ -9,6 +9,7 @@ import type { SelectedOption } from "@/types/cart";
 import { formatPrice, computeTtcCents } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
+import { useToast } from "@/contexts/ToastContext";
 import ProductCustomizeModal from "@/components/ui/ProductCustomizeModal";
 
 interface ProductCardProps {
@@ -17,6 +18,7 @@ interface ProductCardProps {
 
 export default function ProductCard({ product }: ProductCardProps) {
   const { addItem, addItemWithOptions } = useCart();
+  const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
 
   const handleAdd = () => {
@@ -25,11 +27,13 @@ export default function ProductCard({ product }: ProductCardProps) {
       setModalOpen(true);
     } else {
       addItem(product);
+      showToast(`${product.name} ajouté au panier ✓`);
     }
   };
 
   const handleModalConfirm = (selectedOptions: SelectedOption[], quantity: number) => {
     addItemWithOptions(product, selectedOptions, quantity);
+    showToast(`${product.name} ajouté au panier ✓`);
     setModalOpen(false);
   };
 

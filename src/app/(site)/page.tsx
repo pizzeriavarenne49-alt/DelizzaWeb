@@ -2,7 +2,7 @@ import { repo, withFallback, mockRepo, POPULAR_CATEGORY } from "@/data/repositor
 import HomeClient from "./HomeClient";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Pizza Deli'Zza — Pizzeria artisanale à emporter à La Varenne",
