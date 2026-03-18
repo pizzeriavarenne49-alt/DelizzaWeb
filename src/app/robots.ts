@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/go", "/api/"],
       },
     ],
-    sitemap: "https://delizza.fr/sitemap.xml",
+    sitemap: "https://www.delizza.fr/sitemap.xml",
   };
 }

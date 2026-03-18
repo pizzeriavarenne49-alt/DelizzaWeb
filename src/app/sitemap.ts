@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { allCommuneSlugs } from "@/lib/seo";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://delizza.fr";
+  const baseUrl = "https://www.delizza.fr";
 
   const staticPages: MetadataRoute.Sitemap = [
     { url: baseUrl, lastModified: new Date(), changeFrequency: "weekly", priority: 1 },

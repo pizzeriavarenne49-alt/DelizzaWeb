@@ -10,7 +10,7 @@
 /*  Business information                                               */
 /* ------------------------------------------------------------------ */
 
-export const SITE_URL = "https://delizza.fr";
+export const SITE_URL = "https://www.delizza.fr";
 
 export const BUSINESS = {
   name: "Pizza Deli'Zza",
