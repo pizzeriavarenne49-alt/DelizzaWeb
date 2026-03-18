@@ -14,7 +14,7 @@ import { BUSINESS, SITE_URL, type Commune } from "@/lib/seo";
 export function restaurantSchema() {
   return {
     "@context": "https://schema.org",
-    "@type": ["Restaurant", "LocalBusiness"],
+    "@type": ["Restaurant", "LocalBusiness", "TakeoutRestaurant"],
     "@id": `${SITE_URL}/#restaurant`,
     name: BUSINESS.name,
     url: BUSINESS.url,
@@ -28,6 +28,8 @@ export function restaurantSchema() {
     acceptsReservations: false,
     currenciesAccepted: "EUR",
     paymentAccepted: "Cash, Credit Card",
+    // TODO: uncomment when Google Maps CID is available
+    // hasMap: "https://maps.google.com/?cid=TODO_CID",
     address: {
       "@type": "PostalAddress",
       streetAddress: BUSINESS.address.streetAddress,
@@ -41,6 +43,14 @@ export function restaurantSchema() {
       latitude: BUSINESS.geo.latitude,
       longitude: BUSINESS.geo.longitude,
     },
+    // TODO: uncomment when Google reviews are available
+    // aggregateRating: {
+    //   "@type": "AggregateRating",
+    //   ratingValue: "4.8",
+    //   reviewCount: "0",
+    //   bestRating: "5",
+    //   worstRating: "1",
+    // },
     openingHoursSpecification: BUSINESS.openingHours.map((spec) => ({
       "@type": "OpeningHoursSpecification",
       dayOfWeek: spec.dayOfWeek,
@@ -68,6 +78,18 @@ export function restaurantSchema() {
       { "@type": "City", name: "Landemont" },
       { "@type": "City", name: "Liré" },
       { "@type": "City", name: "Drain" },
+      { "@type": "City", name: "Bouzillé" },
+      { "@type": "City", name: "Saint-Christophe-la-Couperie" },
+      { "@type": "City", name: "Saint-Laurent-des-Autels" },
+      { "@type": "City", name: "Saint-Sauveur-de-Landemont" },
+      { "@type": "City", name: "La Remaudière" },
+      { "@type": "City", name: "La Pommeraye" },
+      { "@type": "City", name: "La Chapelle-Saint-Florent" },
+      { "@type": "City", name: "Le Marillais" },
+      { "@type": "City", name: "Oudon" },
+      { "@type": "City", name: "Ancenis-Saint-Géréon" },
+      { "@type": "City", name: "Le Fuilet" },
+      { "@type": "City", name: "Mauges-sur-Loire" },
     ],
   };
 }
@@ -163,4 +185,31 @@ export function communeFaqs(commune: Commune): FaqItem[] {
       answer: `Notre carte propose des pizzas artisanales avec une pâte à longue fermentation (48h minimum), des ingrédients frais et locaux. Consultez notre menu complet sur delizza.fr/menu.`,
     },
   ];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Menu schema                                                        */
+/* ------------------------------------------------------------------ */
+
+export function menuSectionSchema() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Menu",
+    "@id": `${SITE_URL}/menu#menu`,
+    name: "Menu Pizza Deli'Zza",
+    description:
+      "Carte des pizzas artisanales de Pizza Deli'Zza — pâte à longue fermentation, ingrédients frais et locaux.",
+    url: `${SITE_URL}/menu`,
+    hasMenuSection: {
+      "@type": "MenuSection",
+      name: "Pizzas artisanales",
+      description:
+        "Toutes nos pizzas sont préparées à la commande avec une pâte fermentée 48h minimum.",
+    },
+    inLanguage: "fr",
+    offers: {
+      "@type": "Offer",
+      availableAtOrFrom: { "@id": `${SITE_URL}/#restaurant` },
+    },
+  };
 }

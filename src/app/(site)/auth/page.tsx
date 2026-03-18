@@ -4,6 +4,7 @@ import AuthPageClient from "./AuthPageClient";
 export const metadata: Metadata = {
   title: "Connexion — Deli'Zza",
   description: "Connectez-vous ou créez un compte pour commander chez Deli'Zza.",
+  robots: { index: false, follow: true },
 };
 
 export default function AuthPage() {

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { communeBySlug, allCommuneSlugs, BUSINESS, SITE_URL } from "@/lib/seo";
+import { communeBySlug, allCommuneSlugs, nearbyCommunes, BUSINESS, SITE_URL, OG_IMAGE } from "@/lib/seo";
 import { breadcrumbSchema, faqSchema, communeFaqs } from "@/lib/schemas";
 import JsonLd from "@/components/seo/JsonLd";
 
@@ -37,6 +37,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: `${prefix} à ${commune.name} — Pizza Deli'Zza`,
       description: `Commandez vos pizzas artisanales en click & collect depuis ${commune.name}. Retrait à La Varenne en ${commune.driveTime}.`,
       url: `${SITE_URL}/${slug}`,
+      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: `Pizza Deli'Zza — ${prefix} à ${commune.name}` }],
     },
   };
 }
@@ -54,6 +55,7 @@ export default async function CommunePage({ params }: PageProps) {
   const h1Prefix = isVariante ? "Pizzeria à emporter" : "Pizza à emporter";
 
   const faqs = communeFaqs(commune);
+  const nearby = nearbyCommunes(slug);
 
   const breadcrumbs = [
     { name: "Accueil", href: "/" },
@@ -160,6 +162,26 @@ export default async function CommunePage({ params }: PageProps) {
             ))}
           </dl>
         </section>
+
+        {/* Communes voisines */}
+        {nearby.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-[15px] font-medium text-[#6B6B6B]">
+              Pizza à emporter près de chez vous
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {nearby.map((c) => (
+                <Link
+                  key={c.slug}
+                  href={`/${c.slug}`}
+                  className="rounded-full bg-[#0D0D0D] border border-[#252525] px-3 py-1.5 text-[13px] text-[#A0A0A0] hover:text-[#D4A053] hover:border-[#D4A053] transition-colors"
+                >
+                  {c.name}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* CTAs */}
         <section className="flex flex-col items-center gap-3 rounded-[24px] bg-gradient-to-br from-[#1A1A1A] to-[#252525] p-6 text-center">

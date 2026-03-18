@@ -11,6 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/download`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
     { url: `${baseUrl}/privacy`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.3 },
     { url: `${baseUrl}/cgu`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.3 },
+    { url: `${baseUrl}/notre-savoir-faire`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
   ];
 
   const localPages: MetadataRoute.Sitemap = allCommuneSlugs().map((slug) => ({

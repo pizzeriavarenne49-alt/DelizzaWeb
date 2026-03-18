@@ -161,6 +161,213 @@ export const COMMUNES: Commune[] = [
     intro:
       "Voisins de Drain, profitez de la proximité ! Pizza Deli'Zza est votre pizzeria artisanale de quartier. Commandez en click & collect et récupérez votre pizza en quelques minutes.",
   },
+
+  /* ── Communes déléguées d'Orée d'Anjou ── */
+
+  {
+    slug: "pizza-bouzille",
+    name: "Bouzillé",
+    driveTime: "8 min",
+    access:
+      "Depuis Bouzillé, rejoignez La Varenne par la D210 en direction d'Orée d'Anjou. Comptez environ 8 minutes de route à travers les bocages angevins.",
+    landmarks:
+      "Bouzillé borde la vallée de la Loire côté Anjou. La route vers La Varenne est directe et agréable, sans traversée de grande agglomération.",
+    intro:
+      "À Bouzillé, les soirées pizzas sont désormais à 8 minutes. Pizza Deli'Zza vous prépare des pizzas artisanales à pâte longue fermentation que vous récupérez directement à La Varenne.",
+  },
+  {
+    slug: "pizza-saint-christophe-la-couperie",
+    name: "Saint-Christophe-la-Couperie",
+    driveTime: "10 min",
+    access:
+      "Depuis Saint-Christophe-la-Couperie, prenez la direction de La Varenne via la D751. Le trajet traverse un paysage rural typique du Maine-et-Loire et dure environ 10 minutes.",
+    landmarks:
+      "Saint-Christophe-la-Couperie, commune déléguée d'Orée d'Anjou, est nichée entre vignes et bocages. Le pont sur l'Evre permet de rejoindre facilement La Varenne.",
+    intro:
+      "Habitants de Saint-Christophe-la-Couperie, votre pizzeria artisanale est à moins de 10 minutes ! Commandez en ligne sur delizza.fr et récupérez vos pizzas fraîchement préparées à La Varenne.",
+  },
+  {
+    slug: "pizza-saint-laurent-des-autels",
+    name: "Saint-Laurent-des-Autels",
+    driveTime: "12 min",
+    access:
+      "Depuis Saint-Laurent-des-Autels, empruntez la D751 vers l'est jusqu'à La Varenne. Une douzaine de minutes suffisent pour relier les deux communes d'Orée d'Anjou.",
+    landmarks:
+      "Saint-Laurent-des-Autels est connu pour ses vignobles et ses paysages de coteaux. Depuis le bourg, la route vers La Varenne longe de belles prairies angevines.",
+    intro:
+      "De Saint-Laurent-des-Autels jusqu'à La Varenne, il ne faut que 12 minutes pour récupérer vos pizzas artisanales chez Pizza Deli'Zza. Pâte à longue fermentation, ingrédients de qualité : une vraie récompense après la journée.",
+  },
+  {
+    slug: "pizza-saint-sauveur-de-landemont",
+    name: "Saint-Sauveur-de-Landemont",
+    driveTime: "12 min",
+    access:
+      "Depuis Saint-Sauveur-de-Landemont, rejoignez La Varenne par la D154 puis la D210. Ce parcours d'une douzaine de minutes vous mène directement à notre pizzeria.",
+    landmarks:
+      "Saint-Sauveur-de-Landemont est situé dans les collines au sud d'Orée d'Anjou. La route descend agréablement vers la vallée pour rejoindre La Varenne.",
+    intro:
+      "Depuis Saint-Sauveur-de-Landemont, offrez-vous une pause gourmande avec les pizzas de Pizza Deli'Zza. À seulement 12 minutes, vous pouvez commander en ligne et récupérer votre commande fraîche et chaude.",
+  },
+
+  /* ── Communes voisines ── */
+
+  {
+    slug: "pizza-la-remaudiere",
+    name: "La Remaudière",
+    driveTime: "12 min",
+    access:
+      "Depuis La Remaudière (Loire-Atlantique), traversez la Loire par le pont de La Varenne pour rejoindre directement notre pizzeria. Comptez environ 12 minutes.",
+    landmarks:
+      "La Remaudière est un bourg tranquille du vignoble nantais, juste de l'autre côté de la Loire. Le pont de La Varenne est le lien le plus direct entre les deux communes.",
+    intro:
+      "Depuis La Remaudière, une courte traversée de la Loire suffit pour découvrir les pizzas artisanales de Pizza Deli'Zza. Commandez en click & collect et profitez d'une pizza faite maison à seulement 12 minutes de chez vous.",
+  },
+  {
+    slug: "pizza-la-pommeraye",
+    name: "La Pommeraye",
+    driveTime: "12 min",
+    access:
+      "Depuis La Pommeraye, descendez vers la Loire par la D751 en direction de La Varenne. Le trajet dure environ 12 minutes en passant par les coteaux de Mauges-sur-Loire.",
+    landmarks:
+      "La Pommeraye domine les coteaux calcaires de la Loire. La descente vers La Varenne offre une belle vue sur le fleuve et ses îles avant d'arriver à notre pizzeria.",
+    intro:
+      "Depuis les hauteurs de La Pommeraye, venez déguster nos pizzas artisanales à pâte longue fermentation. Pizza Deli'Zza est votre pizzeria de référence à seulement 12 minutes en voiture.",
+  },
+  {
+    slug: "pizza-la-chapelle-saint-florent",
+    name: "La Chapelle-Saint-Florent",
+    driveTime: "10 min",
+    access:
+      "Depuis La Chapelle-Saint-Florent, prenez la D751 direction La Varenne. En 10 minutes, vous longez la Loire avant d'arriver directement devant notre pizzeria.",
+    landmarks:
+      "La Chapelle-Saint-Florent borde la Loire côté Mauges. La route vers La Varenne est panoramique et passe à proximité des rochers de la Loire ligérienne.",
+    intro:
+      "Depuis La Chapelle-Saint-Florent, Pizza Deli'Zza n'est qu'à 10 minutes. Commandez vos pizzas artisanales en ligne et récupérez-les fraîches à La Varenne : pâte croustillante, ingrédients frais, fait maison.",
+  },
+  {
+    slug: "pizza-le-marillais",
+    name: "Le Marillais",
+    driveTime: "12 min",
+    access:
+      "Depuis Le Marillais, rejoignez La Varenne par la D751 en longeant la Loire. Le trajet d'une douzaine de minutes traverse les marais ligériens et arrive directement à notre pizzeria.",
+    landmarks:
+      "Le Marillais est un petit bourg de la Loire angevine, connu pour ses prairies humides et sa vue sur le fleuve. La route vers La Varenne longe les bords de Loire.",
+    intro:
+      "Le Marillais est à 12 minutes de la meilleure pizza artisanale de la région ! Pizza Deli'Zza vous accueille à La Varenne avec des pizzas préparées à la commande, pâte à longue fermentation et ingrédients locaux.",
+  },
+  {
+    slug: "pizza-oudon",
+    name: "Oudon",
+    driveTime: "15 min",
+    access:
+      "Depuis Oudon (Loire-Atlantique), traversez la Loire par le pont d'Oudon et rejoignez La Varenne par la D751. Comptez environ 15 minutes pour ce trajet entre les deux rives.",
+    landmarks:
+      "Oudon est célèbre pour sa Tour médiévale qui domine la Loire. Depuis la rive nord, La Varenne est visible de l'autre côté du fleuve. Notre pizzeria est facilement accessible après la traversée du pont.",
+    intro:
+      "Habitants d'Oudon, votre pizzeria artisanale préférée est à 15 minutes. Pizza Deli'Zza vous propose des pizzas faites maison avec une pâte à longue fermentation. Commandez en ligne et récupérez votre commande à La Varenne.",
+  },
+  {
+    slug: "pizza-ancenis",
+    name: "Ancenis-Saint-Géréon",
+    driveTime: "20 min",
+    access:
+      "Depuis Ancenis, prenez la D923 direction Varades puis la D751 vers La Varenne. Ce trajet d'une vingtaine de minutes vous conduit jusqu'à notre pizzeria artisanale.",
+    landmarks:
+      "Ancenis-Saint-Géréon est la ville principale du Pays d'Ancenis. Malgré la distance de 20 minutes, de nombreux habitants d'Ancenis font le déplacement pour nos pizzas artisanales à pâte longue fermentation.",
+    intro:
+      "Depuis Ancenis, la meilleure pizza artisanale des bords de Loire est à seulement 20 minutes ! Pizza Deli'Zza prépare chaque pizza à la commande avec une pâte fermentée 48 heures, de la mozzarella filante et des produits locaux.",
+  },
+  {
+    slug: "pizza-le-fuilet",
+    name: "Le Fuilet",
+    driveTime: "14 min",
+    access:
+      "Depuis Le Fuilet, rejoignez La Varenne par la D961 puis la D210. Ce trajet d'environ 14 minutes traverse les terres de Montrevault-sur-Èvre.",
+    landmarks:
+      "Le Fuilet est une commune de la région des Mauges, connue pour ses paysages bocagers. La route vers La Varenne descend vers la Loire en passant par les collines angevines.",
+    intro:
+      "Depuis Le Fuilet, offrez-vous une vraie pizza artisanale à seulement 14 minutes. Pizza Deli'Zza vous prépare des pizzas maison avec une pâte à longue fermentation, des légumes frais et une charcuterie sélectionnée.",
+  },
+  {
+    slug: "pizza-mauges-sur-loire",
+    name: "Mauges-sur-Loire",
+    driveTime: "12 min",
+    access:
+      "Depuis Mauges-sur-Loire (La Pommeraye, La Chapelle-Saint-Florent…), rejoignez La Varenne par la D751. Selon votre point de départ, comptez 10 à 15 minutes.",
+    landmarks:
+      "Mauges-sur-Loire regroupe plusieurs communes déléguées en bord de Loire. La Varenne est accessible depuis tous les bourgs en moins de 15 minutes par les routes départementales.",
+    intro:
+      "Depuis Mauges-sur-Loire, Pizza Deli'Zza est votre pizzeria artisanale de proximité. Commandez en ligne et récupérez vos pizzas fraîches à La Varenne : pâte maison, ingrédients de qualité, tout fait sur place.",
+  },
+
+  /* ── Variantes pizzeria- pour les communes principales ── */
+
+  {
+    slug: "pizzeria-ancenis",
+    name: "Ancenis-Saint-Géréon",
+    driveTime: "20 min",
+    access:
+      "Depuis Ancenis, suivez la D923 vers Varades puis la D751 longeant la Loire jusqu'à La Varenne. En 20 minutes, vous rejoignez directement notre pizzeria artisanale.",
+    landmarks:
+      "Ancenis-Saint-Géréon dispose d'un château médiéval et d'un bord de Loire agréable. Notre pizzeria est facilement identifiable Place du Jardin Public à La Varenne.",
+    intro:
+      "Vous cherchez une pizzeria artisanale à emporter près d'Ancenis ? Pizza Deli'Zza est à 20 minutes et vaut vraiment le déplacement : pâte à longue fermentation, ingrédients frais, fait maison sans exception.",
+  },
+  {
+    slug: "pizzeria-champtoceaux",
+    name: "Champtoceaux",
+    driveTime: "7 min",
+    access:
+      "Depuis le bourg de Champtoceaux, descendez par la D751 en direction de La Varenne. En 7 minutes à peine, vous êtes devant notre pizzeria artisanale.",
+    landmarks:
+      "Champtoceaux domine la Loire depuis son promontoire naturel. Le chemin de ronde et le panorama sur le fleuve en font un endroit unique, à deux pas de Pizza Deli'Zza.",
+    intro:
+      "Vous êtes à Champtoceaux et vous cherchez une pizzeria sérieuse ? Pizza Deli'Zza est à 7 minutes. Pâte à longue fermentation, garnitures généreuses, cuisson maîtrisée : venez voir la différence.",
+  },
+  {
+    slug: "pizzeria-drain",
+    name: "Drain",
+    driveTime: "5 min",
+    access:
+      "Drain est à 5 minutes seulement de La Varenne par la D210. La route est simple et directe, sans détour.",
+    landmarks:
+      "Drain surplombe la vallée de la Loire avec ses vignes et ses chemins de randonnée. La Varenne, en contrebas, est le point d'ancrage de notre pizzeria artisanale.",
+    intro:
+      "Votre pizzeria artisanale à Drain ? C'est Pizza Deli'Zza, à 5 minutes à peine. Pâte fermentée, mozzarella de qualité et cuisson au four : tous les ingrédients d'une bonne soirée.",
+  },
+  {
+    slug: "pizzeria-saint-florent-le-vieil",
+    name: "Saint-Florent-le-Vieil",
+    driveTime: "8 min",
+    access:
+      "Depuis Saint-Florent-le-Vieil, empruntez la D751 direction La Varenne. Traversez la Loire et comptez environ 8 minutes pour rejoindre notre pizzeria.",
+    landmarks:
+      "Saint-Florent-le-Vieil est une ville chargée d'histoire, avec son abbaye sur le coteau et son quai sur la Loire. Pizza Deli'Zza est votre pizzeria artisanale à portée de main.",
+    intro:
+      "Depuis Saint-Florent-le-Vieil, vous méritez une vraie pizzeria artisanale. Pizza Deli'Zza est à 8 minutes, avec des pizzas préparées à la commande et une pâte longue fermentation qui change tout.",
+  },
+  {
+    slug: "pizzeria-oree-danjou",
+    name: "Orée d'Anjou",
+    driveTime: "5 min",
+    access:
+      "Orée d'Anjou englobe plusieurs communes dont La Varenne, siège de Pizza Deli'Zza. Selon votre bourg, comptez 5 à 15 minutes pour rejoindre la pizzeria.",
+    landmarks:
+      "Orée d'Anjou est une commune nouvelle des bords de Loire. La Varenne, avec son Jardin Public et son accès facile, est le cœur commercial de la commune où se trouve notre pizzeria.",
+    intro:
+      "Orée d'Anjou, vous avez de la chance : Pizza Deli'Zza est votre pizzeria artisanale locale. Pâte à longue fermentation, ingrédients frais, fait maison — une adresse que vous ne regretterez pas.",
+  },
+  {
+    slug: "pizzeria-oudon",
+    name: "Oudon",
+    driveTime: "15 min",
+    access:
+      "Depuis Oudon, traversez la Loire par le pont et rejoignez La Varenne par la D751. Quinze minutes séparent la Tour d'Oudon de notre pizzeria artisanale.",
+    landmarks:
+      "Oudon est connue pour sa Tour médiévale, l'un des monuments les mieux conservés du bord de Loire. Pizza Deli'Zza, sur la rive angevine, est facilement accessible depuis le pont.",
+    intro:
+      "Oudon mérite une bonne pizzeria, et Pizza Deli'Zza est là pour ça. À 15 minutes, venez chercher vos pizzas artisanales : pâte longue fermentation, produits locaux, cuisson au four. Commandez en ligne, gagnez du temps.",
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -174,4 +381,22 @@ export function communeBySlug(slug: string): Commune | undefined {
 /** All slugs – used by generateStaticParams */
 export function allCommuneSlugs(): string[] {
   return COMMUNES.map((c) => c.slug);
+}
+
+/**
+ * Returns up to 5 nearby communes (distinct names, sorted by driveTime)
+ * excluding the current commune. Used for internal linking chips.
+ */
+export function nearbyCommunes(slug: string): Commune[] {
+  const currentName = communeBySlug(slug)?.name;
+  const seenNames = new Set<string>();
+
+  return COMMUNES.filter((c) => c.slug !== slug && c.name !== currentName)
+    .sort((a, b) => parseInt(a.driveTime) - parseInt(b.driveTime))
+    .filter((c) => {
+      if (seenNames.has(c.name)) return false;
+      seenNames.add(c.name);
+      return true;
+    })
+    .slice(0, 5);
 }
