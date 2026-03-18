@@ -2,6 +2,7 @@ import BottomNav from "@/components/ui/BottomNav";
 import DesktopNav from "@/components/ui/DesktopNav";
 import AppBanner from "@/components/ui/AppBanner";
 import { Providers } from "@/components/ui/SiteProviders";
+import SeoFooter from "@/components/seo/SeoFooter";
 
 export default function SiteLayout({
   children,
@@ -15,6 +16,7 @@ export default function SiteLayout({
         <DesktopNav />
         <main className="flex-1 min-w-0 min-h-screen pb-20 md:pb-8">
           {children}
+          <SeoFooter />
         </main>
       </div>
       <BottomNav />
