@@ -14,7 +14,7 @@ import {
   signOut as firebaseSignOut,
   type User,
 } from "firebase/auth";
-import { getClientAuth } from "@/config/firebase-client";
+import { getClientAuth, initAppCheck } from "@/config/firebase-client";
 
 interface AuthContextValue {
   user: User | null;
@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    initAppCheck();
     const auth = getClientAuth();
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
