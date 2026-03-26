@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -60,24 +61,29 @@ function migrateLegacyItems(items: CartItem[]): CartItem[] {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    // Lazy initializer runs only on the client after hydration
-    if (typeof window === "undefined") return [];
+  const [items, setItems] = useState<CartItem[]>([]);
+  const hydrated = useRef(false);
+
+  // Hydrate cart from localStorage after mount (avoids SSR/client mismatch)
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as CartItem[];
-        if (Array.isArray(parsed)) return migrateLegacyItems(parsed);
+        if (Array.isArray(parsed)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setItems(migrateLegacyItems(parsed));
+        }
       }
     } catch {
       // Ignore malformed data
     }
-    return [];
-  });
+    hydrated.current = true;
+  }, []);
 
   // Persist to localStorage whenever items change
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!hydrated.current) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
