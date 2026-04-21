@@ -230,12 +230,12 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
               <p className="text-[13px] text-[#F5F5F5]">
                 Prochain créneau :{" "}
                 <span className="font-semibold text-[#D4A053]">
-                  {nextAsapSlot.dateKey === "today" ? "Aujourd&apos;hui" : "Demain"} à {nextAsapSlot.slot.start}
+                  {nextAsapSlot.dateKey === "today" ? "Aujourd'hui" : "Demain"} à {nextAsapSlot.slot.start}
                 </span>
               </p>
             ) : (
               <p className="text-[13px] text-[#E74C3C]">
-                Aucun créneau disponible aujourd&apos;hui ou demain. Veuillez choisir un autre horaire.
+                Aucun créneau disponible aujourd’hui ou demain. Veuillez choisir un autre horaire.
               </p>
             )}
           </div>
