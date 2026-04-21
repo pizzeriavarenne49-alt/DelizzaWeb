@@ -35,6 +35,12 @@ function getTomorrowDate(): Date {
   return d;
 }
 
+type SlotDateKey = "today" | "tomorrow";
+
+function findNextAvailableSlot(slots: TimeSlotInfo[]): TimeSlotInfo | undefined {
+  return slots.find((slot) => slot.status !== "full");
+}
+
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
@@ -99,17 +105,22 @@ interface Step1Props {
 }
 
 function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
-  const [selectedDate, setSelectedDate] = useState<"today" | "tomorrow">("today");
+  const [selectedDate, setSelectedDate] = useState<SlotDateKey>("today");
   const [slots, setSlots] = useState<TimeSlotInfo[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [nextAsapSlot, setNextAsapSlot] = useState<{ dateKey: SlotDateKey; slot: TimeSlotInfo } | null>(null);
 
-  const fetchSlots = useCallback(async (dateKey: "today" | "tomorrow") => {
+  const getSlotsForDate = useCallback(async (dateKey: SlotDateKey): Promise<TimeSlotInfo[]> => {
+    const date = dateKey === "today" ? getTodayDate() : getTomorrowDate();
+    return getAvailableSlots({ appId: WL_APP_ID, date: toISODate(date) });
+  }, []);
+
+  const fetchSlots = useCallback(async (dateKey: SlotDateKey) => {
     setSlotsLoading(true);
     setSlotsError(null);
     try {
-      const date = dateKey === "today" ? getTodayDate() : getTomorrowDate();
-      const result = await getAvailableSlots({ appId: WL_APP_ID, date: toISODate(date) });
+      const result = await getSlotsForDate(dateKey);
       setSlots(result);
     } catch (err) {
       console.error("[slot-service] getAvailableSlots unexpected response or error:", err);
@@ -118,19 +129,53 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
     } finally {
       setSlotsLoading(false);
     }
-  }, []);
+  }, [getSlotsForDate]);
 
-  // Fetch slots when "Choisir un créneau" is selected or date changes
-  useEffect(() => {
-    if (!state.isAsap) {
-      fetchSlots(selectedDate);
+  const fetchNextAsapSlot = useCallback(async () => {
+    setSlotsLoading(true);
+    setSlotsError(null);
+    try {
+      const todaySlots = await getSlotsForDate("today");
+      setSlots(todaySlots);
+      const todayNextSlot = findNextAvailableSlot(todaySlots);
+      if (todayNextSlot) {
+        setNextAsapSlot({ dateKey: "today", slot: todayNextSlot });
+        return;
+      }
+
+      const tomorrowSlots = await getSlotsForDate("tomorrow");
+      const tomorrowNextSlot = findNextAvailableSlot(tomorrowSlots);
+      if (tomorrowNextSlot) {
+        setNextAsapSlot({ dateKey: "tomorrow", slot: tomorrowNextSlot });
+      } else {
+        setNextAsapSlot(null);
+      }
+    } catch (err) {
+      console.error("[slot-service] getAvailableSlots unexpected response or error:", err);
+      setSlotsError("Impossible de charger les créneaux. Veuillez réessayer.");
+      setSlots([]);
+      setNextAsapSlot(null);
+    } finally {
+      setSlotsLoading(false);
     }
-  }, [state.isAsap, selectedDate, fetchSlots]);
+  }, [getSlotsForDate]);
 
-  const handleDateChange = (dateKey: "today" | "tomorrow") => {
+  // Fetch slots for schedule mode and compute the next slot for ASAP mode
+  useEffect(() => {
+    if (state.isAsap) {
+      fetchNextAsapSlot();
+      return;
+    }
+    setNextAsapSlot(null);
+    fetchSlots(selectedDate);
+  }, [state.isAsap, selectedDate, fetchSlots, fetchNextAsapSlot]);
+
+  const handleDateChange = (dateKey: SlotDateKey) => {
     setSelectedDate(dateKey);
     onChange({ ...state, scheduledTime: "" });
   };
+
+  const isAsapBlocked = state.isAsap && (!nextAsapSlot || slotsLoading || !!slotsError);
 
   return (
     <div className="flex flex-col gap-5">
@@ -174,6 +219,27 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
             Choisir un créneau
           </button>
         </div>
+
+        {state.isAsap && (
+          <div className="rounded-[14px] bg-[#252525] border border-white/10 px-4 py-3">
+            {slotsLoading ? (
+              <p className="text-[13px] text-[#A0A0A0]">Recherche du prochain créneau disponible…</p>
+            ) : slotsError ? (
+              <p className="text-[13px] text-[#E74C3C]">{slotsError}</p>
+            ) : nextAsapSlot ? (
+              <p className="text-[13px] text-[#F5F5F5]">
+                Prochain créneau :{" "}
+                <span className="font-semibold text-[#D4A053]">
+                  {nextAsapSlot.dateKey === "today" ? "Aujourd'hui" : "Demain"} à {nextAsapSlot.slot.start}
+                </span>
+              </p>
+            ) : (
+              <p className="text-[13px] text-[#E74C3C]">
+                Aucun créneau disponible aujourd’hui ou demain. Veuillez choisir un autre horaire.
+              </p>
+            )}
+          </div>
+        )}
 
         {!state.isAsap && (
           <div className="flex flex-col gap-4">
@@ -279,7 +345,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
       <button
         type="button"
         onClick={onNext}
-        disabled={isEmpty || (!state.isAsap && !state.scheduledTime)}
+        disabled={isEmpty || (!state.isAsap && !state.scheduledTime) || isAsapBlocked}
         className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continuer
@@ -451,6 +517,7 @@ export default function CheckoutClient() {
         method: "clickAndCollect",
         isAsap: fulfillment.isAsap,
         source: "web",
+        paymentTiming: "before",
         ...((!fulfillment.isAsap && fulfillment.scheduledTime)
           ? { scheduledTime: fulfillment.scheduledTime }
           : {}),

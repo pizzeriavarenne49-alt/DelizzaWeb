@@ -23,10 +23,25 @@ export type OrderStatus =
 /** Mirrors WLHORIZON FulfillmentMethod enum */
 export type FulfillmentMethod = "clickAndCollect" | "delivery" | "onSite";
 
-export interface FulfillmentData {
+export type PaymentTiming = "before" | "after" | "flexible";
+
+interface BaseFulfillmentData {
   method: FulfillmentMethod;
-  [key: string]: unknown;
+  isAsap?: boolean;
+  source?: string;
+  scheduledTime?: string;
+  instructions?: string;
 }
+
+export type FulfillmentData =
+  | (BaseFulfillmentData & {
+      method: "clickAndCollect";
+      paymentTiming: PaymentTiming;
+    })
+  | (BaseFulfillmentData & {
+      method: Exclude<FulfillmentMethod, "clickAndCollect">;
+      paymentTiming?: PaymentTiming;
+    });
 
 /** Mirrors the slot structure returned by the WLHORIZON `getAvailableSlots` Cloud Function */
 export interface TimeSlotInfo {
