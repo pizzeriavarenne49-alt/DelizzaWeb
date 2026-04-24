@@ -39,9 +39,9 @@ export default function ComingSoonOverlay() {
 
       {/* Sub-text */}
       <p className="text-[#A0A0A0] text-sm md:text-base text-center max-w-xs md:max-w-sm px-6 leading-relaxed">
-        Nous préparons quelque chose de propre.
+        Le temps de chauffer le four…
         <br />
-        Réouverture très bientôt.
+        Ouverture prochainement.
       </p>
 
       {/* Animated dots loader */}
