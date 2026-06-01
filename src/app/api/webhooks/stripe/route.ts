@@ -25,7 +25,7 @@ import {
   getDoc,
   updateDoc,
 } from "firebase/firestore";
-import type Stripe from "stripe";
+import Stripe from "stripe";
 
 // ─── Firebase initialization (server-side) ──────────────────────────────────
 function getServerFirestore() {
@@ -56,8 +56,6 @@ async function verifyStripeSignature(
   }
 
   try {
-    const stripeModule = await import("stripe");
-    const Stripe = stripeModule.default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
       apiVersion: "2024-06-20",
     });
