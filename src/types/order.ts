@@ -12,7 +12,6 @@ import type { CartItem } from "./cart";
 /** Mirrors WLHORIZON OrderStatus enum */
 export type OrderStatus =
   | "draft"
-  | "created"
   | "paid"
   | "accepted"
   | "inPreparation"
@@ -67,6 +66,11 @@ export interface OrderData {
   totalCents: number;
   fulfillmentMethod: FulfillmentMethod;
   fulfillmentData: FulfillmentData;
+  // Payment tracking — MUST be set by server-side Cloud Function
+  paymentIntentId: string; // Stripe PaymentIntent ID
+  amountCents: number; // Server-calculated amount (matches Stripe)
+  // Webhook idempotence — tracks processed Stripe events
+  processedEvents?: string[]; // Array of Stripe event IDs
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
 }

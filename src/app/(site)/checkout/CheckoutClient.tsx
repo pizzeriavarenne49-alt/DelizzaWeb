@@ -6,7 +6,13 @@ import dynamic from "next/dynamic";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
-import { createOrder, createPaymentIntent } from "@/services/order-service";
+import {
+  validateAndCalculateOrder,
+  createOrder,
+  createPaymentIntent,
+  type ValidateOrderItemInput,
+  type ValidateOrderResult,
+} from "@/services/order-service";
 import { getAvailableSlots } from "@/services/slot-service";
 import { formatPrice, computeTtcCents, formatTaxRate } from "@/types";
 import type { FulfillmentData, TimeSlotInfo } from "@/types/order";
@@ -19,7 +25,7 @@ const StripeCheckout = dynamic(
 
 const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? "";
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
+// ─── Date helpers ────────────────────────────────────────────────────────────
 
 function toISODate(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -41,7 +47,7 @@ function findNextAvailableSlot(slots: TimeSlotInfo[]): TimeSlotInfo | undefined 
   return slots.find((slot) => slot.status !== "full");
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+// ─── Step indicator ────────────────────────────────────────────────────────
 
 function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
   const steps = ["Livraison", "Récapitulatif", "Paiement"];
@@ -160,7 +166,6 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
     }
   }, [getSlotsForDate]);
 
-  // Fetch slots for schedule mode and compute the next slot for ASAP mode
   useEffect(() => {
     if (state.isAsap) {
       fetchNextAsapSlot();
@@ -235,7 +240,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
               </p>
             ) : (
               <p className="text-[13px] text-[#E74C3C]">
-                Aucun créneau disponible aujourd’hui ou demain. Veuillez choisir un autre horaire.
+                Aucun créneau disponible aujourd'hui ou demain. Veuillez choisir un autre horaire.
               </p>
             )}
           </div>
@@ -243,7 +248,6 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
 
         {!state.isAsap && (
           <div className="flex flex-col gap-4">
-            {/* Date toggle: Today / Tomorrow */}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -269,7 +273,6 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
               </button>
             </div>
 
-            {/* Slot grid */}
             {slotsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <span className="h-6 w-6 animate-spin rounded-full border-2 border-[#D4A053] border-t-transparent" />
@@ -330,8 +333,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
       {/* Instructions */}
       <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-3">
         <h2 className="text-[16px] font-bold text-[#F5F5F5]">
-          Instructions{" "}
-          <span className="text-[13px] font-normal text-[#6B6B6B]">(optionnel)</span>
+          Instructions <span className="text-[13px] font-normal text-[#6B6B6B]">(optionnel)</span>
         </h2>
         <textarea
           value={state.instructions}
@@ -346,7 +348,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
         type="button"
         onClick={onNext}
         disabled={isEmpty || (!state.isAsap && !state.scheduledTime) || isAsapBlocked}
-        className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
       >
         Continuer
       </button>
@@ -354,7 +356,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
   );
 }
 
-// ─── Step 2: Summary ──────────────────────────────────────────────────────────
+// ─── Step 2: Summary ────────────────────────────────────────────────────────
 
 interface Step2Props {
   userEmail: string | null | undefined;
@@ -365,6 +367,7 @@ interface Step2Props {
   onNext: () => void;
   loading: boolean;
   error: string | null;
+  validatedOrder: ValidateOrderResult | null;
 }
 
 function Step2Summary({
@@ -376,17 +379,23 @@ function Step2Summary({
   onNext,
   loading,
   error,
+  validatedOrder,
 }: Step2Props) {
-  const {
-    items,
-    getSubtotalCents,
-    getTotalCents,
-    getTaxBreakdown,
-  } = useCart();
+  const subtotal = validatedOrder?.subtotalCents ?? 0;
+  const total = validatedOrder?.totalCents ?? 0;
 
-  const subtotal = getSubtotalCents();
-  const total = getTotalCents();
-  const taxBreakdown = getTaxBreakdown();
+  const taxBreakdown = (() => {
+    if (!validatedOrder) return [];
+    const map = new Map<number, number>();
+    for (const item of validatedOrder.items) {
+      const rate = item.taxRateBps;
+      const tax = Math.round((item.totalCents * rate) / 10000);
+      map.set(rate, (map.get(rate) ?? 0) + tax);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([rateBps, taxCents]) => ({ rateBps, taxCents }));
+  })();
 
   return (
     <div className="flex flex-col gap-5">
@@ -394,11 +403,10 @@ function Step2Summary({
       <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-3">
         <h2 className="text-[16px] font-bold text-[#F5F5F5]">Votre commande</h2>
         <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <li key={item.catalogItemId} className="flex justify-between items-center text-[14px]">
+          {validatedOrder?.items.map((item) => (
+            <li key={item.cartKey} className="flex justify-between items-center text-[14px]">
               <span className="text-[#F5F5F5]">
-                <span className="font-semibold text-[#D4A053]">{item.quantity}×</span>{" "}
-                {item.nameSnapshot}
+                <span className="font-semibold text-[#D4A053]">{item.quantity}×</span> {item.nameSnapshot}
               </span>
               <span className="text-[#A0A0A0] whitespace-nowrap">
                 {formatPrice(computeTtcCents(item.totalCents, item.taxRateBps))}&nbsp;€
@@ -469,8 +477,8 @@ function Step2Summary({
         <button
           type="button"
           onClick={onNext}
-          disabled={loading}
-          className="flex-[2] rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading || !validatedOrder}
+          className="flex-[2] rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -486,12 +494,12 @@ function Step2Summary({
   );
 }
 
-// ─── Main CheckoutClient ──────────────────────────────────────────────────────
+// ─── Main CheckoutClient ───────────────────────────────────────────────────
 
 export default function CheckoutClient() {
   const router = useRouter();
   const { user } = useAuth();
-  const { items, isEmpty, getSubtotalCents, getTaxCents, getTotalCents, clearCart } = useCart();
+  const { items, isEmpty, clearCart } = useCart();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fulfillment, setFulfillment] = useState<FulfillmentFormState>({
@@ -500,9 +508,8 @@ export default function CheckoutClient() {
     instructions: "",
   });
 
-  // Payment state
+  const [validatedOrder, setValidatedOrder] = useState<ValidateOrderResult | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [paymentAmountCents, setPaymentAmountCents] = useState(0);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -513,6 +520,24 @@ export default function CheckoutClient() {
     setError(null);
 
     try {
+      // SECURITY BOUNDARY:
+      // 1. Build minimal validation input (only productId + quantity, NO prices)
+      const validationInput = {
+        appId: WL_APP_ID,
+        items: items.map(
+          (item): ValidateOrderItemInput => ({
+            productId: item.catalogItemId,
+            quantity: item.quantity,
+            selectedOptions: item.selectedOptions,
+          }),
+        ),
+      };
+
+      // 2. Call server function to validate prices & recalculate all amounts
+      const validated = await validateAndCalculateOrder(validationInput);
+      setValidatedOrder(validated);
+
+      // 3. Build fulfillment data
       const fulfillmentData: FulfillmentData = {
         method: "clickAndCollect",
         isAsap: fulfillment.isAsap,
@@ -521,26 +546,23 @@ export default function CheckoutClient() {
         ...((!fulfillment.isAsap && fulfillment.scheduledTime)
           ? { scheduledTime: fulfillment.scheduledTime }
           : {}),
-        ...(fulfillment.instructions
-          ? { instructions: fulfillment.instructions }
-          : {}),
+        ...(fulfillment.instructions ? { instructions: fulfillment.instructions } : {}),
       };
 
+      // 4. Create order with SERVER-VALIDATED items and amounts
       const orderResult = await createOrder({
         appId: WL_APP_ID,
         userId: user.uid,
         userEmail: user.email ?? "",
-        items,
-        subtotalCents: getSubtotalCents(),
-        taxCents: getTaxCents(),
-        totalCents: getTotalCents(),
+        items: validated.items,
+        subtotalCents: validated.subtotalCents,
+        taxCents: validated.taxCents,
+        totalCents: validated.totalCents,
         fulfillmentData,
-        // Temporary placeholder — the real paymentIntentId is set server-side
-        // by createPaymentIntent and updated via Stripe webhook on completion.
-        paymentId: `temp_web_${Date.now()}`,
         paymentMethod: "card",
       });
 
+      // 5. Create Stripe PaymentIntent (server recalculates amount again for double-check)
       const intentResult = await createPaymentIntent({
         appId: WL_APP_ID,
         orderId: orderResult.orderId,
@@ -548,7 +570,6 @@ export default function CheckoutClient() {
 
       setOrderId(orderResult.orderId);
       setClientSecret(intentResult.clientSecret);
-      setPaymentAmountCents(intentResult.amountCents);
       setStep(3);
     } catch (err: unknown) {
       const isResourceExhausted =
@@ -558,20 +579,17 @@ export default function CheckoutClient() {
         setError("Ce créneau est complet. Veuillez en choisir un autre.");
         setStep(1);
       } else {
-        const message =
-          err instanceof Error ? err.message : "Une erreur est survenue.";
+        const message = err instanceof Error ? err.message : "Une erreur est survenue.";
         setError(message);
       }
     } finally {
       setLoading(false);
     }
-  }, [user, fulfillment, items, getSubtotalCents, getTaxCents, getTotalCents]);
+  }, [user, fulfillment, items]);
 
   const handlePaymentSuccess = useCallback(() => {
     clearCart();
-    router.push(
-      `/order-confirmation${orderId ? `?orderId=${orderId}` : ""}`,
-    );
+    router.push(`/order-confirmation${orderId ? `?orderId=${orderId}` : ""}`);
   }, [clearCart, router, orderId]);
 
   const handlePaymentError = useCallback((message: string) => {
@@ -590,7 +608,10 @@ export default function CheckoutClient() {
               onClick={() => {
                 if (step === 1) router.back();
                 else if (step === 2) setStep(1);
-                else { setStep(2); setClientSecret(null); }
+                else {
+                  setStep(2);
+                  setClientSecret(null);
+                }
               }}
               aria-label="Retour"
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1A1A1A] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors"
@@ -623,15 +644,16 @@ export default function CheckoutClient() {
               onNext={handleProceedToPayment}
               loading={loading}
               error={error}
+              validatedOrder={validatedOrder}
             />
           )}
 
-          {step === 3 && clientSecret && (
+          {step === 3 && clientSecret && validatedOrder && (
             <div className="flex flex-col gap-5">
               <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex justify-between items-center">
                 <span className="text-[14px] text-[#A0A0A0]">Total à payer</span>
                 <span className="text-[20px] font-bold text-[#D4A053]">
-                  {formatPrice(paymentAmountCents)}&nbsp;€
+                  {formatPrice(validatedOrder.totalCents)}&nbsp;€
                 </span>
               </div>
 
@@ -643,7 +665,7 @@ export default function CheckoutClient() {
 
               <StripeCheckout
                 clientSecret={clientSecret}
-                amountCents={paymentAmountCents}
+                amountCents={validatedOrder.totalCents}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
               />
