@@ -242,7 +242,7 @@ export default function OrderConfirmationPage({
   const orderId = searchParams.orderId || "";
 
   return (
-    <Suspense fallback={<OrderConfirmationLoading()>}>
+    <Suspense fallback={<OrderConfirmationLoading />}>
       <OrderConfirmationContent orderId={orderId} />
     </Suspense>
   );
