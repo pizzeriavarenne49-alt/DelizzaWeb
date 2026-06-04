@@ -27,7 +27,7 @@ export function restaurantSchema() {
     servesCuisine: BUSINESS.servesCuisine,
     acceptsReservations: false,
     currenciesAccepted: "EUR",
-    paymentAccepted: "Cash, Credit Card",
+    paymentAccepted: "Credit Card",
     // TODO: uncomment when Google Maps CID is available
     // hasMap: "https://maps.google.com/?cid=TODO_CID",
     address: {
@@ -170,7 +170,7 @@ export function communeFaqs(commune: Commune): FaqItem[] {
     },
     {
       question: `Quels sont les horaires de la pizzeria à La Varenne ?`,
-      answer: `Nous sommes ouverts du mardi au dimanche, de 11h à 13h30 et de 18h à 22h. Fermé le lundi.`,
+      answer: `Nous sommes ouverts du mardi au dimanche, de 11h à 13h30 et de 18h30 à 22h. Fermé le lundi.`,
     },
     {
       question: `Peut-on commander en ligne depuis ${commune.name} ?`,

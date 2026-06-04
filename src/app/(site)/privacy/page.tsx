@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BUSINESS, SITE_URL } from "@/lib/seo";
+import { LEGAL_ENTITY, SITE_URL } from "@/lib/seo";
 
 /* ------------------------------------------------------------------ */
 /*  Metadata                                                           */
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 /* ------------------------------------------------------------------ */
 
 export default function PrivacyPage() {
-  const { address } = BUSINESS;
+  const legal = LEGAL_ENTITY;
 
   return (
     <article className="flex flex-col gap-8 px-4 pt-6 pb-10">
@@ -50,15 +50,17 @@ export default function PrivacyPage() {
           <span className="text-[#F5F5F5]">Pizza Deli&apos;Zza</span> est :
         </p>
         <div className="rounded-[16px] bg-[#0D0D0D] border border-[#252525] p-4 flex flex-col gap-1 text-[14px]">
-          <p className="font-semibold text-[#F5F5F5]">{BUSINESS.legalName}</p>
-          <p>{address.streetAddress}</p>
+          <p className="font-semibold text-[#F5F5F5]">{legal.denomination}</p>
+          <p>{legal.legalForm}</p>
+          <p>SIRET : {legal.siret}</p>
+          <p>{legal.registeredOffice.streetAddress}</p>
           <p>
-            {address.postalCode} {address.addressLocality}
+            {legal.registeredOffice.postalCode} {legal.registeredOffice.addressLocality}
           </p>
-          <p>{address.addressRegion}, France</p>
+          <p>{legal.registeredOffice.addressCountry}</p>
           <p>
             Email :{" "}
-            <span className="text-[#D4A053]">{BUSINESS.email}</span>
+            <span className="text-[#D4A053]">{legal.email}</span>
           </p>
         </div>
       </Section>
@@ -177,7 +179,7 @@ export default function PrivacyPage() {
         </div>
         <p>
           Pour exercer ces droits, contactez-nous par email :{" "}
-          <span className="text-[#D4A053]">{BUSINESS.email}</span>.
+          <span className="text-[#D4A053]">{legal.email}</span>.
         </p>
         <p>
           En cas de réponse insatisfaisante, vous pouvez introduire une réclamation auprès de la{" "}
@@ -246,12 +248,13 @@ export default function PrivacyPage() {
           Pour toute question relative à la présente politique ou à vos données personnelles :
         </p>
         <div className="flex flex-col gap-1 text-[14px] text-[#A0A0A0]">
-          <p className="font-semibold text-[#F5F5F5]">{BUSINESS.legalName}</p>
-          <p>{address.streetAddress}</p>
+          <p className="font-semibold text-[#F5F5F5]">{legal.denomination}</p>
+          <p>{legal.registeredOffice.streetAddress}</p>
           <p>
-            {address.postalCode} {address.addressLocality}
+            {legal.registeredOffice.postalCode} {legal.registeredOffice.addressLocality}
           </p>
-          <p className="text-[#D4A053]">{BUSINESS.email}</p>
+          <p>{legal.registeredOffice.addressCountry}</p>
+          <p className="text-[#D4A053]">{legal.email}</p>
         </div>
       </section>
 

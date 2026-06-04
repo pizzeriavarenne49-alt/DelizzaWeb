@@ -42,13 +42,23 @@ export default function CguPage() {
         </p>
       </div>
 
-      {/* ── 1. Objet ── */}
       <Section emoji="📄" title="Objet">
         <p>
           Les présentes Conditions Générales d&apos;Utilisation (CGU) régissent l&apos;utilisation
           du site <span className="text-[#F5F5F5]">delizza.fr</span> et de l&apos;application
           mobile <span className="text-[#F5F5F5]">Pizza Deli&apos;Zza</span> pour la commande en
           ligne de pizzas artisanales à emporter (click &amp; collect).
+        </p>
+        <p>
+          Les informations relatives à l&apos;éditeur du site et à son hébergement sont disponibles
+          sur la page{" "}
+          <Link
+            href="/mentions-legales"
+            className="text-[#D4A053] underline underline-offset-2 hover:opacity-80 transition-opacity"
+          >
+            mentions légales
+          </Link>
+          .
         </p>
       </Section>
 
@@ -65,9 +75,9 @@ export default function CguPage() {
         <p>
           <span className="text-[#F5F5F5]">Pizza Deli&apos;Zza</span> propose un service de
           commande en ligne de pizzas artisanales à emporter. Le client passe commande via le site
-          ou l&apos;application, effectue le paiement en ligne (via{" "}
-          <strong className="text-[#F5F5F5]">Stripe</strong>) ou sur place, et retire sa commande
-          au point de retrait :
+          ou l&apos;application, effectue le paiement en ligne par carte bancaire (via{" "}
+          <strong className="text-[#F5F5F5]">Stripe</strong>), puis retire sa commande
+          au restaurant au créneau choisi :
         </p>
         <div className="rounded-[16px] bg-[#0D0D0D] border border-[#252525] p-4 flex flex-col gap-1 text-[14px]">
           <p className="font-semibold text-[#F5F5F5]">{BUSINESS.legalName}</p>
@@ -112,13 +122,13 @@ export default function CguPage() {
             du paiement.
           </Item>
           <Item>
-            Les paiements en ligne sont traités de manière sécurisée par{" "}
+            Les paiements en ligne par carte bancaire sont traités de manière sécurisée par{" "}
             <strong className="text-[#F5F5F5]">Stripe</strong> (certifié{" "}
             <strong className="text-[#F5F5F5]">PCI DSS</strong>).
           </Item>
           <Item>
-            En cas de paiement en <strong className="text-[#F5F5F5]">espèces sur place</strong>,
-            la commande est confirmée au moment du retrait.
+            Les commandes passées sur le site sont payées en ligne uniquement.
+            Aucun paiement sur place n&apos;est proposé pour les commandes web.
           </Item>
         </ul>
       </Section>
@@ -237,12 +247,14 @@ export default function CguPage() {
           Pour toute question relative aux présentes CGU :
         </p>
         <div className="flex flex-col gap-1 text-[14px] text-[#A0A0A0]">
-          <p className="font-semibold text-[#F5F5F5]">{BUSINESS.legalName}</p>
-          <p>{address.streetAddress}</p>
-          <p>
-            {address.postalCode} {address.addressLocality}
-          </p>
+          <p className="font-semibold text-[#F5F5F5]">{BUSINESS.name}</p>
           <p className="text-[#D4A053]">{BUSINESS.email}</p>
+          <Link
+            href="/mentions-legales"
+            className="text-[#D4A053] underline underline-offset-2 hover:opacity-80 transition-opacity"
+          >
+            Mentions légales
+          </Link>
         </div>
       </section>
 

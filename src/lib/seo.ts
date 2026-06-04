@@ -16,8 +16,8 @@ export const BUSINESS = {
   name: "Pizza Deli'Zza",
   legalName: "Pizza Deli'Zza",
   url: SITE_URL,
-  telephone: "TODO_PHONE",
-  email: "TODO_EMAIL",
+  telephone: "02 21 68 81 82",
+  email: "contact@delizza.fr",
   address: {
     streetAddress: "98 Place du Jardin Public",
     postalCode: "49270",
@@ -40,11 +40,37 @@ export const BUSINESS = {
   shortDescription:
     "Pizza artisanale à emporter — La Varenne, Orée d'Anjou. Pâte longue fermentation, fait maison, ingrédients locaux. Click & collect.",
   openingHours: [
-    // Tuesday-Sunday, 11h–13h30 & 18h–22h
+    // Tuesday-Sunday, 11h-13h30 & 18h30-22h
     { dayOfWeek: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "11:00", closes: "13:30" },
-    { dayOfWeek: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "18:00", closes: "22:00" },
+    { dayOfWeek: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "18:30", closes: "22:00" },
   ],
-  openingHoursText: "Mar–Dim : 11h–13h30 / 18h–22h",
+  openingHoursText: "Mar-Dim : 11h-13h30 / 18h30-22h",
+} as const;
+
+export const LEGAL_ENTITY = {
+  denomination: "DELIZZA",
+  legalForm: "EURL / SARL à associé unique",
+  shareCapital: "1 €",
+  siren: "102 421 732",
+  siret: "102 421 732 00011",
+  apeCode: "5610C",
+  publicationDirector: "Alexandre Stéphane Gérard Magré",
+  publicationDirectorRole: "Gérant de DELIZZA",
+  email: "contact@delizza.fr",
+  telephone: "02 21 68 81 82",
+  registeredOffice: {
+    streetAddress: "9076 Route d’Anjou",
+    postalCode: "49270",
+    addressLocality: "Orée d’Anjou",
+    addressCountry: "France",
+  },
+  host: {
+    name: "Vercel Inc.",
+    streetAddress: "440 N Barranca Ave #4133",
+    addressLocality: "Covina, CA 91723",
+    addressCountry: "États-Unis",
+    website: "https://vercel.com",
+  },
 } as const;
 
 /* ------------------------------------------------------------------ */

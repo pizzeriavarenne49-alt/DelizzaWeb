@@ -112,9 +112,9 @@
       "active": true
     },
     {
-      "id": "offer-delivery",
-      "title": "Livraison offerte",
-      "content": "Livraison gratuite dès 25 € de commande. Code : FREELIV",
+      "id": "offer-pickup",
+      "title": "Retrait express",
+      "content": "Commandez en ligne et récupérez vos pizzas au créneau choisi.",
       "start_at": "2026-02-15T00:00:00Z",
       "end_at": "2026-03-31T23:59:59Z",
       "active": true

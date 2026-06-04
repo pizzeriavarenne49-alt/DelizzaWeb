@@ -12,9 +12,9 @@ export const offers: Offer[] = [
   },
   {
     id: "o2",
-    title: "Livraison offerte",
-    content: "Livraison gratuite dès 25 € de commande. Code : FREELIV",
-    image: "/images/offer-delivery.svg",
+    title: "Retrait express",
+    content: "Commandez en ligne et récupérez vos pizzas au créneau choisi.",
+    image: "/images/offer-happy.svg",
     start_at: "2026-02-15",
     end_at: "2026-03-31",
     active: true,

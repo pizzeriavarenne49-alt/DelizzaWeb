@@ -44,7 +44,7 @@ function findNextAvailableSlot(slots: TimeSlotInfo[]): TimeSlotInfo | undefined 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
-  const steps = ["Livraison", "Récapitulatif", "Paiement"];
+  const steps = ["Retrait", "Récapitulatif", "Paiement"];
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
       {steps.map((label, idx) => {

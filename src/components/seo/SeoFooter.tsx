@@ -11,6 +11,7 @@ const links = [
   { href: "/pizza-saint-florent-le-vieil", label: "Pizza Saint-Florent-le-Vieil" },
   { href: "/privacy", label: "Confidentialité" },
   { href: "/cgu", label: "CGU" },
+  { href: "/mentions-legales", label: "Mentions légales" },
 ];
 
 export default function SeoFooter() {
