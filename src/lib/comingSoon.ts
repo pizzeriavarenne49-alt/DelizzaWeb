@@ -8,4 +8,4 @@
  * puis fallback sur la constante ci-dessous.
  */
 export const COMING_SOON: boolean =
-  process.env.NEXT_PUBLIC_COMING_SOON === "true" || true;
+  process.env.NEXT_PUBLIC_COMING_SOON === "true";
