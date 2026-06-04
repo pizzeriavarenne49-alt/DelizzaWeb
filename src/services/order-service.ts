@@ -22,6 +22,7 @@ export interface CreateOrderParams {
   fulfillmentData: FulfillmentData;
   paymentId: string;
   paymentMethod: string;
+  rewardItemIndex?: number;
 }
 
 export interface CreateOrderResult {

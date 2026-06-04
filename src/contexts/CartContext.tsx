@@ -106,6 +106,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ...prev,
         {
           catalogItemId: product.id,
+          categoryId: product.category,
           nameSnapshot: product.name,
           quantity: 1,
           unitPriceCents: product.price_cents,
@@ -137,6 +138,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           ...prev,
           {
             catalogItemId: product.id,
+            categoryId: product.category,
             nameSnapshot: product.name,
             quantity,
             unitPriceCents,

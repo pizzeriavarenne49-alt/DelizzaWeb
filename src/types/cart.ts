@@ -17,6 +17,8 @@ export interface SelectedOption {
 export interface CartItem {
   /** = product.id from wl_catalog_items */
   catalogItemId: string;
+  /** = product.category, used locally for loyalty eligibility */
+  categoryId?: string;
   /** Snapshot of product.name at the time the item was added */
   nameSnapshot: string;
   quantity: number;

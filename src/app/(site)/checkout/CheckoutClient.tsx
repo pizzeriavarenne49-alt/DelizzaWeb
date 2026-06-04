@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import AuthGuard from "@/components/auth/AuthGuard";
@@ -9,7 +9,13 @@ import { useCart } from "@/contexts/CartContext";
 import { createOrder, createPaymentIntent } from "@/services/order-service";
 import { getAvailableSlots } from "@/services/slot-service";
 import { formatPrice, computeTtcCents, formatTaxRate } from "@/types";
+import type { CartItem } from "@/types/cart";
 import type { FulfillmentData, TimeSlotInfo } from "@/types/order";
+import {
+  getLoyaltyState,
+  type LoyaltyConfig,
+  type LoyaltyState,
+} from "@/services/loyalty-service";
 
 // Dynamically import Stripe component to avoid SSR issues
 const StripeCheckout = dynamic(
@@ -17,7 +23,7 @@ const StripeCheckout = dynamic(
   { ssr: false },
 );
 
-const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? "";
+const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -39,6 +45,50 @@ type SlotDateKey = "today" | "tomorrow";
 
 function findNextAvailableSlot(slots: TimeSlotInfo[]): TimeSlotInfo | undefined {
   return slots.find((slot) => slot.status !== "full");
+}
+
+interface RewardPreview {
+  itemIndex: number;
+  item: CartItem;
+  discountTtcCents: number;
+  totalAfterRewardCents: number;
+  isFullyCovered: boolean;
+}
+
+function findRewardPreview(
+  items: CartItem[],
+  config: LoyaltyConfig | undefined,
+  totalCents: number,
+): RewardPreview | null {
+  if (!config) return null;
+
+  const eligibleCategoryIds = new Set([
+    config.pizzaCategoryId,
+    ...config.eligiblePizzaCategoryIds,
+  ]);
+
+  let best: RewardPreview | null = null;
+  items.forEach((item, index) => {
+    if (!item.categoryId || !eligibleCategoryIds.has(item.categoryId) || item.quantity <= 0) {
+      return;
+    }
+
+    const discountTtcCents = computeTtcCents(item.unitPriceCents, item.taxRateBps);
+    const totalAfterRewardCents = totalCents - discountTtcCents;
+    const candidate: RewardPreview = {
+      itemIndex: index,
+      item,
+      discountTtcCents,
+      totalAfterRewardCents,
+      isFullyCovered: totalAfterRewardCents <= 0,
+    };
+
+    if (!best || candidate.discountTtcCents < best.discountTtcCents) {
+      best = candidate;
+    }
+  });
+
+  return best;
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -361,6 +411,10 @@ interface Step2Props {
   isAsap: boolean;
   scheduledTime: string;
   instructions: string;
+  rewardsAvailable: number;
+  rewardPreview: RewardPreview | null;
+  useReward: boolean;
+  onUseRewardChange: (enabled: boolean) => void;
   onBack: () => void;
   onNext: () => void;
   loading: boolean;
@@ -372,6 +426,10 @@ function Step2Summary({
   isAsap,
   scheduledTime,
   instructions,
+  rewardsAvailable,
+  rewardPreview,
+  useReward,
+  onUseRewardChange,
   onBack,
   onNext,
   loading,
@@ -387,6 +445,7 @@ function Step2Summary({
   const subtotal = getSubtotalCents();
   const total = getTotalCents();
   const taxBreakdown = getTaxBreakdown();
+  const canUseReward = rewardsAvailable > 0 && rewardPreview !== null && !rewardPreview.isFullyCovered;
 
   return (
     <div className="flex flex-col gap-5">
@@ -424,6 +483,49 @@ function Step2Summary({
           </div>
         </div>
       </div>
+
+      {rewardsAvailable > 0 && rewardPreview && (
+        <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-3">
+          <div className="flex items-start gap-3">
+            <input
+              id="use-loyalty-reward"
+              type="checkbox"
+              checked={useReward && canUseReward}
+              disabled={!canUseReward}
+              onChange={(event) => onUseRewardChange(event.target.checked)}
+              className="mt-1 h-4 w-4 accent-[#D4A053]"
+            />
+            <label htmlFor="use-loyalty-reward" className="flex flex-1 flex-col gap-1">
+              <span className="text-[15px] font-semibold text-[#F5F5F5]">
+                Utiliser ma pizza offerte
+              </span>
+              <span className="text-[13px] text-[#A0A0A0]">
+                Pizza estimée offerte : {rewardPreview.item.nameSnapshot}
+              </span>
+            </label>
+          </div>
+
+          {rewardPreview.isFullyCovered ? (
+            <p className="rounded-[14px] bg-[#252525] px-4 py-3 text-[13px] text-[#A0A0A0]">
+              La commande 100 % offerte sera disponible prochainement.
+            </p>
+          ) : (
+            <div className="rounded-[14px] bg-[#252525] px-4 py-3 flex flex-col gap-1.5">
+              <div className="flex justify-between text-[13px] text-[#A0A0A0]">
+                <span>Remise estimée fidélité</span>
+                <span>-{formatPrice(rewardPreview.discountTtcCents)}&nbsp;€</span>
+              </div>
+              <div className="flex justify-between text-[14px] font-semibold text-[#F5F5F5]">
+                <span>Total estimé après avantage</span>
+                <span>{formatPrice(rewardPreview.totalAfterRewardCents)}&nbsp;€</span>
+              </div>
+              <p className="text-[12px] text-[#6B6B6B]">
+                Le serveur appliquera la récompense et recalculera la pizza offerte.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Fulfillment recap */}
       <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-2">
@@ -506,6 +608,45 @@ export default function CheckoutClient() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loyalty, setLoyalty] = useState<LoyaltyState | null>(null);
+  const [useReward, setUseReward] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    let cancelled = false;
+    getLoyaltyState(WL_APP_ID, user.uid)
+      .then((state) => {
+        if (!cancelled) setLoyalty(state);
+      })
+      .catch((err) => {
+        console.error("[loyalty-service] Unable to load loyalty checkout data:", err);
+        if (!cancelled) {
+          setLoyalty(null);
+          setUseReward(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const rewardPreview = useMemo(
+    () => findRewardPreview(items, loyalty?.config, getTotalCents()),
+    [items, loyalty?.config, getTotalCents],
+  );
+  const rewardsAvailable = loyalty?.account.rewardsAvailable ?? 0;
+  const canUseReward =
+    rewardsAvailable > 0 && rewardPreview !== null && !rewardPreview.isFullyCovered;
+
+  useEffect(() => {
+    if (!canUseReward && useReward) {
+      setUseReward(false);
+    }
+  }, [canUseReward, useReward]);
 
   const handleProceedToPayment = useCallback(async () => {
     if (!user) return;
@@ -539,6 +680,9 @@ export default function CheckoutClient() {
         // by createPaymentIntent and updated via Stripe webhook on completion.
         paymentId: `temp_web_${Date.now()}`,
         paymentMethod: "card",
+        ...(useReward && canUseReward && rewardPreview
+          ? { rewardItemIndex: rewardPreview.itemIndex }
+          : {}),
       });
 
       const intentResult = await createPaymentIntent({
@@ -565,7 +709,17 @@ export default function CheckoutClient() {
     } finally {
       setLoading(false);
     }
-  }, [user, fulfillment, items, getSubtotalCents, getTaxCents, getTotalCents]);
+  }, [
+    user,
+    fulfillment,
+    items,
+    getSubtotalCents,
+    getTaxCents,
+    getTotalCents,
+    useReward,
+    canUseReward,
+    rewardPreview,
+  ]);
 
   const handlePaymentSuccess = useCallback(() => {
     clearCart();
@@ -619,6 +773,10 @@ export default function CheckoutClient() {
               isAsap={fulfillment.isAsap}
               scheduledTime={fulfillment.scheduledTime}
               instructions={fulfillment.instructions}
+              rewardsAvailable={rewardsAvailable}
+              rewardPreview={rewardPreview}
+              useReward={useReward}
+              onUseRewardChange={setUseReward}
               onBack={() => setStep(1)}
               onNext={handleProceedToPayment}
               loading={loading}
