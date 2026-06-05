@@ -7,6 +7,8 @@ import { Suspense } from "react";
 function OrderConfirmationContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get("orderId");
+  const payment = searchParams.get("payment");
+  const isLoyaltyRewardPayment = payment === "loyalty_reward";
 
   return (
     <div className="min-h-screen bg-[#0D0D0D] flex flex-col items-center justify-center px-4 py-12 text-center">
@@ -32,6 +34,11 @@ function OrderConfirmationContent() {
       <p className="text-[15px] text-[#A0A0A0] mb-1">
         Merci pour votre commande chez Deli&apos;Zza.
       </p>
+      {isLoyaltyRewardPayment && (
+        <p className="text-[15px] font-semibold text-[#D4A053] mb-1">
+          Commande validée avec votre récompense fidélité.
+        </p>
+      )}
       <p className="text-[15px] text-[#A0A0A0] mb-6">
         Vous recevrez une confirmation par e-mail.
       </p>

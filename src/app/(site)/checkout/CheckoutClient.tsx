@@ -445,7 +445,7 @@ function Step2Summary({
   const subtotal = getSubtotalCents();
   const total = getTotalCents();
   const taxBreakdown = getTaxBreakdown();
-  const canUseReward = rewardsAvailable > 0 && rewardPreview !== null && !rewardPreview.isFullyCovered;
+  const canUseReward = rewardsAvailable > 0 && rewardPreview !== null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -505,25 +505,19 @@ function Step2Summary({
             </label>
           </div>
 
-          {rewardPreview.isFullyCovered ? (
-            <p className="rounded-[14px] bg-[#252525] px-4 py-3 text-[13px] text-[#A0A0A0]">
-              La commande 100 % offerte sera disponible prochainement.
-            </p>
-          ) : (
-            <div className="rounded-[14px] bg-[#252525] px-4 py-3 flex flex-col gap-1.5">
-              <div className="flex justify-between text-[13px] text-[#A0A0A0]">
-                <span>Remise estimée fidélité</span>
-                <span>-{formatPrice(rewardPreview.discountTtcCents)}&nbsp;€</span>
-              </div>
-              <div className="flex justify-between text-[14px] font-semibold text-[#F5F5F5]">
-                <span>Total estimé après avantage</span>
-                <span>{formatPrice(rewardPreview.totalAfterRewardCents)}&nbsp;€</span>
-              </div>
-              <p className="text-[12px] text-[#6B6B6B]">
-                Le serveur appliquera la récompense et recalculera la pizza offerte.
-              </p>
+          <div className="rounded-[14px] bg-[#252525] px-4 py-3 flex flex-col gap-1.5">
+            <div className="flex justify-between text-[13px] text-[#A0A0A0]">
+              <span>Remise estimée fidélité</span>
+              <span>-{formatPrice(rewardPreview.discountTtcCents)}&nbsp;€</span>
             </div>
-          )}
+            <div className="flex justify-between text-[14px] font-semibold text-[#F5F5F5]">
+              <span>Total estimé après avantage</span>
+              <span>{formatPrice(Math.max(0, rewardPreview.totalAfterRewardCents))}&nbsp;€</span>
+            </div>
+            <p className="text-[12px] text-[#6B6B6B]">
+              Le serveur appliquera la récompense et recalculera la pizza offerte.
+            </p>
+          </div>
         </div>
       )}
 
@@ -580,7 +574,9 @@ function Step2Summary({
               Préparation…
             </span>
           ) : (
-            `Payer ${formatPrice(total)} €`
+            useReward && rewardPreview?.isFullyCovered
+              ? "Valider ma commande"
+              : `Payer ${formatPrice(total)} €`
           )}
         </button>
       </div>
@@ -640,7 +636,9 @@ export default function CheckoutClient() {
   );
   const rewardsAvailable = loyalty?.account.rewardsAvailable ?? 0;
   const canUseReward =
-    rewardsAvailable > 0 && rewardPreview !== null && !rewardPreview.isFullyCovered;
+    rewardsAvailable > 0 && rewardPreview !== null;
+  const isFullyCoveredReward =
+    useReward && rewardPreview?.isFullyCovered === true;
 
   useEffect(() => {
     if (!canUseReward && useReward) {
@@ -667,6 +665,14 @@ export default function CheckoutClient() {
           : {}),
       };
 
+      const rewardItemIndex =
+        useReward &&
+        rewardPreview &&
+        Number.isInteger(rewardPreview.itemIndex) &&
+        rewardPreview.itemIndex >= 0
+          ? rewardPreview.itemIndex
+          : undefined;
+
       const orderResult = await createOrder({
         appId: WL_APP_ID,
         userId: user.uid,
@@ -680,10 +686,16 @@ export default function CheckoutClient() {
         // by createPaymentIntent and updated via Stripe webhook on completion.
         paymentId: `temp_web_${Date.now()}`,
         paymentMethod: "card",
-        ...(useReward && canUseReward && rewardPreview
-          ? { rewardItemIndex: rewardPreview.itemIndex }
-          : {}),
+        ...(rewardItemIndex !== undefined ? { rewardItemIndex } : {}),
       });
+
+      if (isFullyCoveredReward) {
+        clearCart();
+        router.push(
+          `/order-confirmation?orderId=${orderResult.orderId}&payment=loyalty_reward`,
+        );
+        return;
+      }
 
       const intentResult = await createPaymentIntent({
         appId: WL_APP_ID,
@@ -716,8 +728,10 @@ export default function CheckoutClient() {
     getSubtotalCents,
     getTaxCents,
     getTotalCents,
+    clearCart,
+    router,
     useReward,
-    canUseReward,
+    isFullyCoveredReward,
     rewardPreview,
   ]);
 
