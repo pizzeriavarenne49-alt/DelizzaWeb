@@ -1,4 +1,4 @@
-import { repo, withFallback, mockRepo, POPULAR_CATEGORY } from "@/data/repository";
+import { repo, withFallback, mockRepo } from "@/data/repository";
 import HomeClient from "./HomeClient";
 import type { Metadata } from "next";
 
@@ -12,17 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const [featuredProducts, cats, prods] = await Promise.all([
-    withFallback(() => repo.getFeaturedProducts(), () => mockRepo.getFeaturedProducts()),
-    withFallback(() => repo.getCategories(), () => mockRepo.getCategories()),
-    withFallback(() => repo.getProducts(), () => mockRepo.getProducts()),
-  ]);
-
-  return (
-    <HomeClient
-      featuredProducts={featuredProducts}
-      categories={[POPULAR_CATEGORY, ...cats]}
-      products={prods}
-    />
+  const featuredProducts = await withFallback(
+    () => repo.getFeaturedProducts(),
+    () => mockRepo.getFeaturedProducts(),
   );
+
+  return <HomeClient featuredProducts={featuredProducts} />;
 }

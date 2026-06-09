@@ -15,24 +15,31 @@ interface MenuClientProps {
 
 export default function MenuClient({ categories, products }: MenuClientProps) {
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("popular");
+  const [activeCategory, setActiveCategory] = useState("all");
 
   useEffect(() => {
     track({ name: "view_menu" });
   }, []);
 
-  const byCategory =
-    activeCategory === "popular"
-      ? products.filter((p) => p.is_popular)
-      : products.filter((p) => p.category === activeCategory);
+  const visibleProducts =
+    search
+      ? products.filter(
+          (p) =>
+            p.name.toLowerCase().includes(search.toLowerCase()) ||
+            p.description_short.toLowerCase().includes(search.toLowerCase()),
+        )
+      : activeCategory === "all"
+        ? products
+        : activeCategory === "popular"
+          ? products.filter((p) => p.is_popular)
+          : products.filter((p) => p.category === activeCategory);
 
-  const results = search
-    ? products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.description_short.toLowerCase().includes(search.toLowerCase()),
-      )
-    : byCategory;
+  const headerTitle =
+    activeCategory === "all"
+      ? "Tout le catalogue"
+      : activeCategory === "popular"
+        ? "Produits populaires"
+        : categories.find((c) => c.id === activeCategory)?.name ?? "";
 
   return (
     <div className="flex flex-col gap-5 px-4 pt-4">
@@ -50,6 +57,12 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
         role="tablist"
         aria-label="Catégories"
       >
+        <Chip
+          label="Tous"
+          icon="✨"
+          active={activeCategory === "all"}
+          onClick={() => setActiveCategory("all")}
+        />
         {categories.map((cat) => (
           <Chip
             key={cat.id}
@@ -61,19 +74,13 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
         ))}
       </div>
 
-      <SectionHeader
-        title={
-          activeCategory === "popular"
-            ? "Tous les plats"
-            : categories.find((c) => c.id === activeCategory)?.name ?? ""
-        }
-      />
+      <SectionHeader title={headerTitle} />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {results.map((product) => (
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+        {visibleProducts.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
-        {results.length === 0 && (
+        {visibleProducts.length === 0 && (
           <p className="col-span-2 py-10 text-center text-[#6B6B6B]">
             Aucun résultat trouvé
           </p>
