@@ -9,22 +9,22 @@ import JsonLd from "@/components/seo/JsonLd";
 /* ------------------------------------------------------------------ */
 
 export const metadata: Metadata = {
-  title: "Notre savoir-faire — Pizza artisanale à longue fermentation | Deli'Zza",
+  title: "Notre savoir-faire | Pizza Deli'Zza",
   description:
-    "Découvrez le savoir-faire de Pizza Deli'Zza : pâte à longue fermentation de 48h, ingrédients frais et locaux, cuisson au four. Pizzeria artisanale à La Varenne.",
+    "Découvrez le savoir-faire de Pizza Deli'Zza : pâte avec maturation d'environ 24h, ingrédients sélectionnés avec soin et cuisson maîtrisée à La Varenne.",
   alternates: { canonical: "/notre-savoir-faire" },
   openGraph: {
-    title: "Notre savoir-faire — Pizza artisanale à longue fermentation | Deli'Zza",
+    title: "Notre savoir-faire | Pizza Deli'Zza",
     description:
-      "Pâte à longue fermentation 48h, ingrédients frais et locaux, cuisson maîtrisée. Découvrez comment Pizza Deli'Zza fabrique ses pizzas artisanales à La Varenne.",
+      "Découvrez comment Pizza Deli'Zza prépare ses pizzas à La Varenne : pâte avec maturation d'environ 24h, ingrédients sélectionnés avec soin et cuisson maîtrisée.",
     url: `${SITE_URL}/notre-savoir-faire`,
-    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Pizza Deli'Zza — Savoir-faire artisanal" }],
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Pizza Deli'Zza - Savoir-faire" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Notre savoir-faire — Pizza artisanale à longue fermentation | Deli'Zza",
+    title: "Notre savoir-faire | Pizza Deli'Zza",
     description:
-      "Pâte à longue fermentation 48h, ingrédients frais et locaux. Le savoir-faire artisanal de Pizza Deli'Zza.",
+      "Pâte avec maturation d'environ 24h, ingrédients sélectionnés avec soin et cuisson maîtrisée. Le savoir-faire de Pizza Deli'Zza.",
     images: [OG_IMAGE],
   },
 };
@@ -53,58 +53,49 @@ export default function NotreSavoirFairePage() {
             Notre savoir-faire
           </h1>
           <p className="text-[15px] text-[#A0A0A0] leading-relaxed">
-            Chez Pizza Deli&apos;Zza, rien n&apos;est laissé au hasard. Chaque pizza naît
-            d&apos;un processus artisanal pensé pour vous offrir le meilleur résultat dans
-            votre assiette.
+            Chez Pizza Deli&apos;Zza, nous travaillons simplement et avec attention. Chaque pizza
+            suit un processus clair, avec un soin particulier porté à la pâte, aux ingrédients et
+            à la cuisson.
           </p>
         </div>
 
-        {/* ── 1. La pâte à longue fermentation ── */}
-        <Section emoji="🌾" title="La pâte à longue fermentation">
+        {/* ── 1. La pâte ── */}
+        <Section emoji="🌾" title="La pâte">
           <p>
-            Tout commence par la pâte. Notre recette repose sur une{" "}
-            <strong className="text-[#F5F5F5]">longue fermentation de 48 heures minimum</strong>{" "}
-            au froid. Ce processus lent transforme les sucres naturels de la farine et développe
-            une complexité aromatique impossible à obtenir avec une pâte rapide.
+            Chez Pizza Deli&apos;Zza, nous accordons une attention particulière à la pâte. Elle
+            bénéficie d&apos;un temps de maturation d&apos;environ 24 heures au froid, afin de
+            développer progressivement sa texture et ses arômes.
           </p>
           <p>
-            Concrètement, cela change tout : la pâte devient plus{" "}
-            <strong className="text-[#F5F5F5]">légère et digeste</strong>, les arômes se
-            développent naturellement, et la texture finale — croustillante à l&apos;extérieur,
-            moelleuse et alvéolée à l&apos;intérieur — est incomparable. C&apos;est la signature
-            de nos pizzas.
-          </p>
-          <p>
-            La fermentation lente permet aussi de réduire le gluten actif, ce qui rend la pâte
-            plus facile à digérer. Une bonne pizza ne doit pas peser sur l&apos;estomac.
+            Ce travail nous permet d&apos;obtenir une pâte plus équilibrée, avec une cuisson
+            soignée et un résultat agréable en bouche. Nous continuons à affiner notre méthode
+            pour proposer des pizzas toujours plus régulières et maîtrisées.
           </p>
         </Section>
 
-        {/* ── 2. Des ingrédients frais et locaux ── */}
-        <Section emoji="🥗" title="Des ingrédients frais et locaux">
+        {/* ── 2. Des ingrédients sélectionnés avec soin ── */}
+        <Section emoji="🥗" title="Des ingrédients sélectionnés avec soin">
           <p>
-            Une belle pâte ne suffit pas : ce sont aussi les ingrédients qui font la différence.
-            Nous sélectionnons soigneusement chaque produit, en privilégiant les{" "}
-            <strong className="text-[#F5F5F5]">producteurs locaux</strong> du Maine-et-Loire et
-            de Loire-Atlantique dès que possible.
+            Nous choisissons nos ingrédients avec attention pour construire des pizzas simples,
+            gourmandes et cohérentes. L&apos;objectif est de proposer un bon équilibre entre pâte,
+            sauce, fromage et garnitures, avec une préparation sérieuse et régulière.
           </p>
           <ul className="flex flex-col gap-2 pl-1">
             <Item>
-              <strong className="text-[#F5F5F5]">Mozzarella de qualité</strong> — fondante,
-              crémeuse, sélectionnée pour son goût et sa texture à la cuisson.
+              <strong className="text-[#F5F5F5]">Une base travaillée avec soin</strong> pour
+              garder l&apos;équilibre de chaque recette.
             </Item>
             <Item>
-              <strong className="text-[#F5F5F5]">Légumes frais</strong> — approvisionnés
-              régulièrement, jamais de légumes en conserve sur nos pizzas.
+              <strong className="text-[#F5F5F5]">Des légumes et garnitures choisis</strong> selon
+              les besoins de la carte.
             </Item>
             <Item>
-              <strong className="text-[#F5F5F5]">Charcuterie sélectionnée</strong> — jambon,
-              lardons, chorizo et autres garnitures choisies pour leur qualité gustative.
+              <strong className="text-[#F5F5F5]">Une sauce tomate et des ingrédients</strong>{" "}
+              sélectionnés pour offrir un résultat simple, efficace et gourmand.
             </Item>
             <Item>
-              <strong className="text-[#F5F5F5]">Sauce tomate maison</strong> — préparée avec
-              des tomates de qualité, assaisonnée simplement pour laisser les garnitures
-              s&apos;exprimer.
+              <strong className="text-[#F5F5F5]">Des recettes volontairement maîtrisées</strong>,
+              sans chercher à en faire trop.
             </Item>
           </ul>
         </Section>
@@ -112,90 +103,79 @@ export default function NotreSavoirFairePage() {
         {/* ── 3. La cuisson ── */}
         <Section emoji="🔥" title="La cuisson">
           <p>
-            La cuisson est l&apos;étape finale qui révèle tout le travail en amont. Nos pizzas
-            sont enfournées à{" "}
-            <strong className="text-[#F5F5F5]">haute température</strong>, ce qui permet
-            d&apos;obtenir une coloration homogène, des bords gonflés et bien dorés, et une
-            base croustillante sans dessécher la garniture.
+            La cuisson est l&apos;étape finale qui révèle le travail en amont. Nos pizzas sont
+            enfournées à <strong className="text-[#F5F5F5]">haute température</strong>, ce qui
+            aide à obtenir une coloration homogène, des bords bien dorés et une base correctement
+            cuite.
           </p>
           <p>
-            Le résultat : une pizza qui sort du four à point, avec une pâte qui claque sous la
-            dent, une mozzarella filante et des arômes de cuisson qui donnent envie dès
-            l&apos;ouverture de la boîte. Ce contrôle de la cuisson est ce qui distingue une
-            vraie pizza artisanale d&apos;une pizza industrielle réchauffée.
+            Le résultat recherché est simple : une pizza bien cuite, servie avec une garniture à
+            bonne température et une tenue régulière à la sortie du four.
           </p>
         </Section>
 
         {/* ── 4. Le click & collect ── */}
-        <Section emoji="📱" title="Le click &amp; collect">
+        <Section emoji="📱" title="Le click & collect">
           <p>
-            Commander chez Pizza Deli&apos;Zza, c&apos;est simple et sans mauvaise surprise. Voici
-            comment ça marche :
+            Commander chez Pizza Deli&apos;Zza, c&apos;est simple et sans mauvaise surprise.
+            Voici comment ça marche :
           </p>
           <ul className="flex flex-col gap-2 pl-1">
             <Item>
               Rendez-vous sur{" "}
-              <Link href="/menu" className="text-[#D4A053] underline underline-offset-2 hover:opacity-80 transition-opacity">
+              <Link
+                href="/menu"
+                className="text-[#D4A053] underline underline-offset-2 hover:opacity-80 transition-opacity"
+              >
                 notre menu en ligne
               </Link>{" "}
               et composez votre commande.
             </Item>
+            <Item>Choisissez votre créneau de retrait et procédez au paiement sécurisé.</Item>
             <Item>
-              Choisissez votre créneau de retrait et procédez au paiement sécurisé.
-            </Item>
-            <Item>
-              Votre pizza est préparée à la commande — elle n&apos;est pas faite à
-              l&apos;avance et mise de côté.
+              Votre pizza est préparée à la commande - elle n&apos;est pas faite à l&apos;avance
+              puis mise de côté.
             </Item>
             <Item>
               Venez chercher votre commande au{" "}
               <strong className="text-[#F5F5F5]">98 Place du Jardin Public à La Varenne</strong>{" "}
-              à l&apos;heure prévue. Votre pizza est chaude et fraîche.
+              à l&apos;heure prévue.
             </Item>
           </ul>
           <p>
             Pas de livraison, pas d&apos;intermédiaire. Le click &amp; collect nous permet de
-            garantir une pizza à la bonne température et au meilleur état possible jusqu&apos;à
-            votre table.
+            remettre la pizza dans de bonnes conditions, au moment du retrait.
           </p>
         </Section>
 
         {/* ── 5. Notre engagement ── */}
         <Section emoji="🤝" title="Notre engagement">
-          <p>
-            Chez Pizza Deli&apos;Zza, nous avons fait des choix clairs dès le départ :
-          </p>
+          <p>Chez Pizza Deli&apos;Zza, nous faisons des choix simples :</p>
           <ul className="flex flex-col gap-2 pl-1">
             <Item>
-              <strong className="text-[#F5F5F5]">Pas d&apos;industriel.</strong> Toutes nos
-              pâtes, sauces et garnitures sont préparées sur place, sans recourir à des
-              bases industrielles.
+              <strong className="text-[#F5F5F5]">Préparer chaque pizza à la commande</strong>.
             </Item>
             <Item>
-              <strong className="text-[#F5F5F5]">Pas de surgelé.</strong> Nos ingrédients
-              sont frais. Nous commandons selon les besoins pour garantir la fraîcheur.
+              <strong className="text-[#F5F5F5]">Travailler une carte volontairement resserrée</strong>.
             </Item>
             <Item>
-              <strong className="text-[#F5F5F5]">Tout fait maison.</strong> De la pâte à la
-              garniture, chaque pizza est le résultat d&apos;un travail artisanal quotidien.
+              <strong className="text-[#F5F5F5]">Rechercher de la régularité</strong> dans les
+              recettes et la cuisson.
             </Item>
             <Item>
-              <strong className="text-[#F5F5F5]">Un menu assumé.</strong> Nous préférons une
-              carte réduite avec des pizzas maîtrisées plutôt qu&apos;une liste interminable
-              de produits de qualité douteuse.
+              <strong className="text-[#F5F5F5]">Proposer une pizza généreuse</strong>, sérieuse
+              et sans promesse inutile.
             </Item>
           </ul>
           <p>
-            Ce sont ces engagements qui nous permettent de vous proposer une pizza honnête,
-            généreuse et vraiment bonne. C&apos;est tout ce qu&apos;on vous promet.
+            Nous préférons rester transparents sur notre façon de travailler : notre priorité est
+            de proposer des pizzas bonnes, cohérentes et préparées avec soin, tout simplement.
           </p>
         </Section>
 
         {/* ── CTA ── */}
         <section className="flex flex-col items-center gap-3 rounded-[24px] bg-gradient-to-br from-[#1A1A1A] to-[#252525] p-6 text-center">
-          <p className="text-[15px] text-[#A0A0A0]">
-            Convaincu ? Découvrez nos pizzas artisanales.
-          </p>
+          <p className="text-[15px] text-[#A0A0A0]">Découvrez notre menu.</p>
           <Link
             href="/menu"
             className="inline-flex items-center justify-center rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] px-6 py-2.5 text-[15px] font-semibold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] active:scale-95 transition-transform"
@@ -239,7 +219,10 @@ function Section({
 function Item({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex gap-2 list-none">
-      <span className="mt-[6px] h-[6px] w-[6px] shrink-0 rounded-full bg-[#D4A053]" aria-hidden="true" />
+      <span
+        className="mt-[6px] h-[6px] w-[6px] shrink-0 rounded-full bg-[#D4A053]"
+        aria-hidden="true"
+      />
       <span>{children}</span>
     </li>
   );
