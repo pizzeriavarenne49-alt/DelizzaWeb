@@ -4,6 +4,7 @@
  * Reads the same Firestore collections as the WLHORIZON Flutter admin:
  *   - wl_catalog_categories
  *   - wl_catalog_items
+ *   - wl_offers
  *
  * Required env vars:
  *   FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY,

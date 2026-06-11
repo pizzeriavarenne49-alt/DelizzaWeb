@@ -62,6 +62,30 @@ export function buildFeaturedProducts(all: Product[]): Product[] {
   return featured;
 }
 
+const FEATURED_PRODUCTS_DEBUG = process.env.FEATURED_PRODUCTS_DEBUG === "1";
+
+function logFeaturedProductsSelection(
+  source: "firebase" | "directus" | "mock",
+  scope: string,
+  products: Product[],
+): void {
+  if (!FEATURED_PRODUCTS_DEBUG) return;
+
+  console.info(
+    `[CMS][featured] source=${source} scope=${scope} count=${products.length}`,
+    products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      active: p.active,
+      is_popular: p.is_popular,
+      category: p.category,
+      price_cents: p.price_cents,
+      image: p.image,
+      badge: p.badge ?? null,
+    })),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Directus implementation
 // ---------------------------------------------------------------------------
@@ -122,6 +146,47 @@ function bool(v: unknown): boolean {
 }
 function arr(v: unknown): string[] {
   return Array.isArray(v) ? (v as string[]) : [];
+}
+
+function optBool(v: unknown): boolean | null {
+  return typeof v === "boolean" ? v : null;
+}
+
+function isVisibleProduct(raw: DirectusRecord): boolean {
+  if (!bool(raw.active)) return false;
+  if (optBool(raw.visible) === false) return false;
+  if (optBool(raw.published) === false) return false;
+  if (optBool(raw.public) === false) return false;
+  if (optBool(raw.isVisible) === false) return false;
+  if (optBool(raw.archived) === true) return false;
+  if (optBool(raw.isArchived) === true) return false;
+  if (optBool(raw.deleted) === true) return false;
+  if (optBool(raw.isDeleted) === true) return false;
+  if (!str(raw.category)) return false;
+  if (num(raw.price_cents) <= 0) return false;
+  return true;
+}
+
+function isVisibleCategory(raw: DirectusRecord): boolean {
+  if (!bool(raw.active)) return false;
+  if (optBool(raw.visible) === false) return false;
+  if (optBool(raw.published) === false) return false;
+  if (optBool(raw.public) === false) return false;
+  if (optBool(raw.isVisible) === false) return false;
+  if (optBool(raw.archived) === true) return false;
+  if (optBool(raw.isArchived) === true) return false;
+  if (optBool(raw.deleted) === true) return false;
+  if (optBool(raw.isDeleted) === true) return false;
+  return true;
+}
+
+function isVisibleOffer(raw: DirectusRecord): boolean {
+  if (!bool(raw.active)) return false;
+  if (optBool(raw.visible) === false) return false;
+  if (optBool(raw.published) === false) return false;
+  if (optBool(raw.archived) === true) return false;
+  if (optBool(raw.deleted) === true) return false;
+  return true;
 }
 
 function mapProduct(raw: DirectusRecord): Product {
@@ -202,7 +267,9 @@ class DirectusRepository implements DataRepository {
   }
 
   async getFeaturedProducts(): Promise<Product[]> {
-    return buildFeaturedProducts(await this.getProducts());
+    const featured = buildFeaturedProducts(await this.getPopularProducts());
+    logFeaturedProductsSelection("directus", `DIRECTUS_URL=${DIRECTUS_URL ?? "unset"}`, featured);
+    return featured;
   }
 
   async getCategories(): Promise<Category[]> {
@@ -210,7 +277,7 @@ class DirectusRepository implements DataRepository {
       "/items/categories?filter[active][_eq]=true&sort=order",
       REVALIDATE.menu,
     );
-    return raw.map(mapCategory);
+    return raw.filter(isVisibleCategory).map(mapCategory);
   }
 
   async getProducts(): Promise<Product[]> {
@@ -218,7 +285,7 @@ class DirectusRepository implements DataRepository {
       "/items/products?filter[active][_eq]=true&limit=-1",
       REVALIDATE.menu,
     );
-    return raw.map(mapProduct);
+    return raw.filter(isVisibleProduct).map(mapProduct);
   }
 
   async getPopularProducts(): Promise<Product[]> {
@@ -226,7 +293,7 @@ class DirectusRepository implements DataRepository {
       "/items/products?filter[active][_eq]=true&filter[is_popular][_eq]=true&limit=-1",
       REVALIDATE.menu,
     );
-    return raw.map(mapProduct);
+    return raw.filter(isVisibleProduct).map(mapProduct);
   }
 
   async getOffers(): Promise<Offer[]> {
@@ -234,7 +301,7 @@ class DirectusRepository implements DataRepository {
       "/items/offers?filter[active][_eq]=true",
       REVALIDATE.offers,
     );
-    return filterActiveOffers(raw.map(mapOffer));
+    return filterActiveOffers(raw.filter(isVisibleOffer).map(mapOffer));
   }
 }
 
@@ -257,7 +324,11 @@ class MockRepository implements DataRepository {
   }
 
   async getFeaturedProducts(): Promise<Product[]> {
-    return buildFeaturedProducts(mockProducts.filter((p) => p.active));
+    const featured = buildFeaturedProducts(
+      mockProducts.filter((p) => p.active && p.is_popular),
+    );
+    logFeaturedProductsSelection("mock", "development-only", featured);
+    return featured;
   }
 
   async getCategories(): Promise<Category[]> {
@@ -277,6 +348,32 @@ class MockRepository implements DataRepository {
   }
 }
 
+class EmptyRepository implements DataRepository {
+  async getHomeHeroSlides(): Promise<HeroSlide[]> {
+    return [];
+  }
+
+  async getFeaturedProducts(): Promise<Product[]> {
+    return [];
+  }
+
+  async getCategories(): Promise<Category[]> {
+    return [];
+  }
+
+  async getProducts(): Promise<Product[]> {
+    return [];
+  }
+
+  async getPopularProducts(): Promise<Product[]> {
+    return [];
+  }
+
+  async getOffers(): Promise<Offer[]> {
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Singleton with fallback
 // ---------------------------------------------------------------------------
@@ -284,7 +381,9 @@ class MockRepository implements DataRepository {
 import { FirebaseRepository } from "./firebase-repository";
 
 /** Detect which data source is active for logging purposes */
-let activeSource: "firebase" | "directus" | "mock" = "mock";
+let activeSource: "firebase" | "directus" | "mock" | "empty" = "mock";
+
+const isProduction = process.env.NODE_ENV === "production";
 
 function createRepository(): DataRepository {
   // Priority 1: Firebase (same data as WLHORIZON mobile app)
@@ -304,6 +403,11 @@ function createRepository(): DataRepository {
     console.info("[CMS] Using Directus as data source");
     return new DirectusRepository();
   }
+  if (isProduction) {
+    activeSource = "empty";
+    console.warn("[CMS] No real data source configured in production — using empty repository");
+    return new EmptyRepository();
+  }
   // Priority 3: Mock data
   activeSource = "mock";
   console.warn("[CMS] No data source configured — using mock data");
@@ -311,6 +415,10 @@ function createRepository(): DataRepository {
 }
 
 export const repo: DataRepository = createRepository();
+
+export function isFirebaseSourceActive(): boolean {
+  return activeSource === "firebase";
+}
 
 /**
  * Safe wrapper: calls the primary repo and falls back to mock on error.
@@ -323,10 +431,14 @@ export async function withFallback<T>(
   try {
     return await primary();
   } catch (err) {
+    const fallbackLabel = isProduction ? "empty state" : "mock fallback";
     console.warn(
-      `[CMS] Primary source (${activeSource}) unavailable, using mock fallback:`,
+      `[CMS] Primary source (${activeSource}) unavailable, using ${fallbackLabel}:`,
       err instanceof Error ? err.message : err,
     );
+    if (isProduction) {
+      return [] as T;
+    }
     return fallback();
   }
 }

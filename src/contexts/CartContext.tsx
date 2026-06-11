@@ -9,11 +9,14 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import type { CartItem, SelectedOption } from "@/types/cart";
 import type { Product } from "@/types";
 import { computeTaxCents } from "@/types";
 
-const STORAGE_KEY = "delizza_cart";
+const LEGACY_STORAGE_KEYS = ["delizza_cart", "cart", "basket", "panier"];
+const GUEST_STORAGE_KEY = "delizza_cart_guest";
+const AUTH_STORAGE_PREFIX = "delizza_cart_uid_";
 
 /** Default tax rate (bps) used when a cart item has no taxRateBps (legacy data) */
 const DEFAULT_TAX_RATE_BPS = 1000;
@@ -60,34 +63,84 @@ function migrateLegacyItems(items: CartItem[]): CartItem[] {
   }));
 }
 
+function getCartStorageKey(uid: string | null): string {
+  return uid ? `${AUTH_STORAGE_PREFIX}${uid}` : GUEST_STORAGE_KEY;
+}
+
+function readCartItems(raw: string | null): CartItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as CartItem[];
+    if (!Array.isArray(parsed)) return [];
+    return migrateLegacyItems(parsed);
+  } catch {
+    return [];
+  }
+}
+
+function removeLegacyCartKeys() {
+  for (const key of LEGACY_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+  }
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const hydrated = useRef(false);
+  const activeStorageKeyRef = useRef<string>(GUEST_STORAGE_KEY);
+  const suppressPersistRef = useRef(false);
 
-  // Hydrate cart from localStorage after mount (avoids SSR/client mismatch)
+  // Hydrate cart from the auth-scoped storage key after mount and on session changes.
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const nextStorageKey = getCartStorageKey(user?.uid ?? null);
+    const isGuestScope = nextStorageKey === GUEST_STORAGE_KEY;
+    const existingScopedRaw = localStorage.getItem(nextStorageKey);
+    const legacyRaw = LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean) ?? null;
+
+    suppressPersistRef.current = true;
+
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as CartItem[];
-        if (Array.isArray(parsed)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setItems(migrateLegacyItems(parsed));
+      let nextItems = readCartItems(existingScopedRaw);
+
+      if (nextItems.length === 0 && isGuestScope && legacyRaw) {
+        nextItems = readCartItems(legacyRaw);
+        if (nextItems.length > 0) {
+          localStorage.setItem(nextStorageKey, JSON.stringify(nextItems));
         }
       }
+
+      // Always drop legacy global keys once we have resolved the scoped cart.
+      removeLegacyCartKeys();
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setItems(nextItems);
+      activeStorageKeyRef.current = nextStorageKey;
     } catch {
       // Ignore malformed data
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setItems([]);
+      activeStorageKeyRef.current = nextStorageKey;
     }
+
+    queueMicrotask(() => {
+      suppressPersistRef.current = false;
+    });
+
     hydrated.current = true;
-  }, []);
+  }, [user?.uid]);
 
   // Persist to localStorage whenever items change
   useEffect(() => {
-    if (!hydrated.current) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    if (!hydrated.current || suppressPersistRef.current) return;
+    localStorage.setItem(activeStorageKeyRef.current, JSON.stringify(items));
   }, [items]);
 
   const addItem = useCallback((product: Product) => {
+    if (product.manualOutOfStock === true) return;
+
     const cartKey = buildCartKey(product.id, []);
     setItems((prev) => {
       const existing = prev.find((i) => i.cartKey === cartKey);
@@ -120,6 +173,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItemWithOptions = useCallback(
     (product: Product, selectedOptions: SelectedOption[], quantity: number) => {
+      if (product.manualOutOfStock === true) return;
+
       const cartKey = buildCartKey(product.id, selectedOptions);
       const deltasCents = selectedOptions.reduce((sum, o) => sum + o.priceDeltaCents, 0);
       const unitPriceCents = product.price_cents + deltasCents;

@@ -5,9 +5,10 @@
  *   wl_catalog_categories  — menu categories
  *   wl_catalog_items       — menu products / items
  *   wl_option_templates    — reusable option templates (e.g. pizza sizes)
+ *   wl_offers              — commercial offers / promotions
  *
- * Hero slides and offers don't exist in WLHORIZON Firestore; they are
- * delegated to mock data (same as MockRepository).
+ * Hero slides still come from shared mock data. Offers now read from the
+ * dedicated WLHORIZON collection.
  */
 
 import { FieldPath } from "firebase-admin/firestore";
@@ -20,8 +21,31 @@ import {
   categories as mockCategories,
   products as mockProducts,
   heroSlides as mockHeroSlides,
-  offers as mockOffers,
 } from "@/data/mock";
+
+const FEATURED_PRODUCTS_DEBUG = process.env.FEATURED_PRODUCTS_DEBUG === "1";
+
+function logFeaturedProductsSelection(
+  source: "firebase",
+  scope: string,
+  products: Product[],
+): void {
+  if (!FEATURED_PRODUCTS_DEBUG) return;
+
+  console.info(
+    `[CMS][featured] source=${source} scope=${scope} count=${products.length}`,
+    products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      active: p.active,
+      is_popular: p.is_popular,
+      category: p.category,
+      price_cents: p.price_cents,
+      image: p.image,
+      badge: p.badge ?? null,
+    })),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,6 +86,149 @@ function bool(v: unknown, fallback = false): boolean {
 }
 function arr(v: unknown): string[] {
   return Array.isArray(v) ? (v as string[]) : [];
+}
+
+function optBool(v: unknown): boolean | null {
+  return typeof v === "boolean" ? v : null;
+}
+
+function isExplicitlyHidden(v: unknown): boolean {
+  return v === true;
+}
+
+function isPublicCategoryDoc(data: FirestoreDoc): boolean {
+  const active = bool(data.isActive, true);
+  if (!active) return false;
+
+  if (isExplicitlyHidden(data.visible)) return false;
+  if (isExplicitlyHidden(data.published)) return false;
+  if (isExplicitlyHidden(data.public)) return false;
+  if (isExplicitlyHidden(data.isVisible)) return false;
+  if (isExplicitlyHidden(data.archived)) return false;
+  if (isExplicitlyHidden(data.isArchived)) return false;
+  if (isExplicitlyHidden(data.deleted)) return false;
+  if (isExplicitlyHidden(data.isDeleted)) return false;
+
+  return true;
+}
+
+function isPublicProductDoc(data: FirestoreDoc): boolean {
+  const active = bool(data.isActive, true);
+  if (!active) return false;
+
+  if (optBool(data.visible) === false) return false;
+  if (optBool(data.published) === false) return false;
+  if (optBool(data.public) === false) return false;
+  if (optBool(data.isVisible) === false) return false;
+  if (optBool(data.archived) === true) return false;
+  if (optBool(data.isArchived) === true) return false;
+  if (optBool(data.deleted) === true) return false;
+  if (optBool(data.isDeleted) === true) return false;
+
+  const categoryId = str(data.categoryId);
+  if (!categoryId) return false;
+
+  const priceObj = data.price as Record<string, unknown> | undefined;
+  const priceCents =
+    typeof priceObj?.amountCents === "number"
+      ? priceObj.amountCents
+      : num(data.priceCents);
+  if (!(priceCents > 0)) return false;
+
+  return true;
+}
+
+function toNumber(v: unknown, fallback = 0): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const parsed = Number(v);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function toDate(v: unknown): Date | null {
+  if (v instanceof Date && !Number.isNaN(v.getTime())) return v;
+  if (typeof v === "string" || typeof v === "number") {
+    const parsed = new Date(v);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof v === "object" && v !== null && "toDate" in v) {
+    const candidate = v as { toDate?: unknown };
+    if (typeof candidate.toDate === "function") {
+      try {
+        const parsed = candidate.toDate();
+        return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function toIsoDate(v: unknown): string | null {
+  return toDate(v)?.toISOString() ?? null;
+}
+
+function firstString(data: FirestoreDoc, keys: string[], fallback = ""): string {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim() !== "") {
+      return value;
+    }
+  }
+  return fallback;
+}
+
+function firstBool(data: FirestoreDoc, keys: string[], fallback = false): boolean {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "boolean") {
+      return value;
+    }
+  }
+  return fallback;
+}
+
+function firstNumber(data: FirestoreDoc, keys: string[], fallback = 0): number {
+  for (const key of keys) {
+    const value = data[key];
+    const parsed = toNumber(value, Number.NaN);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+function firstDate(data: FirestoreDoc, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = toIsoDate(data[key]);
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function resolveOfferImage(data: FirestoreDoc): string | null {
+  const url = firstString(data, ["imageUrl", "bannerImageUrl", "coverUrl"]);
+  if (url) return url;
+
+  const rawPath = firstString(data, [
+    "imagePath",
+    "bannerImagePath",
+    "coverPath",
+    "image",
+  ]);
+  if (!rawPath) return null;
+  if (/^https?:\/\//i.test(rawPath)) return rawPath;
+  if (rawPath.startsWith("/")) return rawPath;
+  if (FIREBASE_STORAGE_BUCKET) {
+    return `https://firebasestorage.googleapis.com/v0/b/${FIREBASE_STORAGE_BUCKET}/o/${encodeURIComponent(rawPath)}?alt=media`;
+  }
+  return null;
 }
 
 /** Parse a raw Firestore options array into typed ProductOption[] */
@@ -146,15 +313,49 @@ function mapTemplateToOption(id: string, data: FirestoreDoc, order: number): Pro
   };
 }
 
-/** Filter offers by active status + date window */
-function filterActiveOffers(offers: Offer[]): Offer[] {
+type FirestoreOffer = Offer & {
+  sort_order: number;
+  created_at_ms: number;
+};
+
+function mapOffer(id: string, data: FirestoreDoc): FirestoreOffer {
+  return {
+    id,
+    title: firstString(data, ["title", "name", "label", "headline"], id),
+    content: firstString(data, ["content", "description", "body", "summary"]),
+    image: resolveOfferImage(data),
+    start_at: firstDate(data, ["startAt", "start_at", "startsAt", "starts_at"]),
+    end_at: firstDate(data, ["endAt", "end_at", "endsAt", "ends_at"]),
+    active: firstBool(data, ["isActive", "active"], true),
+    sort_order: firstNumber(data, ["order", "sortOrder", "sort_order"], 0),
+    created_at_ms: toDate(data.createdAt ?? data.created_at)?.getTime() ?? 0,
+  };
+}
+
+function isOfferActive(offer: Offer): boolean {
   const now = new Date();
-  return offers.filter((o) => {
-    if (!o.active) return false;
-    if (o.start_at && new Date(o.start_at) > now) return false;
-    if (o.end_at && new Date(o.end_at) < now) return false;
-    return true;
-  });
+  if (!offer.active) return false;
+  if (offer.start_at && new Date(offer.start_at) > now) return false;
+  if (offer.end_at && new Date(offer.end_at) < now) return false;
+  return true;
+}
+
+function sortOffers(a: FirestoreOffer, b: FirestoreOffer): number {
+  if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+  if (a.created_at_ms !== b.created_at_ms) return a.created_at_ms - b.created_at_ms;
+  const aEnd = a.end_at ? new Date(a.end_at).getTime() : Number.POSITIVE_INFINITY;
+  const bEnd = b.end_at ? new Date(b.end_at).getTime() : Number.POSITIVE_INFINITY;
+  if (aEnd !== bEnd) return aEnd - bEnd;
+  const titleDiff = a.title.localeCompare(b.title, "fr");
+  if (titleDiff !== 0) return titleDiff;
+  return a.id.localeCompare(b.id, "fr");
+}
+
+function normalizeOffers(offers: FirestoreOffer[]): Offer[] {
+  return offers
+    .filter(isOfferActive)
+    .sort(sortOffers)
+    .map(({ sort_order: _sortOrder, created_at_ms: _createdAtMs, ...offer }) => offer);
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +398,7 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
     category: str(data.categoryId),
     badge: typeof data.badge === "string" ? data.badge : undefined,
     active: bool(data.isActive, true),
+    manualOutOfStock: bool(data.manualOutOfStock, false),
     is_popular: bool(data.isPopular, false),
     tags: arr(data.tags),
     options: parseOptions(data.options),
@@ -209,15 +411,20 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
 // ---------------------------------------------------------------------------
 
 export class FirebaseRepository implements DataRepository {
-  /** Hero slides don't exist in WLHORIZON Firestore — delegate to mock */
+  /** Hero slides don't exist in WLHORIZON Firestore — return empty state in production. */
   async getHomeHeroSlides(): Promise<HeroSlide[]> {
+    if (process.env.NODE_ENV === "production") {
+      return [];
+    }
     return mockHeroSlides
       .filter((s) => s.active)
       .sort((a, b) => a.order - b.order);
   }
 
   async getFeaturedProducts(): Promise<Product[]> {
-    return buildFeaturedProducts(await this.getProducts());
+    const featured = buildFeaturedProducts(await this.getPopularProducts());
+    logFeaturedProductsSelection("firebase", `appId=${WL_APP_ID}`, featured);
+    return featured;
   }
 
   async getCategories(): Promise<Category[]> {
@@ -228,7 +435,10 @@ export class FirebaseRepository implements DataRepository {
       .orderBy("order")
       .get();
 
-    return snap.docs.map((doc) => mapCategory(doc.id, doc.data()));
+    return snap.docs
+      .map((doc) => ({ id: doc.id, data: doc.data() }))
+      .filter(({ data }) => isPublicCategoryDoc(data))
+      .map(({ id, data }) => mapCategory(id, data));
   }
 
   async getProducts(): Promise<Product[]> {
@@ -238,7 +448,10 @@ export class FirebaseRepository implements DataRepository {
       .where("isActive", "==", true)
       .get();
 
-    const rawProducts = snap.docs.map((doc) => mapProduct(doc.id, doc.data()));
+    const rawProducts = snap.docs
+      .map((doc) => ({ id: doc.id, data: doc.data() }))
+      .filter(({ data }) => isPublicProductDoc(data))
+      .map(({ id, data }) => mapProduct(id, data));
 
     // Collect all unique template IDs referenced across products
     const allTemplateIds = [
@@ -286,9 +499,26 @@ export class FirebaseRepository implements DataRepository {
     return all.filter((p) => p.is_popular);
   }
 
-  /** Offers don't exist in WLHORIZON Firestore — delegate to mock */
+  /** Offers are stored in the dedicated wl_offers collection. */
   async getOffers(): Promise<Offer[]> {
-    return filterActiveOffers(mockOffers);
+    const snap = await getDb()
+      .collection("wl_offers")
+      .where("appId", "==", WL_APP_ID)
+      .get();
+
+    const rawOffers = snap.docs
+      .map((doc) => ({ id: doc.id, data: doc.data() }))
+      .filter(({ data }) => {
+        const active = bool(data.isActive, true);
+        if (!active) return false;
+        if (optBool(data.visible) === false) return false;
+        if (optBool(data.published) === false) return false;
+        if (optBool(data.archived) === true) return false;
+        if (optBool(data.deleted) === true) return false;
+        return true;
+      })
+      .map(({ id, data }) => mapOffer(id, data));
+    return normalizeOffers(rawOffers);
   }
 }
 

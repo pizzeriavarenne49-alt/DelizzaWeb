@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { repo, withFallback, mockRepo } from "@/data/repository";
+import { repo, withFallback, mockRepo, isFirebaseSourceActive } from "@/data/repository";
 import { OG_IMAGE, SITE_URL } from "@/lib/seo";
 import OffersClient from "./OffersClient";
 
@@ -24,11 +24,23 @@ export const metadata: Metadata = {
   },
 };
 
+async function loadOffers() {
+  if (process.env.NODE_ENV === "production") {
+    try {
+      return await repo.getOffers();
+    } catch (err) {
+      console.warn("[CMS] Offers source unavailable in production; rendering empty state.", err);
+      return [];
+    }
+  }
+
+  return isFirebaseSourceActive()
+    ? await repo.getOffers()
+    : await withFallback(() => repo.getOffers(), () => mockRepo.getOffers());
+}
+
 export default async function OffersPage() {
-  const offers = await withFallback(
-    () => repo.getOffers(),
-    () => mockRepo.getOffers(),
-  );
+  const offers = await loadOffers();
 
   return <OffersClient offers={offers} />;
 }

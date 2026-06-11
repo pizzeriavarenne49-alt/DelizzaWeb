@@ -18,6 +18,7 @@ export interface Product {
   category: string; // category id
   badge?: string;
   active: boolean;
+  manualOutOfStock?: boolean;
   is_popular: boolean;
   tags: string[];
   /** Customization options (size, toppings, etc.) embedded in Firestore document */

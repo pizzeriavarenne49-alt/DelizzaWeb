@@ -20,8 +20,14 @@ export default function ProductCard({ product }: ProductCardProps) {
   const { addItem, addItemWithOptions } = useCart();
   const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
+  const isUnavailable = product.manualOutOfStock === true;
 
   const handleAdd = () => {
+    if (isUnavailable) {
+      showToast(`${product.name} est indisponible`);
+      return;
+    }
+
     track({ name: "click_add_product", payload: { productId: product.id } });
     if (product.options.length > 0) {
       setModalOpen(true);
@@ -32,6 +38,12 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   const handleModalConfirm = (selectedOptions: SelectedOption[], quantity: number) => {
+    if (isUnavailable) {
+      showToast(`${product.name} est indisponible`);
+      setModalOpen(false);
+      return;
+    }
+
     addItemWithOptions(product, selectedOptions, quantity);
     showToast(`${product.name} ajouté au panier ✓`);
     setModalOpen(false);
@@ -58,6 +70,11 @@ export default function ProductCard({ product }: ProductCardProps) {
               {product.badge}
             </span>
           )}
+          {isUnavailable && (
+            <span className="absolute top-2 right-2 rounded-full bg-[#E74C3C] px-2.5 py-0.5 text-[11px] font-semibold text-white">
+              Rupture
+            </span>
+          )}
         </div>
 
         {/* Info */}
@@ -79,16 +96,20 @@ export default function ProductCard({ product }: ProductCardProps) {
             <button
               type="button"
               onClick={handleAdd}
-              aria-label={`Ajouter ${product.name} au panier`}
+              disabled={isUnavailable}
+              aria-label={isUnavailable ? `${product.name} indisponible` : `Ajouter ${product.name} au panier`}
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full",
-                "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
-                "text-[18px] font-bold leading-none shadow-[0_4px_20px_rgba(212,160,83,0.3)]",
-                "active:scale-90 transition-transform",
+                isUnavailable
+                  ? "bg-[#3A3A3A] text-[#8A8A8A] cursor-not-allowed"
+                  : "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
+                "text-[18px] font-bold leading-none",
+                !isUnavailable && "shadow-[0_4px_20px_rgba(212,160,83,0.3)] active:scale-90",
+                "transition-transform",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
               )}
             >
-              +
+              {isUnavailable ? "x" : "+"}
             </button>
           </div>
         </div>

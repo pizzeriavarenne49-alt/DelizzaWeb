@@ -3,9 +3,14 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import {
+  doc,
+  getDoc,
+} from "firebase/firestore";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
+import { getClientFirestore } from "@/config/firebase-client";
 import { createOrder, createPaymentIntent } from "@/services/order-service";
 import { getAvailableSlots } from "@/services/slot-service";
 import { formatPrice, computeTtcCents, formatTaxRate } from "@/types";
@@ -89,6 +94,71 @@ function findRewardPreview(
   });
 
   return best;
+}
+
+async function validateCartProductsAvailable(items: CartItem[]): Promise<boolean> {
+  const productIds = [...new Set(items.map((item) => item.catalogItemId))];
+  if (productIds.length === 0) return true;
+
+  const db = getClientFirestore();
+  const products = new Map<
+    string,
+    {
+      isActive: boolean;
+      manualOutOfStock: boolean;
+      visible: boolean;
+      published: boolean;
+      archived: boolean;
+      deleted: boolean;
+      categoryId: string;
+      priceCents: number;
+    }
+  >();
+
+  await Promise.all(
+    productIds.map(async (productId) => {
+      const snap = await getDoc(doc(db, "wl_catalog_items", productId));
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      if (data.appId !== WL_APP_ID) return;
+
+      const priceCents =
+        typeof data.price?.amountCents === "number"
+          ? data.price.amountCents
+          : typeof data.priceCents === "number"
+            ? data.priceCents
+            : 0;
+
+      products.set(snap.id, {
+        isActive: typeof data.isActive === "boolean" ? data.isActive : true,
+        manualOutOfStock:
+          typeof data.manualOutOfStock === "boolean"
+            ? data.manualOutOfStock
+            : false,
+        visible: typeof data.visible === "boolean" ? data.visible : true,
+        published: typeof data.published === "boolean" ? data.published : true,
+        archived: typeof data.archived === "boolean" ? data.archived : false,
+        deleted: typeof data.deleted === "boolean" ? data.deleted : false,
+        categoryId: typeof data.categoryId === "string" ? data.categoryId : "",
+        priceCents,
+      });
+    }),
+  );
+
+  return productIds.every((productId) => {
+    const product = products.get(productId);
+    return (
+      product?.isActive === true &&
+      product.manualOutOfStock !== true &&
+      product.visible !== false &&
+      product.published !== false &&
+      product.archived !== true &&
+      product.deleted !== true &&
+      Boolean(product.categoryId) &&
+      product.priceCents > 0
+    );
+  });
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -652,6 +722,12 @@ export default function CheckoutClient() {
     setError(null);
 
     try {
+      const cartAvailable = await validateCartProductsAvailable(items);
+      if (!cartAvailable) {
+        setError("Un produit de votre panier n'est plus disponible.");
+        return;
+      }
+
       const fulfillmentData: FulfillmentData = {
         method: "clickAndCollect",
         isAsap: fulfillment.isAsap,
