@@ -17,7 +17,7 @@ const stripePromise = loadStripe(
 interface StripeCheckoutFormProps {
   amountCents: number;
   onSuccess: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 function StripeCheckoutForm({
@@ -44,7 +44,7 @@ function StripeCheckoutForm({
     });
 
     if (error) {
-      onError(error.message ?? "Une erreur est survenue lors du paiement.");
+      onError(error);
       setSubmitting(false);
     } else {
       onSuccess();
@@ -83,7 +83,7 @@ interface StripeCheckoutProps {
   clientSecret: string;
   amountCents: number;
   onSuccess: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
 }
 
 export default function StripeCheckout({

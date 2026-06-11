@@ -11,6 +11,10 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { getClientFirestore } from "@/config/firebase-client";
+import {
+  CLIENT_ERROR_MESSAGES,
+  getClientErrorMessage,
+} from "@/lib/client-error-message";
 import { createOrder, createPaymentIntent } from "@/services/order-service";
 import { getAvailableSlots } from "@/services/slot-service";
 import { formatPrice, formatTaxRate } from "@/types";
@@ -244,7 +248,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
       setSlots(result);
     } catch (err) {
       console.error("[slot-service] getAvailableSlots unexpected response or error:", err);
-      setSlotsError("Impossible de charger les créneaux. Veuillez réessayer.");
+      setSlotsError(getClientErrorMessage(err, "slots"));
       setSlots([]);
     } finally {
       setSlotsLoading(false);
@@ -272,7 +276,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
       }
     } catch (err) {
       console.error("[slot-service] getAvailableSlots unexpected response or error:", err);
-      setSlotsError("Impossible de charger les créneaux. Veuillez réessayer.");
+      setSlotsError(getClientErrorMessage(err, "slots"));
       setSlots([]);
       setNextAsapSlot(null);
     } finally {
@@ -728,7 +732,7 @@ export default function CheckoutClient() {
     try {
       const cartAvailable = await validateCartProductsAvailable(items);
       if (!cartAvailable) {
-        setError("Un produit de votre panier n'est plus disponible.");
+        setError(CLIENT_ERROR_MESSAGES.invalidCart);
         return;
       }
 
@@ -791,15 +795,12 @@ export default function CheckoutClient() {
       setPaymentAmountCents(intentResult.amountCents);
       setStep(3);
     } catch (err: unknown) {
-      const isResourceExhausted =
-        (err instanceof Error && err.message.includes("resource-exhausted")) ||
-        (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "functions/resource-exhausted");
-      if (isResourceExhausted) {
-        setError("Ce créneau est complet. Veuillez en choisir un autre.");
+      console.error("[checkout] Unable to create order or payment intent:", err);
+      const message = getClientErrorMessage(err, "checkout");
+      if (message === CLIENT_ERROR_MESSAGES.slotUnavailable) {
+        setError(message);
         setStep(1);
       } else {
-        const message =
-          err instanceof Error ? err.message : "Une erreur est survenue.";
         setError(message);
       }
     } finally {
@@ -826,8 +827,9 @@ export default function CheckoutClient() {
     );
   }, [clearCart, router, orderId]);
 
-  const handlePaymentError = useCallback((message: string) => {
-    setError(message);
+  const handlePaymentError = useCallback((error: unknown) => {
+    console.error("[stripe] Payment failed:", error);
+    setError(getClientErrorMessage(error, "payment"));
     setStep(2);
   }, []);
 

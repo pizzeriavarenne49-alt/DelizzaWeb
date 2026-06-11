@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { getClientErrorMessage } from "@/lib/client-error-message";
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -28,9 +29,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       }
       onSuccess?.();
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Une erreur est survenue";
-      setError(msg);
+      console.error("[auth] Authentication failed:", err);
+      setError(getClientErrorMessage(err, "auth"));
     } finally {
       setLoading(false);
     }

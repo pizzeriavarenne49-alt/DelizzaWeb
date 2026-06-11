@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   alternates: { canonical: "/menu" },
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function MenuPage() {
   const [cats, prods] = await Promise.all([
     withFallback(() => repo.getCategories(), () => mockRepo.getCategories()),
