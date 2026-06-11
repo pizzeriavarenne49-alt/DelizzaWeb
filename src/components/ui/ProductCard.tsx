@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import type { Product } from "@/types";
 import type { SelectedOption } from "@/types/cart";
-import { formatPrice, computeTtcCents } from "@/types";
+import { formatPrice } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -91,7 +91,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="flex items-center justify-between pt-1">
             <span className="text-[15px] font-bold text-[#D4A053]">
               {product.options.length > 0 ? "dès " : ""}
-              {formatPrice(computeTtcCents(product.price_cents, product.tax_rate_bps))}&nbsp;€
+              {formatPrice(product.price_cents)}&nbsp;€
             </span>
             <button
               type="button"

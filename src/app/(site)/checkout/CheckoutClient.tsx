@@ -13,7 +13,7 @@ import { useCart } from "@/contexts/CartContext";
 import { getClientFirestore } from "@/config/firebase-client";
 import { createOrder, createPaymentIntent } from "@/services/order-service";
 import { getAvailableSlots } from "@/services/slot-service";
-import { formatPrice, computeTtcCents, formatTaxRate } from "@/types";
+import { formatPrice, formatTaxRate } from "@/types";
 import type { CartItem } from "@/types/cart";
 import type { FulfillmentData, TimeSlotInfo } from "@/types/order";
 import {
@@ -78,7 +78,7 @@ function findRewardPreview(
       return;
     }
 
-    const discountTtcCents = computeTtcCents(item.unitPriceCents, item.taxRateBps);
+    const discountTtcCents = item.unitPriceCents;
     const totalAfterRewardCents = totalCents - discountTtcCents;
     const candidate: RewardPreview = {
       itemIndex: index,
@@ -516,6 +516,10 @@ function Step2Summary({
   const total = getTotalCents();
   const taxBreakdown = getTaxBreakdown();
   const canUseReward = rewardsAvailable > 0 && rewardPreview !== null;
+  const payableTotalCents =
+    useReward && rewardPreview
+      ? Math.max(0, rewardPreview.totalAfterRewardCents)
+      : total;
 
   return (
     <div className="flex flex-col gap-5">
@@ -530,7 +534,7 @@ function Step2Summary({
                 {item.nameSnapshot}
               </span>
               <span className="text-[#A0A0A0] whitespace-nowrap">
-                {formatPrice(computeTtcCents(item.totalCents, item.taxRateBps))}&nbsp;€
+                {formatPrice(item.totalCents)}&nbsp;€
               </span>
             </li>
           ))}
@@ -538,12 +542,12 @@ function Step2Summary({
 
         <div className="border-t border-white/5 pt-3 flex flex-col gap-1.5">
           <div className="flex justify-between text-[13px] text-[#A0A0A0]">
-            <span>Sous-total HT</span>
+            <span>Sous-total TTC</span>
             <span>{formatPrice(subtotal)}&nbsp;€</span>
           </div>
           {taxBreakdown.map((entry) => (
             <div key={entry.rateBps} className="flex justify-between text-[13px] text-[#A0A0A0]">
-              <span>TVA ({formatTaxRate(entry.rateBps)}%)</span>
+              <span>dont TVA ({formatTaxRate(entry.rateBps)}%)</span>
               <span>{formatPrice(entry.taxCents)}&nbsp;€</span>
             </div>
           ))}
@@ -646,7 +650,7 @@ function Step2Summary({
           ) : (
             useReward && rewardPreview?.isFullyCovered
               ? "Valider ma commande"
-              : `Payer ${formatPrice(total)} €`
+              : `Payer ${formatPrice(payableTotalCents)} €`
           )}
         </button>
       </div>
@@ -748,6 +752,10 @@ export default function CheckoutClient() {
         rewardPreview.itemIndex >= 0
           ? rewardPreview.itemIndex
           : undefined;
+      const payableTotalCents =
+        useReward && rewardPreview
+          ? Math.max(0, rewardPreview.totalAfterRewardCents)
+          : getTotalCents();
 
       const orderResult = await createOrder({
         appId: WL_APP_ID,
@@ -756,7 +764,7 @@ export default function CheckoutClient() {
         items,
         subtotalCents: getSubtotalCents(),
         taxCents: getTaxCents(),
-        totalCents: getTotalCents(),
+        totalCents: payableTotalCents,
         fulfillmentData,
         // Temporary placeholder — the real paymentIntentId is set server-side
         // by createPaymentIntent and updated via Stripe webhook on completion.

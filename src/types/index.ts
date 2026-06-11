@@ -75,6 +75,11 @@ export function computeTaxCents(htCents: number, taxRateBps: number): number {
   return Math.round(htCents * taxRateBps / 10000);
 }
 
+/** Extract included tax from a TTC amount and tax rate in basis points */
+export function computeTaxFromTtcCents(ttcCents: number, taxRateBps: number): number {
+  return Math.round((ttcCents * taxRateBps) / (10000 + taxRateBps));
+}
+
 /** Format a tax rate in bps as a display percentage (e.g. 1000 → "10", 550 → "5,5") */
 export function formatTaxRate(bps: number): string {
   const pct = bps / 100;

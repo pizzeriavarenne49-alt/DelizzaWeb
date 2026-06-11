@@ -10,7 +10,7 @@ export interface SelectedOption {
   optionName: string;
   choiceIds: string[];
   choiceNames: string[];
-  /** Total price modifier for this option in cents */
+  /** Total TTC price modifier for this option in cents */
   priceDeltaCents: number;
 }
 
@@ -22,9 +22,9 @@ export interface CartItem {
   /** Snapshot of product.name at the time the item was added */
   nameSnapshot: string;
   quantity: number;
-  /** = product.price_cents (HT) + sum of selectedOptions priceDeltaCents */
+  /** = product.price_cents (TTC) + sum of selectedOptions priceDeltaCents */
   unitPriceCents: number;
-  /** = unitPriceCents * quantity (HT) */
+  /** = unitPriceCents * quantity (TTC) */
   totalCents: number;
   /** Tax rate in basis points (e.g. 1000 = 10 %) */
   taxRateBps: number;

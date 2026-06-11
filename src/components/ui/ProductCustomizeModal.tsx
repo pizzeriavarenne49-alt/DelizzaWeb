@@ -6,7 +6,7 @@ import Image from "next/image";
 import type { Product } from "@/types";
 import type { SelectedOption } from "@/types/cart";
 import type { ProductOption } from "@/types/product-options";
-import { formatPrice, computeTtcCents } from "@/types";
+import { formatPrice } from "@/types";
 
 interface ProductCustomizeModalProps {
   product: Product;
@@ -95,7 +95,7 @@ export default function ProductCustomizeModal({
 
   const deltasCents = computeOptionsDeltaCents(sortedOptions, selections);
   const unitPriceCents = product.price_cents + deltasCents;
-  const totalTtcCents = computeTtcCents(unitPriceCents, product.tax_rate_bps) * quantity;
+  const totalTtcCents = unitPriceCents * quantity;
   const canAdd = areRequiredOptionsFilled(sortedOptions, selections);
 
   const handleConfirm = () => {
@@ -165,7 +165,7 @@ export default function ProductCustomizeModal({
                   {product.name}
                 </h2>
                 <p className="text-[14px] font-semibold text-[#D4A053]">
-                  À partir de {formatPrice(computeTtcCents(product.price_cents, product.tax_rate_bps))}&nbsp;€
+                  À partir de {formatPrice(product.price_cents)}&nbsp;€
                 </p>
               </div>
             </div>

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useCart } from "@/contexts/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { formatPrice, computeTtcCents, formatTaxRate } from "@/types";
+import { formatPrice, formatTaxRate } from "@/types";
 
 interface CartDrawerProps {
   open: boolean;
@@ -109,12 +109,12 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                           )}
                         </div>
                         <span className="text-[14px] font-semibold text-[#D4A053] whitespace-nowrap">
-                          {formatPrice(computeTtcCents(item.totalCents, item.taxRateBps))}&nbsp;€
+                          {formatPrice(item.totalCents)}&nbsp;€
                         </span>
                       </div>
                       <div className="mt-2 flex items-center justify-between">
                         <span className="text-[12px] text-[#A0A0A0]">
-                          {formatPrice(computeTtcCents(item.unitPriceCents, item.taxRateBps))}&nbsp;€ / unité
+                          {formatPrice(item.unitPriceCents)}&nbsp;€ / unité
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -153,12 +153,12 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                 {/* Totals */}
                 <div className="flex flex-col gap-1.5 mb-4">
                   <div className="flex justify-between text-[13px] text-[#A0A0A0]">
-                    <span>Sous-total HT</span>
+                    <span>Sous-total TTC</span>
                     <span>{formatPrice(subtotal)}&nbsp;€</span>
                   </div>
                   {taxBreakdown.map((entry) => (
                     <div key={entry.rateBps} className="flex justify-between text-[13px] text-[#A0A0A0]">
-                      <span>TVA ({formatTaxRate(entry.rateBps)}%)</span>
+                      <span>dont TVA ({formatTaxRate(entry.rateBps)}%)</span>
                       <span>{formatPrice(entry.taxCents)}&nbsp;€</span>
                     </div>
                   ))}

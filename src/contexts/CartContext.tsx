@@ -12,7 +12,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import type { CartItem, SelectedOption } from "@/types/cart";
 import type { Product } from "@/types";
-import { computeTaxCents } from "@/types";
+import { computeTaxFromTtcCents } from "@/types";
 
 const LEGACY_STORAGE_KEYS = ["delizza_cart", "cart", "basket", "panier"];
 const GUEST_STORAGE_KEY = "delizza_cart_guest";
@@ -249,6 +249,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getSubtotalCents = useCallback(
+    // Client cart amounts are already TTC. This subtotal is TTC before loyalty rewards.
     () => items.reduce((sum, i) => sum + i.totalCents, 0),
     [items],
   );
@@ -256,22 +257,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const getTaxCents = useCallback(
     () =>
       items.reduce(
-        (sum, i) => sum + computeTaxCents(i.totalCents, i.taxRateBps),
+        (sum, i) => sum + computeTaxFromTtcCents(i.totalCents, i.taxRateBps),
         0,
       ),
     [items],
   );
 
   const getTotalCents = useCallback(
-    () => getSubtotalCents() + getTaxCents(),
-    [getSubtotalCents, getTaxCents],
+    () => getSubtotalCents(),
+    [getSubtotalCents],
   );
 
   const getTaxBreakdown = useCallback((): TaxBreakdownEntry[] => {
     const map = new Map<number, number>();
     for (const item of items) {
       const rate = item.taxRateBps;
-      const tax = computeTaxCents(item.totalCents, rate);
+      const tax = computeTaxFromTtcCents(item.totalCents, rate);
       map.set(rate, (map.get(rate) ?? 0) + tax);
     }
     return Array.from(map.entries())
