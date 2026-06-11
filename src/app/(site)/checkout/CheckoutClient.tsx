@@ -849,7 +849,8 @@ export default function CheckoutClient() {
 
       const fulfillmentData: FulfillmentData = {
         method: "clickAndCollect",
-        isAsap: fulfillment.isAsap,
+        isAsap: Boolean(fulfillment.isAsap),
+        isPaid: false,
         source: "web",
         paymentTiming: "before",
         ...((!fulfillment.isAsap && fulfillment.scheduledTime)

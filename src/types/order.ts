@@ -28,6 +28,7 @@ export type PaymentTiming = "before" | "after" | "flexible";
 interface BaseFulfillmentData {
   method: FulfillmentMethod;
   isAsap?: boolean;
+  isPaid: boolean;
   source?: string;
   scheduledTime?: string;
   instructions?: string;
