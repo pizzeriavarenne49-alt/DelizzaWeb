@@ -102,7 +102,51 @@ function findRewardPreview(
 
 type CartValidationResult =
   | { ok: true }
-  | { ok: false; message: string };
+  | { ok: false; message: string; reason: string; details?: CartProductDiagnostic };
+
+type CartProductDiagnostic = {
+  productId: string;
+  name: string;
+  appId: string;
+  categoryId: string;
+  isActive: boolean;
+  visible: boolean | null;
+  published: boolean | null;
+  archived: boolean | null;
+  deleted: boolean | null;
+  stock: number | null;
+  stockManaged: boolean;
+  manualOutOfStock: boolean;
+  priceCents: number;
+};
+
+function boolOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function logCartValidationFailure(
+  reason: string,
+  details: CartProductDiagnostic | { productId: string; expectedAppId: string } | undefined,
+  items: CartItem[],
+): void {
+  console.error("[checkout] Cart validation refused:", {
+    reason,
+    details,
+    cartItems: items.map((item) => ({
+      productId: item.catalogItemId,
+      name: item.nameSnapshot,
+      categoryId: item.categoryId ?? null,
+      quantity: item.quantity,
+      unitPriceCents: item.unitPriceCents,
+      totalCents: item.totalCents,
+      taxRateBps: item.taxRateBps,
+    })),
+  });
+}
 
 async function validateCartProductsAvailable(items: CartItem[]): Promise<CartValidationResult> {
   const productIds = [...new Set(items.map((item) => item.catalogItemId))];
@@ -114,10 +158,14 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
     {
       isActive: boolean;
       manualOutOfStock: boolean;
-      visible: boolean;
-      published: boolean;
-      archived: boolean;
-      deleted: boolean;
+      visible: boolean | null;
+      published: boolean | null;
+      archived: boolean | null;
+      deleted: boolean | null;
+      stock: number | null;
+      stockManaged: boolean;
+      appId: string;
+      name: string;
       categoryId: string;
       priceCents: number;
     }
@@ -139,15 +187,20 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
             : 0;
 
       products.set(snap.id, {
+        appId: typeof data.appId === "string" ? data.appId : "",
+        name: typeof data.name === "string" ? data.name : "",
         isActive: typeof data.isActive === "boolean" ? data.isActive : true,
         manualOutOfStock:
           typeof data.manualOutOfStock === "boolean"
             ? data.manualOutOfStock
             : false,
-        visible: typeof data.visible === "boolean" ? data.visible : true,
-        published: typeof data.published === "boolean" ? data.published : true,
-        archived: typeof data.archived === "boolean" ? data.archived : false,
-        deleted: typeof data.deleted === "boolean" ? data.deleted : false,
+        visible: boolOrNull(data.visible),
+        published: boolOrNull(data.published),
+        archived: boolOrNull(data.archived),
+        deleted: boolOrNull(data.deleted),
+        stock: numberOrNull(data.stock),
+        stockManaged:
+          typeof data.stockManaged === "boolean" ? data.stockManaged : false,
         categoryId: typeof data.categoryId === "string" ? data.categoryId : "",
         priceCents,
       });
@@ -157,8 +210,15 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
   for (const productId of productIds) {
     const product = products.get(productId);
     if (!product) {
-      return { ok: false, message: "Un produit de votre panier est introuvable." };
+      const details = { productId, expectedAppId: WL_APP_ID };
+      logCartValidationFailure("product_not_found_or_wrong_app", details, items);
+      return {
+        ok: false,
+        message: "Un produit de votre panier est introuvable.",
+        reason: "product_not_found_or_wrong_app",
+      };
     }
+    const details: CartProductDiagnostic = { productId, ...product };
     if (
       product.isActive !== true ||
       product.visible === false ||
@@ -166,13 +226,49 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
       product.archived === true ||
       product.deleted === true
     ) {
-      return { ok: false, message: "Un produit de votre panier n'est plus disponible." };
+      logCartValidationFailure("product_unavailable", details, items);
+      return {
+        ok: false,
+        message: `${product.name || "Ce produit"} n'est plus disponible.`,
+        reason: "product_unavailable",
+        details,
+      };
     }
     if (product.manualOutOfStock === true) {
-      return { ok: false, message: "Ce produit n'est plus disponible." };
+      logCartValidationFailure("manual_out_of_stock", details, items);
+      return {
+        ok: false,
+        message: `${product.name || "Ce produit"} est en rupture.`,
+        reason: "manual_out_of_stock",
+        details,
+      };
     }
-    if (!product.categoryId || product.priceCents <= 0) {
-      return { ok: false, message: CLIENT_ERROR_MESSAGES.invalidCart };
+    if (product.stockManaged === true && product.stock !== null && product.stock <= 0) {
+      logCartValidationFailure("stock_managed_out_of_stock", details, items);
+      return {
+        ok: false,
+        message: `${product.name || "Ce produit"} est en rupture.`,
+        reason: "stock_managed_out_of_stock",
+        details,
+      };
+    }
+    if (!product.categoryId) {
+      logCartValidationFailure("missing_category_id", details, items);
+      return {
+        ok: false,
+        message: `${product.name || "Un produit"} ne peut pas être commandé : catégorie manquante.`,
+        reason: "missing_category_id",
+        details,
+      };
+    }
+    if (product.priceCents <= 0) {
+      logCartValidationFailure("invalid_price_cents", details, items);
+      return {
+        ok: false,
+        message: `${product.name || "Un produit"} ne peut pas être commandé : prix invalide.`,
+        reason: "invalid_price_cents",
+        details,
+      };
     }
   }
 
@@ -746,6 +842,7 @@ export default function CheckoutClient() {
     try {
       const cartValidation = await validateCartProductsAvailable(items);
       if (!cartValidation.ok) {
+        console.error("[checkout] Refusing before createOrder:", cartValidation);
         setError(cartValidation.message);
         return;
       }
@@ -810,6 +907,23 @@ export default function CheckoutClient() {
       setStep(3);
     } catch (err: unknown) {
       console.error("[checkout] Unable to create order or payment intent:", err);
+      console.error("[checkout] createOrder/createPaymentIntent context:", {
+        appId: WL_APP_ID,
+        userId: user.uid,
+        fulfillment,
+        cartItems: items.map((item) => ({
+          productId: item.catalogItemId,
+          name: item.nameSnapshot,
+          categoryId: item.categoryId ?? null,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+          totalCents: item.totalCents,
+          taxRateBps: item.taxRateBps,
+        })),
+        subtotalCents: getSubtotalCents(),
+        taxCents: getTaxCents(),
+        totalCents: getTotalCents(),
+      });
       const message = getClientErrorMessage(err, "checkout");
       if (message === CLIENT_ERROR_MESSAGES.slotUnavailable) {
         setError(message);

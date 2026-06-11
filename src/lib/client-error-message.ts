@@ -18,7 +18,7 @@ export const CLIENT_ERROR_MESSAGES = {
   invalidCart: "Votre panier ne peut pas être validé. Vérifiez son contenu.",
   productNotFound: "Un produit de votre panier est introuvable.",
   productUnavailable: "Un produit de votre panier n'est plus disponible.",
-  productOutOfStock: "Ce produit n'est plus disponible.",
+  productOutOfStock: "Produit en rupture.",
   paymentDeclined: "Le paiement a été refusé. Essayez une autre carte.",
   orderFailed:
     "Impossible de finaliser la commande. Réessayez dans quelques instants.",
