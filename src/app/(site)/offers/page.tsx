@@ -3,6 +3,9 @@ import { repo, withFallback, mockRepo, isFirebaseSourceActive } from "@/data/rep
 import { OG_IMAGE, SITE_URL } from "@/lib/seo";
 import OffersClient from "./OffersClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "Offres et promotions — Pizza Deli'Zza",
   description:
