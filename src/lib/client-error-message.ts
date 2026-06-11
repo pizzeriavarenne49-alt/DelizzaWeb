@@ -16,6 +16,9 @@ export const CLIENT_ERROR_MESSAGES = {
   network: "Connexion impossible. Vérifiez votre connexion internet.",
   slotUnavailable: "Ce créneau n'est plus disponible. Choisissez un autre horaire.",
   invalidCart: "Votre panier ne peut pas être validé. Vérifiez son contenu.",
+  productNotFound: "Un produit de votre panier est introuvable.",
+  productUnavailable: "Un produit de votre panier n'est plus disponible.",
+  productOutOfStock: "Ce produit n'est plus disponible.",
   paymentDeclined: "Le paiement a été refusé. Essayez une autre carte.",
   orderFailed:
     "Impossible de finaliser la commande. Réessayez dans quelques instants.",
@@ -129,6 +132,36 @@ export function getClientErrorMessage(
   }
 
   if (code.startsWith("functions/") || text.includes("functions/")) {
+    if (hasAny(text, ["introuvable", "not-found", "not found"])) {
+      return CLIENT_ERROR_MESSAGES.productNotFound;
+    }
+
+    if (
+      hasAny(text, [
+        "plus disponible",
+        "out-of-stock",
+        "out of stock",
+        "stock insuffisant",
+        "disponibilite insuffisante",
+        "disponibilité insuffisante",
+      ])
+    ) {
+      return CLIENT_ERROR_MESSAGES.productOutOfStock;
+    }
+
+    if (
+      hasAny(text, [
+        "permission-denied",
+        "permission denied",
+        "not authorized",
+        "does not have access",
+      ])
+    ) {
+      return context === "checkout"
+        ? CLIENT_ERROR_MESSAGES.orderFailed
+        : CLIENT_ERROR_MESSAGES.server;
+    }
+
     if (
       hasAny(text, [
         "resource-exhausted",

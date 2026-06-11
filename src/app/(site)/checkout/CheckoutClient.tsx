@@ -100,9 +100,13 @@ function findRewardPreview(
   return best;
 }
 
-async function validateCartProductsAvailable(items: CartItem[]): Promise<boolean> {
+type CartValidationResult =
+  | { ok: true }
+  | { ok: false; message: string };
+
+async function validateCartProductsAvailable(items: CartItem[]): Promise<CartValidationResult> {
   const productIds = [...new Set(items.map((item) => item.catalogItemId))];
-  if (productIds.length === 0) return true;
+  if (productIds.length === 0) return { ok: true };
 
   const db = getClientFirestore();
   const products = new Map<
@@ -150,19 +154,29 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<boolean
     }),
   );
 
-  return productIds.every((productId) => {
+  for (const productId of productIds) {
     const product = products.get(productId);
-    return (
-      product?.isActive === true &&
-      product.manualOutOfStock !== true &&
-      product.visible !== false &&
-      product.published !== false &&
-      product.archived !== true &&
-      product.deleted !== true &&
-      Boolean(product.categoryId) &&
-      product.priceCents > 0
-    );
-  });
+    if (!product) {
+      return { ok: false, message: "Un produit de votre panier est introuvable." };
+    }
+    if (
+      product.isActive !== true ||
+      product.visible === false ||
+      product.published === false ||
+      product.archived === true ||
+      product.deleted === true
+    ) {
+      return { ok: false, message: "Un produit de votre panier n'est plus disponible." };
+    }
+    if (product.manualOutOfStock === true) {
+      return { ok: false, message: "Ce produit n'est plus disponible." };
+    }
+    if (!product.categoryId || product.priceCents <= 0) {
+      return { ok: false, message: CLIENT_ERROR_MESSAGES.invalidCart };
+    }
+  }
+
+  return { ok: true };
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -730,9 +744,9 @@ export default function CheckoutClient() {
     setError(null);
 
     try {
-      const cartAvailable = await validateCartProductsAvailable(items);
-      if (!cartAvailable) {
-        setError(CLIENT_ERROR_MESSAGES.invalidCart);
+      const cartValidation = await validateCartProductsAvailable(items);
+      if (!cartValidation.ok) {
+        setError(cartValidation.message);
         return;
       }
 
