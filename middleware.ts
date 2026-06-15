@@ -1,0 +1,38 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { COMING_SOON } from "@/lib/comingSoon";
+
+const MAINTENANCE_PATH = "/maintenance";
+
+const EXCLUDED_PATHS = new Set([
+  MAINTENANCE_PATH,
+  "/mentions-legales",
+  "/privacy",
+  "/cgu",
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml",
+]);
+
+function shouldBypassMaintenance(pathname: string): boolean {
+  return (
+    EXCLUDED_PATHS.has(pathname) ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/images")
+  );
+}
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (!COMING_SOON || shouldBypassMaintenance(pathname)) {
+    return NextResponse.next();
+  }
+
+  const url = request.nextUrl.clone();
+  url.pathname = MAINTENANCE_PATH;
+  return NextResponse.rewrite(url);
+}
+
+export const config = {
+  matcher: ["/((?!api).*)"],
+};

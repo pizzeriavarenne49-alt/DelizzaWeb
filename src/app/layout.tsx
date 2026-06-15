@@ -5,8 +5,6 @@ import { SITE_URL, BUSINESS, OG_IMAGE } from "@/lib/seo";
 import JsonLd from "@/components/seo/JsonLd";
 import GoogleAnalytics from "@/components/seo/GoogleAnalytics";
 import { restaurantSchema, webSiteSchema } from "@/lib/schemas";
-import { COMING_SOON } from "@/lib/comingSoon";
-import ComingSoonOverlay from "@/components/ComingSoonOverlay";
 
 const poppins = Poppins({
   weight: ["400", "500", "600", "700"],
@@ -60,7 +58,6 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <GoogleAnalytics />
-        {COMING_SOON && <ComingSoonOverlay />}
         {children}
       </body>
     </html>
