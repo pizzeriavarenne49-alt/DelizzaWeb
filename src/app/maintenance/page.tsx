@@ -58,9 +58,11 @@ export default function MaintenancePage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#A0A0A0]">
                   Horaires
                 </p>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-lg font-semibold text-[#F5F5F5]">
+                <div className="mt-2 flex flex-col gap-2 text-lg font-semibold text-[#F5F5F5]">
+                  <span>Mardi au Dimanche</span>
                   <span>11h30-14h00</span>
                   <span>18h00-22h00</span>
+                  <span className="text-base font-medium text-[#A0A0A0]">Fermé le lundi</span>
                 </div>
               </div>
             </div>
