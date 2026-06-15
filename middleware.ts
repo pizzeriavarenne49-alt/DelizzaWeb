@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { COMING_SOON } from "@/lib/comingSoon";
 
 const MAINTENANCE_PATH = "/maintenance";
 
@@ -23,8 +22,9 @@ function shouldBypassMaintenance(pathname: string): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const maintenanceEnabled = process.env.NEXT_PUBLIC_COMING_SOON === "true";
 
-  if (!COMING_SOON || shouldBypassMaintenance(pathname)) {
+  if (!maintenanceEnabled || shouldBypassMaintenance(pathname)) {
     return NextResponse.next();
   }
 
