@@ -13,13 +13,16 @@ const poppins = Poppins({
   variable: "--font-poppins",
 });
 
+const SEO_DESCRIPTION =
+  "Pizza Deli'Zza à Orée d'Anjou : pizzas artisanales à emporter, commande par téléphone au 02 21 68 81 82. Découvrez la carte, les horaires et les informations pratiques.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: "Pizza Deli'Zza — Pizzeria à emporter à La Varenne (Orée d'Anjou)",
     template: "%s | Pizza Deli'Zza",
   },
-  description: BUSINESS.description,
+  description: SEO_DESCRIPTION,
   robots: { index: true, follow: true },
   alternates: { canonical: "/" },
   openGraph: {
@@ -28,13 +31,13 @@ export const metadata: Metadata = {
     locale: "fr_FR",
     url: SITE_URL,
     title: "Pizza Deli'Zza — Pizzeria artisanale à La Varenne",
-    description: BUSINESS.shortDescription,
+    description: SEO_DESCRIPTION,
     images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Pizza artisanale Deli'Zza" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Pizza Deli'Zza — Pizzeria artisanale à La Varenne",
-    description: BUSINESS.shortDescription,
+    description: SEO_DESCRIPTION,
     images: [OG_IMAGE],
   },
 };
