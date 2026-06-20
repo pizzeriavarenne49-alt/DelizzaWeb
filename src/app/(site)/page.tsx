@@ -8,7 +8,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "Pizza Deli'Zza — Pizzeria artisanale à emporter à La Varenne",
   description:
-    "Pizzeria artisanale à La Varenne (Orée d'Anjou). Pâte à longue fermentation, ingrédients frais et locaux. Commandez en click & collect ou passez nous voir !",
+    "Pizza Deli'Zza à Orée d'Anjou : pizzas artisanales à emporter, commande par téléphone au 02 21 68 81 82. Découvrez la carte, les horaires et les informations pratiques.",
   alternates: { canonical: "/" },
 };
 
