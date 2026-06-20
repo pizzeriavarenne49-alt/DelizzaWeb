@@ -1,35 +1,26 @@
 /**
  * JSON-LD schema generators for Pizza Deli'Zza.
- *
- * Each function returns a plain object ready to be serialised by <JsonLd />.
- * All data comes from the centralised BUSINESS constant in lib/seo.ts.
  */
 
 import { BUSINESS, SITE_URL, type Commune } from "@/lib/seo";
 
-/* ------------------------------------------------------------------ */
-/*  Restaurant / LocalBusiness                                         */
-/* ------------------------------------------------------------------ */
+const SEO_DESCRIPTION =
+  "Pizza Deli'Zza à Orée d'Anjou : pizzas artisanales à emporter, commande par téléphone au 02 21 68 81 82. Découvrez la carte, les horaires et les informations pratiques.";
 
 export function restaurantSchema() {
   return {
     "@context": "https://schema.org",
-    "@type": ["Restaurant", "LocalBusiness", "TakeoutRestaurant"],
+    "@type": ["Restaurant", "LocalBusiness"],
     "@id": `${SITE_URL}/#restaurant`,
     name: BUSINESS.name,
     url: BUSINESS.url,
     telephone: BUSINESS.telephone,
     email: BUSINESS.email,
-    description: BUSINESS.description,
+    description: SEO_DESCRIPTION,
     image: `${SITE_URL}/images/og-default.png`,
     logo: `${SITE_URL}/images/og-default.png`,
     priceRange: BUSINESS.priceRange,
     servesCuisine: BUSINESS.servesCuisine,
-    acceptsReservations: false,
-    currenciesAccepted: "EUR",
-    paymentAccepted: "Credit Card",
-    // TODO: uncomment when Google Maps CID is available
-    // hasMap: "https://maps.google.com/?cid=TODO_CID",
     address: {
       "@type": "PostalAddress",
       streetAddress: BUSINESS.address.streetAddress,
@@ -38,65 +29,23 @@ export function restaurantSchema() {
       addressRegion: BUSINESS.address.addressRegion,
       addressCountry: BUSINESS.address.addressCountry,
     },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: BUSINESS.geo.latitude,
-      longitude: BUSINESS.geo.longitude,
-    },
-    // TODO: uncomment when Google reviews are available
-    // aggregateRating: {
-    //   "@type": "AggregateRating",
-    //   ratingValue: "4.8",
-    //   reviewCount: "0",
-    //   bestRating: "5",
-    //   worstRating: "1",
-    // },
     openingHoursSpecification: BUSINESS.openingHours.map((spec) => ({
       "@type": "OpeningHoursSpecification",
       dayOfWeek: spec.dayOfWeek,
       opens: spec.opens,
       closes: spec.closes,
     })),
-    sameAs: [BUSINESS.social.facebook, BUSINESS.social.instagram].filter(
-      (u) => !u.startsWith("TODO"),
-    ),
     hasMenu: `${SITE_URL}/menu`,
-    potentialAction: {
-      "@type": "OrderAction",
-      target: {
-        "@type": "EntryPoint",
-        urlTemplate: `${SITE_URL}/menu`,
-        actionPlatform: "http://schema.org/DesktopWebPlatform",
-      },
-      deliveryMethod: "http://purl.org/goodrelations/v1#DeliveryModePickUp",
-    },
     areaServed: [
       { "@type": "City", name: "La Varenne" },
       { "@type": "City", name: "Orée d'Anjou" },
       { "@type": "City", name: "Saint-Florent-le-Vieil" },
       { "@type": "City", name: "Champtoceaux" },
-      { "@type": "City", name: "Landemont" },
-      { "@type": "City", name: "Liré" },
       { "@type": "City", name: "Drain" },
-      { "@type": "City", name: "Bouzillé" },
-      { "@type": "City", name: "Saint-Christophe-la-Couperie" },
-      { "@type": "City", name: "Saint-Laurent-des-Autels" },
-      { "@type": "City", name: "Saint-Sauveur-de-Landemont" },
-      { "@type": "City", name: "La Remaudière" },
-      { "@type": "City", name: "La Pommeraye" },
-      { "@type": "City", name: "La Chapelle-Saint-Florent" },
-      { "@type": "City", name: "Le Marillais" },
-      { "@type": "City", name: "Oudon" },
       { "@type": "City", name: "Ancenis-Saint-Géréon" },
-      { "@type": "City", name: "Le Fuilet" },
-      { "@type": "City", name: "Mauges-sur-Loire" },
     ],
   };
 }
-
-/* ------------------------------------------------------------------ */
-/*  WebSite + SearchAction                                             */
-/* ------------------------------------------------------------------ */
 
 export function webSiteSchema() {
   return {
@@ -108,10 +57,6 @@ export function webSiteSchema() {
     publisher: { "@id": `${SITE_URL}/#restaurant` },
   };
 }
-
-/* ------------------------------------------------------------------ */
-/*  BreadcrumbList                                                     */
-/* ------------------------------------------------------------------ */
 
 export interface BreadcrumbItem {
   name: string;
@@ -130,10 +75,6 @@ export function breadcrumbSchema(items: BreadcrumbItem[]) {
     })),
   };
 }
-
-/* ------------------------------------------------------------------ */
-/*  FAQPage (for local pages)                                          */
-/* ------------------------------------------------------------------ */
 
 export interface FaqItem {
   question: string;
@@ -155,10 +96,6 @@ export function faqSchema(faqs: FaqItem[]) {
   };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Local-page FAQ generator                                           */
-/* ------------------------------------------------------------------ */
-
 export function communeFaqs(commune: Commune): FaqItem[] {
   const isLaVarenne = commune.driveTime === "0 min";
   return [
@@ -173,23 +110,19 @@ export function communeFaqs(commune: Commune): FaqItem[] {
       answer: `Nous sommes ouverts du mardi au dimanche, de 11h à 13h30 et de 18h30 à 22h. Fermé le lundi.`,
     },
     {
-      question: `Peut-on commander en ligne depuis ${commune.name} ?`,
-      answer: `Oui ! Rendez-vous sur delizza.fr pour commander en click & collect. Vous choisissez vos pizzas, vous payez en ligne et vous récupérez votre commande à La Varenne, prête à l'heure convenue.`,
+      question: `Peut-on commander depuis ${commune.name} ?`,
+      answer: `Oui. Consultez la carte sur delizza.fr/menu puis récupérez votre commande à La Varenne, au créneau prévu.`,
     },
     {
       question: `Pizza Deli'Zza livre-t-elle à ${commune.name} ?`,
-      answer: `Non, nous ne proposons pas de livraison. Nous sommes une pizzeria à emporter uniquement. Le retrait se fait directement à notre pizzeria de La Varenne.`,
+      answer: `Non, nous ne proposons pas de livraison. Le retrait se fait directement à notre pizzeria de La Varenne.`,
     },
     {
       question: `Quelles pizzas propose Pizza Deli'Zza ?`,
-      answer: `Notre carte propose des pizzas artisanales avec une pâte à longue fermentation (48h minimum), des ingrédients frais et locaux. Consultez notre menu complet sur delizza.fr/menu.`,
+      answer: `Pizza Deli'Zza propose des pizzas artisanales à emporter. La carte, les horaires et les informations pratiques sont disponibles sur delizza.fr/menu.`,
     },
   ];
 }
-
-/* ------------------------------------------------------------------ */
-/*  Menu schema                                                        */
-/* ------------------------------------------------------------------ */
 
 export function menuSectionSchema() {
   return {
@@ -197,19 +130,8 @@ export function menuSectionSchema() {
     "@type": "Menu",
     "@id": `${SITE_URL}/menu#menu`,
     name: "Menu Pizza Deli'Zza",
-    description:
-      "Carte des pizzas artisanales de Pizza Deli'Zza — pâte à longue fermentation, ingrédients frais et locaux.",
+    description: "Carte des pizzas artisanales à emporter de Pizza Deli'Zza à Orée d'Anjou.",
     url: `${SITE_URL}/menu`,
-    hasMenuSection: {
-      "@type": "MenuSection",
-      name: "Pizzas artisanales",
-      description:
-        "Toutes nos pizzas sont préparées à la commande avec une pâte fermentée 48h minimum.",
-    },
     inLanguage: "fr",
-    offers: {
-      "@type": "Offer",
-      availableAtOrFrom: { "@id": `${SITE_URL}/#restaurant` },
-    },
   };
 }
