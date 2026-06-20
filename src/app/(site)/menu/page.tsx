@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Menu pizzas artisanales — Pizza Deli'Zza à La Varenne",
   description:
-    "Découvrez notre menu : pizzas artisanales, entrées et desserts préparés avec des ingrédients frais et locaux. Commandez en ligne pour un retrait à La Varenne.",
+    "Découvrez la carte de Pizza Deli'Zza à Orée d'Anjou : pizzas artisanales à emporter, desserts, horaires et informations pratiques.",
   alternates: { canonical: "/menu" },
 };
 
