@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "Commande en ligne temporairement indisponible | Pizza Deli'Zza",
   description:
     "Le site de commande en ligne Pizza Deli'Zza est temporairement indisponible. Consultez la carte et commandez par téléphone.",
-  robots: { index: false, follow: true },
+  robots: { index: true, follow: true },
 };
 
 const phoneDisplay = "02 21 68 81 82";
