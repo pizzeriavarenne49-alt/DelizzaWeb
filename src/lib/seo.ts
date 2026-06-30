@@ -40,11 +40,11 @@ export const BUSINESS = {
   shortDescription:
     "Pizza artisanale à emporter — La Varenne, Orée d'Anjou. Pâte longue fermentation, fait maison, ingrédients locaux. Click & collect.",
   openingHours: [
-    // Tuesday-Sunday, 11h-13h30 & 18h30-22h
-    { dayOfWeek: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "11:00", closes: "13:30" },
-    { dayOfWeek: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "18:30", closes: "22:00" },
+    // Wednesday-Sunday evenings only
+    { dayOfWeek: ["Wednesday", "Thursday"], opens: "18:30", closes: "21:30" },
+    { dayOfWeek: ["Friday", "Saturday", "Sunday"], opens: "18:00", closes: "22:00" },
   ],
-  openingHoursText: "Mar-Dim : 11h-13h30 / 18h30-22h",
+  openingHoursText: "Mer-Jeu : 18h30-21h30 / Ven-Dim : 18h00-22h00",
 } as const;
 
 export const LEGAL_ENTITY = {

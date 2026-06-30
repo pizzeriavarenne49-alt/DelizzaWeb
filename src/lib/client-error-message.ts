@@ -6,6 +6,8 @@ export type ClientErrorContext =
   | "server";
 
 export const CLIENT_ERROR_MESSAGES = {
+  customerSessionSync:
+    "Votre session client n'est pas synchronisée. Actualisez la page ou reconnectez-vous.",
   invalidEmail: "L'adresse e-mail n'est pas valide.",
   invalidCredentials: "Adresse e-mail ou mot de passe incorrect.",
   weakPassword: "Le mot de passe est trop faible.",
@@ -76,6 +78,19 @@ export function getClientErrorMessage(
 
   if (hasAny(text, ["network", "fetch", "offline", "unavailable"])) {
     return CLIENT_ERROR_MESSAGES.network;
+  }
+
+  if (
+    hasAny(text, [
+      "customer-session-sync",
+      "customer session sync",
+      "customer session not synchronized",
+      "session client n'est pas synchronisée",
+      "session client non synchronisée",
+      "customerappid",
+    ])
+  ) {
+    return CLIENT_ERROR_MESSAGES.customerSessionSync;
   }
 
   if (

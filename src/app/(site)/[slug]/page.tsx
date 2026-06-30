@@ -122,11 +122,11 @@ export default async function CommunePage({ params }: PageProps) {
         <section className="flex flex-col gap-3">
           <h2 className="text-[20px] font-semibold text-[#F5F5F5]">Nos horaires</h2>
           <p className="text-[15px] text-[#A0A0A0]">
-            {BUSINESS.openingHoursText}. Fermé le lundi.
+            {BUSINESS.openingHoursText}. Lundi et mardi : fermés.
           </p>
           <p className="text-[15px] text-[#A0A0A0]">
-            Nous vous conseillons de commander en avance pour les créneaux du soir (18h–22h), très
-            demandés le week-end.
+            Nous vous conseillons de commander en avance pour les créneaux du soir, très demandés
+            le week-end.
           </p>
         </section>
 

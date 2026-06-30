@@ -107,7 +107,7 @@ export function communeFaqs(commune: Commune): FaqItem[] {
     },
     {
       question: `Quels sont les horaires de la pizzeria à La Varenne ?`,
-      answer: `Nous sommes ouverts du mardi au dimanche, de 11h à 13h30 et de 18h30 à 22h. Fermé le lundi.`,
+      answer: `Nous sommes ouverts uniquement le soir du mercredi au dimanche. Lundi et mardi : fermés. Mercredi et jeudi : 18h30 à 21h30. Vendredi, samedi et dimanche : 18h00 à 22h00.`,
     },
     {
       question: `Peut-on commander depuis ${commune.name} ?`,

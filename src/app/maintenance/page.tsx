@@ -59,10 +59,13 @@ export default function MaintenancePage() {
                   Horaires
                 </p>
                 <div className="mt-2 flex flex-col gap-2 text-lg font-semibold text-[#F5F5F5]">
-                  <span>Mardi au Dimanche</span>
-                  <span>11h30-14h00</span>
-                  <span>18h00-22h00</span>
-                  <span className="text-base font-medium text-[#A0A0A0]">Fermé le lundi</span>
+                  <span>Lundi : fermé</span>
+                  <span>Mardi : fermé</span>
+                  <span>Mercredi : 18h30-21h30</span>
+                  <span>Jeudi : 18h30-21h30</span>
+                  <span>Vendredi : 18h00-22h00</span>
+                  <span>Samedi : 18h00-22h00</span>
+                  <span>Dimanche : 18h00-22h00</span>
                 </div>
               </div>
             </div>

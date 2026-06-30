@@ -15,6 +15,7 @@ import {
   type User,
 } from "firebase/auth";
 import { getClientAuth, initAppCheck } from "@/config/firebase-client";
+import { ensureDelizzaCustomerSession } from "@/services/customer-session";
 
 interface AuthContextValue {
   user: User | null;
@@ -48,6 +49,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string) => {
     const auth = getClientAuth();
     await createUserWithEmailAndPassword(auth, email, password);
+    try {
+      await ensureDelizzaCustomerSession(true);
+    } catch (error) {
+      try {
+        await firebaseSignOut(auth);
+      } catch {
+        // Ignore sign-out cleanup failures; the sync error is the important one.
+      }
+      throw error;
+    }
   };
 
   const signOut = async () => {

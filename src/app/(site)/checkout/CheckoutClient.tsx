@@ -12,6 +12,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { getClientFirestore } from "@/config/firebase-client";
 import {
+  ensureDelizzaCustomerSession,
+  CustomerSessionSyncError,
+} from "@/services/customer-session";
+import {
   CLIENT_ERROR_MESSAGES,
   getClientErrorMessage,
 } from "@/lib/client-error-message";
@@ -847,6 +851,8 @@ export default function CheckoutClient() {
         return;
       }
 
+      await ensureDelizzaCustomerSession(true);
+
       const fulfillmentData: FulfillmentData = {
         method: "clickAndCollect",
         isAsap: Boolean(fulfillment.isAsap),
@@ -908,6 +914,10 @@ export default function CheckoutClient() {
       setStep(3);
     } catch (err: unknown) {
       console.error("[checkout] Unable to create order or payment intent:", err);
+      if (err instanceof CustomerSessionSyncError) {
+        setError(err.message);
+        return;
+      }
       console.error("[checkout] createOrder/createPaymentIntent context:", {
         appId: WL_APP_ID,
         userId: user.uid,
