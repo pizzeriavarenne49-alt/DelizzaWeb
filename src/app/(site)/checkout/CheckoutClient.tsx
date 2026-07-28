@@ -12,6 +12,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { getClientFirestore } from "@/config/firebase-client";
 import {
+  buildScheduledFulfillmentData,
+  getServiceDateForKey,
+  isSameSlot,
+  type SlotDateKey,
+} from "@/lib/slot-contract";
+import {
   ensureDelizzaCustomerSession,
   CustomerSessionSyncError,
 } from "@/services/customer-session";
@@ -39,22 +45,6 @@ const StripeCheckout = dynamic(
 const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
-
-function toISODate(d: Date): string {
-  return d.toISOString().split("T")[0];
-}
-
-function getTodayDate(): Date {
-  return new Date();
-}
-
-function getTomorrowDate(): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d;
-}
-
-type SlotDateKey = "today" | "tomorrow";
 
 function findNextAvailableSlot(slots: TimeSlotInfo[]): TimeSlotInfo | undefined {
   return slots.find((slot) => slot.status !== "full");
@@ -137,6 +127,14 @@ function logCartValidationFailure(
   details: CartProductDiagnostic | { productId: string; expectedAppId: string } | undefined,
   items: CartItem[],
 ): void {
+  if (process.env.NODE_ENV === "production") {
+    console.error("[checkout] Cart validation refused:", {
+      reason,
+      itemCount: items.length,
+    });
+    return;
+  }
+
   console.error("[checkout] Cart validation refused:", {
     reason,
     details,
@@ -340,18 +338,19 @@ interface Step1Props {
   onChange: (s: FulfillmentFormState) => void;
   onNext: () => void;
   isEmpty: boolean;
+  onSlotChange: (selection: { dateKey: SlotDateKey; slot: TimeSlotInfo | null }) => void;
 }
 
-function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
+function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: Step1Props) {
   const [selectedDate, setSelectedDate] = useState<SlotDateKey>("today");
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlotInfo | null>(null);
   const [slots, setSlots] = useState<TimeSlotInfo[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [nextAsapSlot, setNextAsapSlot] = useState<{ dateKey: SlotDateKey; slot: TimeSlotInfo } | null>(null);
 
   const getSlotsForDate = useCallback(async (dateKey: SlotDateKey): Promise<TimeSlotInfo[]> => {
-    const date = dateKey === "today" ? getTodayDate() : getTomorrowDate();
-    return getAvailableSlots({ appId: WL_APP_ID, date: toISODate(date) });
+    return getAvailableSlots({ appId: WL_APP_ID, date: getServiceDateForKey(dateKey) });
   }, []);
 
   const fetchSlots = useCallback(async (dateKey: SlotDateKey) => {
@@ -360,6 +359,15 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
     try {
       const result = await getSlotsForDate(dateKey);
       setSlots(result);
+      if (selectedSlot) {
+        const liveSelection = result.find((slot) => isSameSlot(slot, selectedSlot));
+        if (!liveSelection || liveSelection.status === "full") {
+          setSelectedSlot(null);
+          onSlotChange({ dateKey, slot: null });
+          onChange({ ...state, scheduledTime: "" });
+          setSlotsError("Ce créneau n'est plus disponible. Choisissez-en un autre.");
+        }
+      }
     } catch (err) {
       console.error("[slot-service] getAvailableSlots unexpected response or error:", err);
       setSlotsError(getClientErrorMessage(err, "slots"));
@@ -367,7 +375,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
     } finally {
       setSlotsLoading(false);
     }
-  }, [getSlotsForDate]);
+  }, [getSlotsForDate, onChange, onSlotChange, selectedSlot, state]);
 
   const fetchNextAsapSlot = useCallback(async () => {
     setSlotsLoading(true);
@@ -410,6 +418,8 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
 
   const handleDateChange = (dateKey: SlotDateKey) => {
     setSelectedDate(dateKey);
+    setSelectedSlot(null);
+    onSlotChange({ dateKey, slot: null });
     onChange({ ...state, scheduledTime: "" });
   };
 
@@ -531,13 +541,17 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
                 {slots.map((slot) => {
                   const isFull = slot.status === "full";
                   const isLimited = slot.status === "limited";
-                  const isSelected = state.scheduledTime === slot.start;
+                  const isSelected = selectedSlot ? isSameSlot(slot, selectedSlot) : false;
                   return (
                     <button
-                      key={slot.start}
+                      key={`${slot.service}_${slot.start}_${slot.end}`}
                       type="button"
                       disabled={isFull}
-                      onClick={() => onChange({ ...state, scheduledTime: slot.start })}
+                      onClick={() => {
+                        setSelectedSlot(slot);
+                        onSlotChange({ dateKey: selectedDate, slot });
+                        onChange({ ...state, scheduledTime: slot.start });
+                      }}
                       className={`relative flex flex-col items-center rounded-[14px] px-2 py-3 text-[13px] font-semibold transition-colors ${
                         isFull
                           ? "bg-[#252525] text-[#6B6B6B] opacity-40 cursor-not-allowed"
@@ -583,7 +597,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty }: Step1Props) {
       <button
         type="button"
         onClick={onNext}
-        disabled={isEmpty || (!state.isAsap && !state.scheduledTime) || isAsapBlocked}
+        disabled={isEmpty || (!state.isAsap && !selectedSlot) || isAsapBlocked}
         className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continuer
@@ -598,6 +612,7 @@ interface Step2Props {
   userEmail: string | null | undefined;
   isAsap: boolean;
   scheduledTime: string;
+  pickupLabel: string;
   instructions: string;
   rewardsAvailable: number;
   rewardPreview: RewardPreview | null;
@@ -613,6 +628,7 @@ function Step2Summary({
   userEmail,
   isAsap,
   scheduledTime,
+  pickupLabel,
   instructions,
   rewardsAvailable,
   rewardPreview,
@@ -722,7 +738,7 @@ function Step2Summary({
         </div>
         <div className="flex justify-between text-[14px]">
           <span className="text-[#A0A0A0]">Heure</span>
-          <span className="text-[#F5F5F5]">{isAsap ? "Dès que possible" : scheduledTime}</span>
+          <span className="text-[#F5F5F5]">{isAsap ? "Dès que possible" : pickupLabel || scheduledTime}</span>
         </div>
         {instructions && (
           <div className="flex justify-between text-[14px]">
@@ -789,6 +805,10 @@ export default function CheckoutClient() {
     scheduledTime: "",
     instructions: "",
   });
+  const [selectedSlotSelection, setSelectedSlotSelection] = useState<{
+    dateKey: SlotDateKey;
+    slot: TimeSlotInfo | null;
+  } | null>(null);
 
   // Payment state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -831,6 +851,9 @@ export default function CheckoutClient() {
     rewardsAvailable > 0 && rewardPreview !== null;
   const isFullyCoveredReward =
     useReward && rewardPreview?.isFullyCovered === true;
+  const pickupLabel = selectedSlotSelection
+    ? `${selectedSlotSelection.dateKey === "today" ? "Aujourd'hui" : "Demain"} • ${selectedSlotSelection.slot ? `${selectedSlotSelection.slot.start}-${selectedSlotSelection.slot.end}` : fulfillment.scheduledTime}`
+    : fulfillment.scheduledTime;
 
   useEffect(() => {
     if (!canUseReward && useReward) {
@@ -853,19 +876,48 @@ export default function CheckoutClient() {
 
       await ensureDelizzaCustomerSession(true);
 
-      const fulfillmentData: FulfillmentData = {
-        method: "clickAndCollect",
-        isAsap: Boolean(fulfillment.isAsap),
-        isPaid: false,
-        source: "web",
-        paymentTiming: "before",
-        ...((!fulfillment.isAsap && fulfillment.scheduledTime)
-          ? { scheduledTime: fulfillment.scheduledTime }
-          : {}),
-        ...(fulfillment.instructions
-          ? { instructions: fulfillment.instructions }
-          : {}),
-      };
+      let fulfillmentData: FulfillmentData;
+      if (fulfillment.isAsap) {
+        fulfillmentData = {
+          method: "clickAndCollect",
+          isAsap: true,
+          isPaid: false,
+          source: "web",
+          paymentTiming: "before",
+          ...(fulfillment.instructions ? { instructions: fulfillment.instructions } : {}),
+        };
+      } else {
+        if (!selectedSlotSelection?.slot) {
+          setError(CLIENT_ERROR_MESSAGES.slotUnavailable);
+          setStep(1);
+          return;
+        }
+
+        const selectedSlot = selectedSlotSelection.slot;
+        if (!selectedSlot) {
+          setSelectedSlotSelection(null);
+          setError(CLIENT_ERROR_MESSAGES.slotUnavailable);
+          setStep(1);
+          return;
+        }
+
+        const serviceDate = getServiceDateForKey(selectedSlotSelection.dateKey);
+        const liveSlots = await getAvailableSlots({ appId: WL_APP_ID, date: serviceDate });
+        const liveSlot = liveSlots.find((slot) => isSameSlot(slot, selectedSlot));
+        if (!liveSlot || liveSlot.status === "full") {
+          setSelectedSlotSelection(null);
+          setError(CLIENT_ERROR_MESSAGES.slotUnavailable);
+          setStep(1);
+          return;
+        }
+
+        fulfillmentData = buildScheduledFulfillmentData({
+          appId: WL_APP_ID,
+          serviceDate,
+          slot: liveSlot,
+          instructions: fulfillment.instructions || undefined,
+        });
+      }
 
       const rewardItemIndex =
         useReward &&
@@ -918,23 +970,13 @@ export default function CheckoutClient() {
         setError(err.message);
         return;
       }
-      console.error("[checkout] createOrder/createPaymentIntent context:", {
-        appId: WL_APP_ID,
-        userId: user.uid,
-        fulfillment,
-        cartItems: items.map((item) => ({
-          productId: item.catalogItemId,
-          name: item.nameSnapshot,
-          categoryId: item.categoryId ?? null,
-          quantity: item.quantity,
-          unitPriceCents: item.unitPriceCents,
-          totalCents: item.totalCents,
-          taxRateBps: item.taxRateBps,
-        })),
-        subtotalCents: getSubtotalCents(),
-        taxCents: getTaxCents(),
-        totalCents: getTotalCents(),
-      });
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[checkout] createOrder/createPaymentIntent context:", {
+          appId: WL_APP_ID,
+          fulfillment,
+          itemCount: items.length,
+        });
+      }
       const message = getClientErrorMessage(err, "checkout");
       if (message === CLIENT_ERROR_MESSAGES.slotUnavailable) {
         setError(message);
@@ -948,6 +990,7 @@ export default function CheckoutClient() {
   }, [
     user,
     fulfillment,
+    selectedSlotSelection,
     items,
     getSubtotalCents,
     getTaxCents,
@@ -1003,6 +1046,7 @@ export default function CheckoutClient() {
               onChange={setFulfillment}
               onNext={() => setStep(2)}
               isEmpty={isEmpty}
+              onSlotChange={setSelectedSlotSelection}
             />
           )}
 
@@ -1011,6 +1055,7 @@ export default function CheckoutClient() {
               userEmail={user?.email}
               isAsap={fulfillment.isAsap}
               scheduledTime={fulfillment.scheduledTime}
+              pickupLabel={pickupLabel}
               instructions={fulfillment.instructions}
               rewardsAvailable={rewardsAvailable}
               rewardPreview={rewardPreview}

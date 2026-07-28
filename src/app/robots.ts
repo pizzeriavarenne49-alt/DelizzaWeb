@@ -1,14 +1,18 @@
 import type { MetadataRoute } from "next";
+import { COMING_SOON } from "@/lib/comingSoon";
 
-export default function robots(): MetadataRoute.Robots {
+export function buildRobots(comingSoon: boolean = COMING_SOON): MetadataRoute.Robots {
   return {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
-        disallow: ["/go", "/api/"],
+        disallow: comingSoon ? ["/"] : ["/go", "/api/"],
       },
     ],
-    sitemap: "https://www.delizza.fr/sitemap.xml",
+    sitemap: comingSoon ? undefined : "https://www.delizza.fr/sitemap.xml",
   };
+}
+
+export default function robots(): MetadataRoute.Robots {
+  return buildRobots();
 }

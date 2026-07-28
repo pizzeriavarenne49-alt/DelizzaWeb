@@ -31,6 +31,10 @@ interface BaseFulfillmentData {
   isPaid: boolean;
   source?: string;
   scheduledTime?: string;
+  slotDate?: string;
+  timeSlot?: string;
+  serviceOpeningId?: string;
+  slotId?: string;
   instructions?: string;
 }
 
@@ -48,6 +52,7 @@ export type FulfillmentData =
 export interface TimeSlotInfo {
   start: string;
   end: string;
+  service: string;
   remainingUnits: number;
   remainingOrders: number;
   status: "available" | "limited" | "full";

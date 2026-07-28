@@ -1,7 +1,10 @@
 import type { MetadataRoute } from "next";
 import { allCommuneSlugs } from "@/lib/seo";
+import { COMING_SOON } from "@/lib/comingSoon";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export function buildSitemap(comingSoon: boolean = COMING_SOON): MetadataRoute.Sitemap {
+  if (comingSoon) return [];
+
   const baseUrl = "https://www.delizza.fr";
 
   const staticPages: MetadataRoute.Sitemap = [
@@ -23,4 +26,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }));
 
   return [...staticPages, ...localPages];
+}
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  return buildSitemap();
 }

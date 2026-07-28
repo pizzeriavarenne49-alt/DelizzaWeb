@@ -5,6 +5,7 @@ const directusHostname = process.env.NEXT_PUBLIC_DIRECTUS_URL
   : undefined;
 
 const nextConfig: NextConfig = {
+  skipTrailingSlashRedirect: true,
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",

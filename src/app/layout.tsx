@@ -1,17 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins } from "next/font/google";
 import "./globals.css";
 import { SITE_URL, BUSINESS, OG_IMAGE } from "@/lib/seo";
+import { COMING_SOON } from "@/lib/comingSoon";
 import JsonLd from "@/components/seo/JsonLd";
 import GoogleAnalytics from "@/components/seo/GoogleAnalytics";
 import { restaurantSchema, webSiteSchema } from "@/lib/schemas";
-
-const poppins = Poppins({
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-poppins",
-});
 
 const SEO_DESCRIPTION =
   "Pizza Deli'Zza à Orée d'Anjou : pizzas artisanales à emporter, commande par téléphone au 02 21 68 81 82. Découvrez la carte, les horaires et les informations pratiques.";
@@ -23,7 +16,7 @@ export const metadata: Metadata = {
     template: "%s | Pizza Deli'Zza",
   },
   description: SEO_DESCRIPTION,
-  robots: { index: true, follow: true },
+  robots: COMING_SOON ? { index: false, follow: false } : { index: true, follow: true },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
@@ -54,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={poppins.variable}>
+    <html lang="fr">
       <head>
         <JsonLd data={restaurantSchema()} />
         <JsonLd data={webSiteSchema()} />
