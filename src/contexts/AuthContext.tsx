@@ -12,6 +12,10 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
+  updateProfile,
   type User,
 } from "firebase/auth";
 import { getClientAuth, initAppCheck } from "@/config/firebase-client";
@@ -21,7 +25,10 @@ interface AuthContextValue {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (params: { email: string; password: string; displayName: string; phone: string }) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
+  verifyResetCode: (code: string) => Promise<string>;
+  confirmPasswordResetCode: (code: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -44,21 +51,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     const auth = getClientAuth();
     await signInWithEmailAndPassword(auth, email, password);
+    await ensureDelizzaCustomerSession(true);
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async ({
+    email,
+    password,
+    displayName,
+    phone,
+  }: { email: string; password: string; displayName: string; phone: string }) => {
     const auth = getClientAuth();
-    await createUserWithEmailAndPassword(auth, email, password);
-    try {
-      await ensureDelizzaCustomerSession(true);
-    } catch (error) {
-      try {
-        await firebaseSignOut(auth);
-      } catch {
-        // Ignore sign-out cleanup failures; the sync error is the important one.
-      }
-      throw error;
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    if (displayName.trim()) {
+      await updateProfile(credential.user, { displayName: displayName.trim() });
     }
+    await ensureDelizzaCustomerSession(true, { displayName, phone });
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    const auth = getClientAuth();
+    await sendPasswordResetEmail(auth, email, {
+      url: `${window.location.origin}/auth`,
+      handleCodeInApp: false,
+    });
+  };
+
+  const confirmPasswordResetCode = async (code: string, newPassword: string) => {
+    await confirmPasswordReset(getClientAuth(), code, newPassword);
+  };
+
+  const verifyResetCode = async (code: string) => {
+    return verifyPasswordResetCode(getClientAuth(), code);
   };
 
   const signOut = async () => {
@@ -67,7 +90,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signIn,
+        signUp,
+        sendPasswordReset,
+        verifyResetCode,
+        confirmPasswordResetCode,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -35,6 +35,8 @@ interface BaseFulfillmentData {
   timeSlot?: string;
   serviceOpeningId?: string;
   slotId?: string;
+  requestedPickupAt?: string;
+  pickupAt?: string;
   instructions?: string;
 }
 

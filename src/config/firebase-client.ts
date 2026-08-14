@@ -25,6 +25,12 @@ import {
   type AppCheck,
 } from "firebase/app-check";
 
+declare global {
+  interface Window {
+    FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
+  }
+}
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -55,35 +61,49 @@ export function getClientFunctions(): Functions {
 
 let appCheckInstance: AppCheck | null = null;
 
+function isLocalDevelopmentHost(): boolean {
+  if (typeof window === "undefined") return false;
+  if (process.env.NODE_ENV !== "development") return false;
+
+  return (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === "::1"
+  );
+}
+
 /**
  * Initialise Firebase App Check (browser-only, idempotent).
  *
  * Requires NEXT_PUBLIC_RECAPTCHA_SITE_KEY to be set with your reCAPTCHA
  * Enterprise site key.
  *
- * In local development without a key, App Check is skipped.  To test
- * App-Check-protected Cloud Functions locally:
- *   1. Set NEXT_PUBLIC_RECAPTCHA_SITE_KEY in .env.local, or
- *   2. Enable debug mode by setting
- *      `self.FIREBASE_APPCHECK_DEBUG_TOKEN = true` in the browser console
- *      before page load, then register the printed token in the Firebase
- *      console.
+ * In local development on localhost, App Check debug mode is enabled before
+ * initialisation. The printed debug token must be registered in Firebase
+ * Console for calls to App-Check-protected production Functions.
  */
 export function initAppCheck(): void {
   if (typeof window === "undefined") return; // server-side — skip
   if (appCheckInstance) return; // already initialised
 
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  const debugToken = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_TOKEN;
 
   if (!siteKey) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(
-        "[AppCheck] NEXT_PUBLIC_RECAPTCHA_SITE_KEY is not set — " +
-          "App Check is disabled. Cloud Functions with enforceAppCheck=true " +
-          "will reject calls. Set the key in .env.local for local testing.",
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "[AppCheck] NEXT_PUBLIC_RECAPTCHA_SITE_KEY is required in production.",
       );
     }
+    console.warn(
+      "[AppCheck] NEXT_PUBLIC_RECAPTCHA_SITE_KEY is not set - " +
+        "App Check is disabled in development.",
+    );
     return;
+  }
+
+  if (isLocalDevelopmentHost()) {
+    window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken || true;
   }
 
   appCheckInstance = initializeAppCheck(getClientApp(), {

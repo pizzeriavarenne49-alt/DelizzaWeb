@@ -4,13 +4,24 @@ const MAINTENANCE_PATH = "/maintenance";
 
 const EXCLUDED_PATHS = new Set([
   MAINTENANCE_PATH,
+  "/order-confirmation",
   "/favicon.ico",
   "/robots.txt",
   "/sitemap.xml",
 ]);
 
-export function shouldBypassMaintenance(pathname: string): boolean {
+function normalizedAuthActionMode(searchParams?: URLSearchParams): string {
+  return searchParams?.get("mode") ?? "";
+}
+
+export function shouldBypassMaintenance(pathname: string, searchParams?: URLSearchParams): boolean {
+  const authResetAllowed =
+    pathname === "/auth" &&
+    normalizedAuthActionMode(searchParams) === "resetPassword" &&
+    !!searchParams?.get("oobCode");
+
   return (
+    authResetAllowed ||
     EXCLUDED_PATHS.has(pathname) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/images")
@@ -35,8 +46,12 @@ export function createApiUnavailableResponse(): NextResponse {
   return response;
 }
 
-export function resolveMaintenanceAction(pathname: string, maintenanceEnabled: boolean): "next" | "api" | "maintenance" {
-  if (!maintenanceEnabled || shouldBypassMaintenance(pathname)) {
+export function resolveMaintenanceAction(
+  pathname: string,
+  maintenanceEnabled: boolean,
+  searchParams?: URLSearchParams,
+): "next" | "api" | "maintenance" {
+  if (!maintenanceEnabled || shouldBypassMaintenance(pathname, searchParams)) {
     return "next";
   }
 
@@ -48,9 +63,9 @@ export function resolveMaintenanceAction(pathname: string, maintenanceEnabled: b
 }
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
   const maintenanceEnabled = process.env.NEXT_PUBLIC_COMING_SOON === "true";
-  const action = resolveMaintenanceAction(pathname, maintenanceEnabled);
+  const action = resolveMaintenanceAction(pathname, maintenanceEnabled, searchParams);
 
   if (action === "next") {
     return NextResponse.next();

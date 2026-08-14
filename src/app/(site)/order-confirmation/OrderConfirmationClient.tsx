@@ -1,71 +1,281 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { doc, onSnapshot } from "firebase/firestore";
+import { getClientFirestore } from "@/config/firebase-client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCart } from "@/contexts/CartContext";
+import { clearCheckoutAttemptForOrder } from "@/services/checkout-attempt";
+import { DELIZZA_CUSTOMER_APP_ID } from "@/services/customer-session";
+import { formatPrice } from "@/types";
+
+const PENDING_PROLONGED_DELAY_MS = 45000;
+const LEGACY_ORDER_REFERENCE_LABEL = "Référence indisponible";
+
+interface OrderView {
+  id: string;
+  appId: string;
+  orderNumber: string;
+  createdAt: string;
+  pickup: string;
+  totalCents: number;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+}
+
+interface OrderLoadState {
+  key: string;
+  order: OrderView | null;
+  error: string | null;
+}
+
+function dateFromFirestore(value: unknown): Date | null {
+  if (value && typeof value === "object" && "toDate" in value) {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  return null;
+}
+
+function formatDate(value: unknown): string {
+  const date = dateFromFirestore(value);
+  return date ? date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+}
+
+function formatPickup(data: Record<string, unknown>): string {
+  const fulfillment = data.fulfillmentData as Record<string, unknown> | undefined;
+  const raw = fulfillment?.pickupAt ?? data.pickupAt;
+  if (typeof raw === "string") {
+    const date = new Date(raw);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleString("fr-FR", {
+        timeZone: "Europe/Paris",
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    }
+  }
+  if (typeof fulfillment?.scheduledTime === "string") return fulfillment.scheduledTime;
+  return "";
+}
+
+function mapOrder(id: string, data: Record<string, unknown>): OrderView {
+  return {
+    id,
+    appId: typeof data.appId === "string" ? data.appId : "",
+    orderNumber: typeof data.orderNumber === "string" && data.orderNumber.trim()
+      ? data.orderNumber
+      : LEGACY_ORDER_REFERENCE_LABEL,
+    createdAt: formatDate(data.createdAt),
+    pickup: formatPickup(data),
+    totalCents: typeof data.totalCents === "number" ? data.totalCents : 0,
+    status: typeof data.status === "string" ? data.status : "unknown",
+    paymentStatus: typeof data.paymentStatus === "string" ? data.paymentStatus : "unknown",
+    fulfillmentStatus: typeof data.fulfillmentStatus === "string" ? data.fulfillmentStatus : "",
+  };
+}
+
+function statusMessage(
+  paymentStatus: string,
+  orderStatus: string,
+  prolongedPending: boolean,
+): { title: string; body: string; tone: "pending" | "paid" | "failed" } {
+  if (paymentStatus === "paid") {
+    return {
+      title: "Commande confirmee",
+      body: "Le paiement est valide par le backend. Votre commande est transmise a l'equipe.",
+      tone: "paid",
+    };
+  }
+  if (["cancelled", "expired"].includes(orderStatus) || ["failed", "cancelled", "unpaid"].includes(paymentStatus)) {
+    return {
+      title: "Paiement non valide",
+      body: "Le paiement n'a pas ete confirme. Vous pouvez revenir au checkout pour reprendre cette commande si une action est encore disponible.",
+      tone: "failed",
+    };
+  }
+  if (prolongedPending) {
+    return {
+      title: "Validation plus longue que prevu",
+      body: "La confirmation Stripe prend plus de temps. Ne payez pas une deuxieme fois : gardez cette reference et rechargez la page dans quelques instants.",
+      tone: "pending",
+    };
+  }
+  return {
+    title: "Validation du paiement en cours",
+    body: "Nous attendons la confirmation Stripe et la reconciliation backend.",
+    tone: "pending",
+  };
+}
 
 function OrderConfirmationContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get("orderId");
-  const payment = searchParams.get("payment");
-  const isLoyaltyRewardPayment = payment === "loyalty_reward";
+  const { user, loading: authLoading } = useAuth();
+  const { clearCart } = useCart();
+  const [loadState, setLoadState] = useState<OrderLoadState | null>(null);
+  const [prolongedPendingKey, setProlongedPendingKey] = useState<string | null>(null);
+  const validOrderId = !!orderId && /^[A-Za-z0-9_-]{6,120}$/.test(orderId);
+  const listenKey = user && validOrderId ? `${user.uid}:${orderId}` : null;
+  const order = loadState?.key === listenKey ? loadState.order : null;
+  const loadError = loadState?.key === listenKey ? loadState.error : null;
+  const derivedError =
+    authLoading
+      ? null
+      : !user
+        ? "Connectez-vous pour consulter cette confirmation."
+        : !validOrderId
+          ? "Lien de confirmation invalide."
+          : loadError;
+  const loading = authLoading || (!!listenKey && loadState?.key !== listenKey);
+  const pendingKey = order && !["paid", "failed", "cancelled", "unpaid"].includes(order.paymentStatus)
+    ? `${order.id}:${order.paymentStatus}:${order.status}`
+    : null;
+  const prolongedPending = !!pendingKey && prolongedPendingKey === pendingKey;
+
+  useEffect(() => {
+    if (!listenKey || !orderId) return;
+
+    const db = getClientFirestore();
+    const unsubscribe = onSnapshot(
+      doc(db, "orders", orderId),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setLoadState({
+            key: listenKey,
+            order: null,
+            error: "Commande introuvable ou inaccessible avec ce compte.",
+          });
+        } else {
+          const mapped = mapOrder(snapshot.id, snapshot.data());
+          if (mapped.appId !== DELIZZA_CUSTOMER_APP_ID) {
+            setLoadState({
+              key: listenKey,
+              order: null,
+              error: "Commande introuvable ou inaccessible avec ce compte.",
+            });
+          } else {
+            setLoadState({ key: listenKey, order: mapped, error: null });
+          }
+        }
+      },
+      (err) => {
+        console.error("[confirmation] Unable to load order:", {
+          code: typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined,
+        });
+        setLoadState({
+          key: listenKey,
+          order: null,
+          error: "Commande introuvable ou inaccessible avec ce compte.",
+        });
+      },
+    );
+
+    return unsubscribe;
+  }, [listenKey, orderId]);
+
+  useEffect(() => {
+    if (!pendingKey) return;
+    const timeout = window.setTimeout(() => setProlongedPendingKey(pendingKey), PENDING_PROLONGED_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [pendingKey]);
+
+  useEffect(() => {
+    if (order?.paymentStatus === "paid") {
+      clearCheckoutAttemptForOrder(order.id);
+      clearCart();
+    }
+  }, [clearCart, order]);
+
+  const message = useMemo(
+    () => statusMessage(order?.paymentStatus ?? "pending", order?.status ?? "unknown", prolongedPending),
+    [order?.paymentStatus, order?.status, prolongedPending],
+  );
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] flex flex-col items-center justify-center px-4 py-12 text-center">
-      {/* Success icon */}
-      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] shadow-[0_8px_32px_rgba(212,160,83,0.4)]">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-10 w-10 text-[#0D0D0D]"
-          aria-hidden="true"
-        >
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      </div>
-
-      <h1 className="text-[26px] font-extrabold text-[#F5F5F5] mb-2">
-        Commande confirmée !
-      </h1>
-      <p className="text-[15px] text-[#A0A0A0] mb-1">
-        Merci pour votre commande chez Deli&apos;Zza.
-      </p>
-      {isLoyaltyRewardPayment && (
-        <p className="text-[15px] font-semibold text-[#D4A053] mb-1">
-          Commande validée avec votre récompense fidélité.
-        </p>
-      )}
-      <p className="text-[15px] text-[#A0A0A0] mb-6">
-        Vous recevrez une confirmation par e-mail.
-      </p>
-
-      {orderId && (
-        <div className="mb-8 rounded-[18px] bg-[#1A1A1A] px-6 py-4">
-          <p className="text-[12px] text-[#6B6B6B] uppercase tracking-widest mb-1">
-            Référence commande
-          </p>
-          <p className="text-[14px] font-mono text-[#D4A053]">{orderId}</p>
+    <div className="min-h-screen bg-[#0D0D0D] px-4 py-12">
+      <div className="mx-auto flex max-w-md flex-col gap-6">
+        <div className="text-center">
+          <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ${
+            message.tone === "paid"
+              ? "bg-[#2ECC71]"
+              : message.tone === "failed"
+                ? "bg-[#E74C3C]"
+                : "bg-gradient-to-br from-[#D4A053] to-[#E8C078]"
+          }`}>
+            <span className="text-[28px] font-bold text-[#0D0D0D]">
+              {message.tone === "paid" ? "OK" : message.tone === "failed" ? "!" : "..."}
+            </span>
+          </div>
+          <h1 className="mb-2 text-[26px] font-extrabold text-[#F5F5F5]">{message.title}</h1>
+          <p className="text-[15px] leading-relaxed text-[#A0A0A0]">{message.body}</p>
         </div>
-      )}
 
-      <div className="flex flex-col gap-3 w-full max-w-xs">
-        <Link
-          href="/menu"
-          className="block rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[15px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)]"
-        >
-          Voir le menu
-        </Link>
-        <Link
-          href="/"
-          className="block rounded-[18px] border border-white/10 py-3.5 text-[14px] text-[#A0A0A0] hover:text-[#F5F5F5] hover:border-white/20 transition-colors"
-        >
-          Retour à l&apos;accueil
-        </Link>
+        {loading && (
+          <div className="rounded-[18px] bg-[#1A1A1A] px-6 py-5 text-center text-[14px] text-[#A0A0A0]">
+            {authLoading ? "Restauration de votre session..." : "Chargement de la commande..."}
+          </div>
+        )}
+
+        {derivedError && !loading && (
+          <div className="rounded-[18px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-6 py-5 text-[14px] text-[#F59B90]">
+            {derivedError}
+          </div>
+        )}
+
+        {order && (
+          <div className="rounded-[18px] bg-[#1A1A1A] px-6 py-5">
+            <h2 className="mb-4 text-[16px] font-bold text-[#F5F5F5]">Details de commande</h2>
+            <dl className="flex flex-col gap-3 text-[14px]">
+              <Row label="Reference" value={order.orderNumber} />
+              <Row label="Date" value={order.createdAt || "-"} />
+              <Row label="Retrait" value={order.pickup || "-"} />
+              <Row label="Total TTC" value={`${formatPrice(order.totalCents)} EUR`} />
+              <Row label="Statut commande" value={order.status} />
+              <Row label="Statut paiement" value={order.paymentStatus} />
+              {order.fulfillmentStatus && <Row label="Preparation" value={order.fulfillmentStatus} />}
+            </dl>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          {!user && !authLoading && (
+            <Link
+              href="/auth"
+              className="block rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-center text-[15px] font-bold text-[#0D0D0D]"
+            >
+              Se connecter
+            </Link>
+          )}
+          {user && order?.paymentStatus !== "paid" && (
+            <Link
+              href="/checkout"
+              className="block rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-center text-[15px] font-bold text-[#0D0D0D]"
+            >
+              Retour au checkout
+            </Link>
+          )}
+          {user && (
+            <Link
+              href="/profile"
+              className="block rounded-[18px] border border-white/10 py-3.5 text-center text-[14px] text-[#A0A0A0] transition-colors hover:border-white/20 hover:text-[#F5F5F5]"
+            >
+              Voir mon profil
+            </Link>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-[#A0A0A0]">{label}</dt>
+      <dd className="text-right font-medium text-[#F5F5F5]">{value}</dd>
     </div>
   );
 }

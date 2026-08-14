@@ -22,6 +22,17 @@ export interface CreateOrderParams {
   fulfillmentData: FulfillmentData;
   paymentId: string;
   paymentMethod: string;
+  source?: "web";
+  idempotencyKey: string;
+  customerName?: string;
+  customerPhone?: string;
+  legalAcceptance?: {
+    termsVersion: string;
+    privacyVersion: string;
+    acceptedAt: string;
+    origin: "web";
+    uid: string;
+  };
   rewardItemIndex?: number;
 }
 
@@ -29,6 +40,8 @@ export interface CreateOrderResult {
   success: boolean;
   orderId: string;
   orderNumber: string;
+  status?: string;
+  idempotent?: boolean;
 }
 
 export interface CreatePaymentIntentParams {
@@ -39,7 +52,11 @@ export interface CreatePaymentIntentParams {
 export interface CreatePaymentIntentResult {
   clientSecret: string;
   paymentIntentId: string;
+  transactionId?: string;
   amountCents: number;
+  currency?: string;
+  status?: string;
+  idempotent?: boolean;
 }
 
 /**
@@ -51,8 +68,7 @@ export async function createOrder(
 ): Promise<CreateOrderResult> {
   const functions = getClientFunctions();
   const callable = httpsCallable(functions, "createOrder");
-  const idempotencyKey = `web_${params.userId}_${Date.now()}_${globalThis.crypto.randomUUID().slice(0, 8)}`;
-  const result = await callable({ ...params, idempotencyKey });
+  const result = await callable(params);
   return result.data as CreateOrderResult;
 }
 

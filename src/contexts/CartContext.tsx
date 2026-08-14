@@ -4,7 +4,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -43,6 +42,23 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+const noop = () => undefined;
+
+const EMPTY_CART_CONTEXT: CartContextValue = {
+  items: [],
+  addItem: noop,
+  addItemWithOptions: noop,
+  removeItem: noop,
+  updateQuantity: noop,
+  clearCart: noop,
+  getSubtotalCents: () => 0,
+  getTaxCents: () => 0,
+  getTotalCents: () => 0,
+  getTaxBreakdown: () => [],
+  itemCount: 0,
+  isEmpty: true,
+};
+
 /** Generate a stable cartKey from a productId and sorted selectedOptions */
 function buildCartKey(productId: string, selectedOptions: SelectedOption[]): string {
   if (selectedOptions.length === 0) return productId;
@@ -78,65 +94,89 @@ function readCartItems(raw: string | null): CartItem[] {
   }
 }
 
+function readStorageItem(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorageItem(key: string, value: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeStorageItem(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore unavailable storage.
+  }
+}
+
 function removeLegacyCartKeys() {
   for (const key of LEGACY_STORAGE_KEYS) {
-    localStorage.removeItem(key);
+    removeStorageItem(key);
   }
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const [items, setItems] = useState<CartItem[]>([]);
-  const hydrated = useRef(false);
-  const activeStorageKeyRef = useRef<string>(GUEST_STORAGE_KEY);
-  const suppressPersistRef = useRef(false);
+  const { user, loading } = useAuth();
 
-  // Hydrate cart from the auth-scoped storage key after mount and on session changes.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  if (loading) {
+    return <CartContext.Provider value={EMPTY_CART_CONTEXT}>{children}</CartContext.Provider>;
+  }
 
-    const nextStorageKey = getCartStorageKey(user?.uid ?? null);
-    const isGuestScope = nextStorageKey === GUEST_STORAGE_KEY;
-    const existingScopedRaw = localStorage.getItem(nextStorageKey);
-    const legacyRaw = LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean) ?? null;
+  const storageKey = getCartStorageKey(user?.uid ?? null);
 
-    suppressPersistRef.current = true;
+  return (
+    <CartStateProvider key={storageKey} storageKey={storageKey}>
+      {children}
+    </CartStateProvider>
+  );
+}
 
-    try {
-      let nextItems = readCartItems(existingScopedRaw);
+function readInitialCartItems(storageKey: string): CartItem[] {
+  const isGuestScope = storageKey === GUEST_STORAGE_KEY;
+  let nextItems = readCartItems(readStorageItem(storageKey));
 
-      if (nextItems.length === 0 && isGuestScope && legacyRaw) {
-        nextItems = readCartItems(legacyRaw);
-        if (nextItems.length > 0) {
-          localStorage.setItem(nextStorageKey, JSON.stringify(nextItems));
-        }
+  if (nextItems.length === 0 && isGuestScope) {
+    const legacyRaw = LEGACY_STORAGE_KEYS.map((key) => readStorageItem(key)).find(Boolean) ?? null;
+    nextItems = readCartItems(legacyRaw);
+    if (nextItems.length > 0) {
+      if (!writeStorageItem(storageKey, JSON.stringify(nextItems))) {
+        return nextItems;
       }
-
-      // Always drop legacy global keys once we have resolved the scoped cart.
-      removeLegacyCartKeys();
-
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setItems(nextItems);
-      activeStorageKeyRef.current = nextStorageKey;
-    } catch {
-      // Ignore malformed data
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setItems([]);
-      activeStorageKeyRef.current = nextStorageKey;
     }
+  }
 
-    queueMicrotask(() => {
-      suppressPersistRef.current = false;
-    });
+  // Drop legacy global keys only after resolving the scoped cart.
+  removeLegacyCartKeys();
 
-    hydrated.current = true;
-  }, [user?.uid]);
+  return nextItems;
+}
+
+function CartStateProvider({
+  children,
+  storageKey,
+}: {
+  children: ReactNode;
+  storageKey: string;
+}) {
+  const [items, setItems] = useState<CartItem[]>(() => readInitialCartItems(storageKey));
 
   // Persist to localStorage whenever items change
   useEffect(() => {
-    if (!hydrated.current || suppressPersistRef.current) return;
-    localStorage.setItem(activeStorageKeyRef.current, JSON.stringify(items));
-  }, [items]);
+    writeStorageItem(storageKey, JSON.stringify(items));
+  }, [items, storageKey]);
 
   const addItem = useCallback((product: Product) => {
     if (product.manualOutOfStock === true) return;

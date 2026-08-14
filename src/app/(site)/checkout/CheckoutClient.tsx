@@ -1,22 +1,27 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import Link from "next/link";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { getClientFirestore } from "@/config/firebase-client";
 import {
-  buildScheduledFulfillmentData,
   getServiceDateForKey,
-  isSameSlot,
   type SlotDateKey,
 } from "@/lib/slot-contract";
+import {
+  buildScheduledFulfillmentDataFromPickupOption,
+  isSameScheduledPickupOption,
+  PICKUP_SLOT_UNAVAILABLE_MESSAGE,
+  type ScheduledPickupOption,
+} from "@/lib/production-capacity-preview";
 import {
   ensureDelizzaCustomerSession,
   CustomerSessionSyncError,
@@ -26,15 +31,22 @@ import {
   getClientErrorMessage,
 } from "@/lib/client-error-message";
 import { createOrder, createPaymentIntent } from "@/services/order-service";
-import { getAvailableSlots } from "@/services/slot-service";
+import {
+  buildCheckoutAttemptFingerprint,
+  getOrCreateCheckoutAttempt,
+  rememberCheckoutAttemptOrder,
+} from "@/services/checkout-attempt";
+import { getCustomerProfile, type CustomerProfile } from "@/services/customer-profile-service";
+import { previewScheduledPickupOptions } from "@/services/production-capacity-service";
 import { formatPrice, formatTaxRate } from "@/types";
 import type { CartItem } from "@/types/cart";
-import type { FulfillmentData, TimeSlotInfo } from "@/types/order";
+import type { FulfillmentData } from "@/types/order";
 import {
   getLoyaltyState,
   type LoyaltyConfig,
   type LoyaltyState,
 } from "@/services/loyalty-service";
+import { formatFrenchPhone } from "@/lib/phone";
 
 // Dynamically import Stripe component to avoid SSR issues
 const StripeCheckout = dynamic(
@@ -43,10 +55,19 @@ const StripeCheckout = dynamic(
 );
 
 const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
+const TERMS_VERSION = "cgu-2026-07";
+const PRIVACY_VERSION = "privacy-2026-07";
+const MINIMUM_ORDER_CENTS = 900;
+
+function minimumOrderMessage(payableTotalCents: number): string | null {
+  const remainingCents = MINIMUM_ORDER_CENTS - payableTotalCents;
+  if (remainingCents <= 0) return null;
+  return `Ajoutez ${formatPrice(remainingCents)} € pour atteindre le minimum de commande de 9 €.`;
+}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
-function findNextAvailableSlot(slots: TimeSlotInfo[]): TimeSlotInfo | undefined {
+function findNextAvailableSlot(slots: ScheduledPickupOption[]): ScheduledPickupOption | undefined {
   return slots.find((slot) => slot.status !== "full");
 }
 
@@ -338,50 +359,66 @@ interface Step1Props {
   onChange: (s: FulfillmentFormState) => void;
   onNext: () => void;
   isEmpty: boolean;
-  onSlotChange: (selection: { dateKey: SlotDateKey; slot: TimeSlotInfo | null }) => void;
+  onSlotChange: (selection: { dateKey: SlotDateKey; slot: ScheduledPickupOption | null }) => void;
 }
 
 function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: Step1Props) {
+  const { items } = useCart();
   const [selectedDate, setSelectedDate] = useState<SlotDateKey>("today");
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlotInfo | null>(null);
-  const [slots, setSlots] = useState<TimeSlotInfo[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<ScheduledPickupOption | null>(null);
+  const [slots, setSlots] = useState<ScheduledPickupOption[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
-  const [nextAsapSlot, setNextAsapSlot] = useState<{ dateKey: SlotDateKey; slot: TimeSlotInfo } | null>(null);
+  const [nextAsapSlot, setNextAsapSlot] = useState<{ dateKey: SlotDateKey; slot: ScheduledPickupOption } | null>(null);
+  const previewRequestIdRef = useRef(0);
 
-  const getSlotsForDate = useCallback(async (dateKey: SlotDateKey): Promise<TimeSlotInfo[]> => {
-    return getAvailableSlots({ appId: WL_APP_ID, date: getServiceDateForKey(dateKey) });
-  }, []);
+  const getSlotsForDate = useCallback(async (dateKey: SlotDateKey): Promise<ScheduledPickupOption[]> => {
+    if (items.length === 0) return [];
+    return previewScheduledPickupOptions({
+      appId: WL_APP_ID,
+      date: getServiceDateForKey(dateKey),
+      items,
+    });
+  }, [items]);
 
   const fetchSlots = useCallback(async (dateKey: SlotDateKey) => {
+    const requestId = previewRequestIdRef.current + 1;
+    previewRequestIdRef.current = requestId;
     setSlotsLoading(true);
     setSlotsError(null);
     try {
       const result = await getSlotsForDate(dateKey);
+      if (previewRequestIdRef.current !== requestId) return;
       setSlots(result);
       if (selectedSlot) {
-        const liveSelection = result.find((slot) => isSameSlot(slot, selectedSlot));
-        if (!liveSelection || liveSelection.status === "full") {
+        const liveSelection = result.find((slot) => isSameScheduledPickupOption(slot, selectedSlot));
+        if (!liveSelection) {
           setSelectedSlot(null);
           onSlotChange({ dateKey, slot: null });
           onChange({ ...state, scheduledTime: "" });
-          setSlotsError("Ce créneau n'est plus disponible. Choisissez-en un autre.");
+          setSlotsError(PICKUP_SLOT_UNAVAILABLE_MESSAGE);
         }
       }
     } catch (err) {
-      console.error("[slot-service] getAvailableSlots unexpected response or error:", err);
+      if (previewRequestIdRef.current !== requestId) return;
+      console.error("[production-capacity-service] previewContinuousPickupWindows unexpected response or error:", err);
       setSlotsError(getClientErrorMessage(err, "slots"));
       setSlots([]);
     } finally {
-      setSlotsLoading(false);
+      if (previewRequestIdRef.current === requestId) {
+        setSlotsLoading(false);
+      }
     }
   }, [getSlotsForDate, onChange, onSlotChange, selectedSlot, state]);
 
   const fetchNextAsapSlot = useCallback(async () => {
+    const requestId = previewRequestIdRef.current + 1;
+    previewRequestIdRef.current = requestId;
     setSlotsLoading(true);
     setSlotsError(null);
     try {
       const todaySlots = await getSlotsForDate("today");
+      if (previewRequestIdRef.current !== requestId) return;
       setSlots(todaySlots);
       const todayNextSlot = findNextAvailableSlot(todaySlots);
       if (todayNextSlot) {
@@ -390,6 +427,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
       }
 
       const tomorrowSlots = await getSlotsForDate("tomorrow");
+      if (previewRequestIdRef.current !== requestId) return;
       const tomorrowNextSlot = findNextAvailableSlot(tomorrowSlots);
       if (tomorrowNextSlot) {
         setNextAsapSlot({ dateKey: "tomorrow", slot: tomorrowNextSlot });
@@ -397,23 +435,33 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
         setNextAsapSlot(null);
       }
     } catch (err) {
-      console.error("[slot-service] getAvailableSlots unexpected response or error:", err);
+      if (previewRequestIdRef.current !== requestId) return;
+      console.error("[production-capacity-service] previewContinuousPickupWindows unexpected response or error:", err);
       setSlotsError(getClientErrorMessage(err, "slots"));
       setSlots([]);
       setNextAsapSlot(null);
     } finally {
-      setSlotsLoading(false);
+      if (previewRequestIdRef.current === requestId) {
+        setSlotsLoading(false);
+      }
     }
   }, [getSlotsForDate]);
 
   // Fetch slots for schedule mode and compute the next slot for ASAP mode
   useEffect(() => {
-    if (state.isAsap) {
-      fetchNextAsapSlot();
-      return;
-    }
-    setNextAsapSlot(null);
-    fetchSlots(selectedDate);
+    const timeout = window.setTimeout(() => {
+      if (state.isAsap) {
+        fetchNextAsapSlot();
+        return;
+      }
+      setNextAsapSlot(null);
+      fetchSlots(selectedDate);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      previewRequestIdRef.current += 1;
+    };
   }, [state.isAsap, selectedDate, fetchSlots, fetchNextAsapSlot]);
 
   const handleDateChange = (dateKey: SlotDateKey) => {
@@ -446,8 +494,8 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => onChange({ ...state, isAsap: true })}
-            className={`flex-1 rounded-[14px] py-3 text-[14px] font-semibold transition-colors ${
+            onClick={() => onChange({ ...state, isAsap: false })}
+            className={`hidden flex-1 rounded-[14px] py-3 text-[14px] font-semibold transition-colors ${
               state.isAsap
                 ? "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]"
                 : "bg-[#252525] text-[#A0A0A0] hover:text-[#F5F5F5]"
@@ -478,7 +526,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
               <p className="text-[13px] text-[#F5F5F5]">
                 Prochain créneau :{" "}
                 <span className="font-semibold text-[#D4A053]">
-                  {nextAsapSlot.dateKey === "today" ? "Aujourd'hui" : "Demain"} à {nextAsapSlot.slot.start}
+                  {nextAsapSlot.dateKey === "today" ? "Aujourd'hui" : "Demain"} à {nextAsapSlot.slot.end}
                 </span>
               </p>
             ) : (
@@ -541,16 +589,16 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
                 {slots.map((slot) => {
                   const isFull = slot.status === "full";
                   const isLimited = slot.status === "limited";
-                  const isSelected = selectedSlot ? isSameSlot(slot, selectedSlot) : false;
+                  const isSelected = selectedSlot ? isSameScheduledPickupOption(slot, selectedSlot) : false;
                   return (
                     <button
-                      key={`${slot.service}_${slot.start}_${slot.end}`}
+                      key={`${slot.serviceOpeningId}_${slot.pickupAt}_${slot.slotId}`}
                       type="button"
                       disabled={isFull}
                       onClick={() => {
                         setSelectedSlot(slot);
                         onSlotChange({ dateKey: selectedDate, slot });
-                        onChange({ ...state, scheduledTime: slot.start });
+                        onChange({ ...state, scheduledTime: slot.end });
                       }}
                       className={`relative flex flex-col items-center rounded-[14px] px-2 py-3 text-[13px] font-semibold transition-colors ${
                         isFull
@@ -562,7 +610,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
                               : "bg-[#252525] text-[#F5F5F5] border border-white/10 hover:border-[#D4A053]/50"
                       }`}
                     >
-                      <span>{slot.start}</span>
+                      <span>{slot.end}</span>
                       {isFull ? (
                         <span className="mt-0.5 text-[10px] font-normal">Complet</span>
                       ) : isLimited ? (
@@ -622,6 +670,9 @@ interface Step2Props {
   onNext: () => void;
   loading: boolean;
   error: string | null;
+  customerProfile: CustomerProfile | null;
+  termsAccepted: boolean;
+  onTermsAcceptedChange: (accepted: boolean) => void;
 }
 
 function Step2Summary({
@@ -638,6 +689,9 @@ function Step2Summary({
   onNext,
   loading,
   error,
+  customerProfile,
+  termsAccepted,
+  onTermsAcceptedChange,
 }: Step2Props) {
   const {
     items,
@@ -654,6 +708,7 @@ function Step2Summary({
     useReward && rewardPreview
       ? Math.max(0, rewardPreview.totalAfterRewardCents)
       : total;
+  const minimumMessage = minimumOrderMessage(payableTotalCents);
 
   return (
     <div className="flex flex-col gap-5">
@@ -729,6 +784,18 @@ function Step2Summary({
         </div>
       )}
 
+      <div className="rounded-[18px] bg-[#1A1A1A] p-5">
+        <div className="flex justify-between text-[14px] font-semibold text-[#F5F5F5]">
+          <span>Commande minimum</span>
+          <span>9&nbsp;€</span>
+        </div>
+        {minimumMessage && (
+          <p className="mt-2 text-[13px] leading-relaxed text-[#E74C3C]">
+            {minimumMessage}
+          </p>
+        )}
+      </div>
+
       {/* Fulfillment recap */}
       <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-2">
         <h2 className="text-[16px] font-bold text-[#F5F5F5]">Retrait</h2>
@@ -753,8 +820,31 @@ function Step2Summary({
         <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-2">
           <h2 className="text-[16px] font-bold text-[#F5F5F5]">Compte</h2>
           <p className="text-[14px] text-[#A0A0A0]">{userEmail}</p>
+          {customerProfile?.displayName && (
+            <p className="text-[14px] text-[#A0A0A0]">{customerProfile.displayName}</p>
+          )}
+          {customerProfile?.phone && (
+            <p className="text-[14px] text-[#A0A0A0]">{formatFrenchPhone(customerProfile.phone)}</p>
+          )}
         </div>
       )}
+
+      <div className="rounded-[18px] bg-[#1A1A1A] p-5">
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(event) => onTermsAcceptedChange(event.target.checked)}
+            className="mt-1 h-4 w-4 accent-[#D4A053]"
+          />
+          <span className="text-[13px] leading-relaxed text-[#A0A0A0]">
+            J&apos;accepte les{" "}
+            <Link href="/cgu" className="text-[#D4A053] underline">conditions de commande</Link>
+            {" "}et j&apos;ai accès à la{" "}
+            <Link href="/privacy" className="text-[#D4A053] underline">politique de confidentialité</Link>.
+          </span>
+        </label>
+      </div>
 
       {error && (
         <div className="rounded-[14px] bg-[#E74C3C]/10 border border-[#E74C3C]/30 px-4 py-3 text-[13px] text-[#E74C3C]">
@@ -773,7 +863,7 @@ function Step2Summary({
         <button
           type="button"
           onClick={onNext}
-          disabled={loading}
+          disabled={loading || !termsAccepted || minimumMessage !== null}
           className="flex-[2] rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
@@ -797,17 +887,17 @@ function Step2Summary({
 export default function CheckoutClient() {
   const router = useRouter();
   const { user } = useAuth();
-  const { items, isEmpty, getSubtotalCents, getTaxCents, getTotalCents, clearCart } = useCart();
+  const { items, isEmpty, getSubtotalCents, getTaxCents, getTotalCents } = useCart();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fulfillment, setFulfillment] = useState<FulfillmentFormState>({
-    isAsap: true,
+    isAsap: false,
     scheduledTime: "",
     instructions: "",
   });
   const [selectedSlotSelection, setSelectedSlotSelection] = useState<{
     dateKey: SlotDateKey;
-    slot: TimeSlotInfo | null;
+    slot: ScheduledPickupOption | null;
   } | null>(null);
 
   // Payment state
@@ -818,13 +908,20 @@ export default function CheckoutClient() {
   const [error, setError] = useState<string | null>(null);
   const [loyalty, setLoyalty] = useState<LoyaltyState | null>(null);
   const [useReward, setUseReward] = useState(false);
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!user) {
+      setProfile(null);
+      setProfileLoading(false);
       return;
     }
 
     let cancelled = false;
+    setProfileLoading(true);
     getLoyaltyState(WL_APP_ID, user.uid)
       .then((state) => {
         if (!cancelled) setLoyalty(state);
@@ -835,6 +932,20 @@ export default function CheckoutClient() {
           setLoyalty(null);
           setUseReward(false);
         }
+      });
+
+    getCustomerProfile(user.uid)
+      .then((loadedProfile) => {
+        if (!cancelled) setProfile(loadedProfile);
+      })
+      .catch((err) => {
+        console.error("[customer-profile] Unable to load checkout profile:", {
+          code: typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined,
+        });
+        if (!cancelled) setProfile(null);
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false);
       });
 
     return () => {
@@ -852,7 +963,7 @@ export default function CheckoutClient() {
   const isFullyCoveredReward =
     useReward && rewardPreview?.isFullyCovered === true;
   const pickupLabel = selectedSlotSelection
-    ? `${selectedSlotSelection.dateKey === "today" ? "Aujourd'hui" : "Demain"} • ${selectedSlotSelection.slot ? `${selectedSlotSelection.slot.start}-${selectedSlotSelection.slot.end}` : fulfillment.scheduledTime}`
+    ? `${selectedSlotSelection.dateKey === "today" ? "Aujourd'hui" : "Demain"} • ${selectedSlotSelection.slot ? selectedSlotSelection.slot.end : fulfillment.scheduledTime}`
     : fulfillment.scheduledTime;
 
   useEffect(() => {
@@ -863,10 +974,33 @@ export default function CheckoutClient() {
 
   const handleProceedToPayment = useCallback(async () => {
     if (!user) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     setError(null);
 
     try {
+      if (!termsAccepted) {
+        setError("Vous devez accepter les conditions de commande avant de payer.");
+        return;
+      }
+      if (profileLoading) {
+        setError("Votre profil client est encore en cours de synchronisation.");
+        return;
+      }
+      if (!profile?.displayName?.trim() || !profile?.phone?.trim()) {
+        setError("Completez votre nom et votre telephone dans votre profil avant de commander.");
+        return;
+      }
+      const payableTotalCents =
+        useReward && rewardPreview
+          ? Math.max(0, rewardPreview.totalAfterRewardCents)
+          : getTotalCents();
+      const checkoutMinimumMessage = minimumOrderMessage(payableTotalCents);
+      if (checkoutMinimumMessage) {
+        setError(checkoutMinimumMessage);
+        return;
+      }
       const cartValidation = await validateCartProductsAvailable(items);
       if (!cartValidation.ok) {
         console.error("[checkout] Refusing before createOrder:", cartValidation);
@@ -878,17 +1012,12 @@ export default function CheckoutClient() {
 
       let fulfillmentData: FulfillmentData;
       if (fulfillment.isAsap) {
-        fulfillmentData = {
-          method: "clickAndCollect",
-          isAsap: true,
-          isPaid: false,
-          source: "web",
-          paymentTiming: "before",
-          ...(fulfillment.instructions ? { instructions: fulfillment.instructions } : {}),
-        };
+        setError("Choisissez un créneau de retrait disponible.");
+        setStep(1);
+        return;
       } else {
         if (!selectedSlotSelection?.slot) {
-          setError(CLIENT_ERROR_MESSAGES.slotUnavailable);
+          setError(PICKUP_SLOT_UNAVAILABLE_MESSAGE);
           setStep(1);
           return;
         }
@@ -896,24 +1025,26 @@ export default function CheckoutClient() {
         const selectedSlot = selectedSlotSelection.slot;
         if (!selectedSlot) {
           setSelectedSlotSelection(null);
-          setError(CLIENT_ERROR_MESSAGES.slotUnavailable);
+          setError(PICKUP_SLOT_UNAVAILABLE_MESSAGE);
           setStep(1);
           return;
         }
 
         const serviceDate = getServiceDateForKey(selectedSlotSelection.dateKey);
-        const liveSlots = await getAvailableSlots({ appId: WL_APP_ID, date: serviceDate });
-        const liveSlot = liveSlots.find((slot) => isSameSlot(slot, selectedSlot));
-        if (!liveSlot || liveSlot.status === "full") {
+        const liveSlots = await previewScheduledPickupOptions({
+          appId: WL_APP_ID,
+          date: serviceDate,
+          items,
+        });
+        const liveSlot = liveSlots.find((slot) => isSameScheduledPickupOption(slot, selectedSlot));
+        if (!liveSlot) {
           setSelectedSlotSelection(null);
-          setError(CLIENT_ERROR_MESSAGES.slotUnavailable);
+          setError(PICKUP_SLOT_UNAVAILABLE_MESSAGE);
           setStep(1);
           return;
         }
 
-        fulfillmentData = buildScheduledFulfillmentData({
-          appId: WL_APP_ID,
-          serviceDate,
+        fulfillmentData = buildScheduledFulfillmentDataFromPickupOption({
           slot: liveSlot,
           instructions: fulfillment.instructions || undefined,
         });
@@ -926,10 +1057,19 @@ export default function CheckoutClient() {
         rewardPreview.itemIndex >= 0
           ? rewardPreview.itemIndex
           : undefined;
-      const payableTotalCents =
-        useReward && rewardPreview
-          ? Math.max(0, rewardPreview.totalAfterRewardCents)
-          : getTotalCents();
+      const customerName = profile?.displayName?.trim() || user.displayName || "";
+      const customerPhone = profile?.phone?.trim() || "";
+      const fingerprint = buildCheckoutAttemptFingerprint({
+        appId: WL_APP_ID,
+        userId: user.uid,
+        items,
+        fulfillmentData,
+        customerName,
+        customerPhone,
+        useReward,
+        ...(rewardItemIndex !== undefined ? { rewardItemIndex } : {}),
+      });
+      const attempt = getOrCreateCheckoutAttempt(fingerprint);
 
       const orderResult = await createOrder({
         appId: WL_APP_ID,
@@ -942,13 +1082,24 @@ export default function CheckoutClient() {
         fulfillmentData,
         // Temporary placeholder — the real paymentIntentId is set server-side
         // by createPaymentIntent and updated via Stripe webhook on completion.
-        paymentId: `temp_web_${Date.now()}`,
+        paymentId: `web_pending_${attempt.idempotencyKey}`,
         paymentMethod: "card",
+        source: "web",
+        idempotencyKey: attempt.idempotencyKey,
+        customerName,
+        customerPhone,
+        legalAcceptance: {
+          termsVersion: TERMS_VERSION,
+          privacyVersion: PRIVACY_VERSION,
+          acceptedAt: new Date().toISOString(),
+          origin: "web",
+          uid: user.uid,
+        },
         ...(rewardItemIndex !== undefined ? { rewardItemIndex } : {}),
       });
+      rememberCheckoutAttemptOrder(fingerprint, orderResult.orderId);
 
       if (isFullyCoveredReward) {
-        clearCart();
         router.push(
           `/order-confirmation?orderId=${orderResult.orderId}&payment=loyalty_reward`,
         );
@@ -986,6 +1137,7 @@ export default function CheckoutClient() {
       }
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   }, [
     user,
@@ -995,19 +1147,20 @@ export default function CheckoutClient() {
     getSubtotalCents,
     getTaxCents,
     getTotalCents,
-    clearCart,
     router,
     useReward,
     isFullyCoveredReward,
     rewardPreview,
+    termsAccepted,
+    profile,
+    profileLoading,
   ]);
 
   const handlePaymentSuccess = useCallback(() => {
-    clearCart();
     router.push(
       `/order-confirmation${orderId ? `?orderId=${orderId}` : ""}`,
     );
-  }, [clearCart, router, orderId]);
+  }, [router, orderId]);
 
   const handlePaymentError = useCallback((error: unknown) => {
     console.error("[stripe] Payment failed:", error);
@@ -1065,6 +1218,9 @@ export default function CheckoutClient() {
               onNext={handleProceedToPayment}
               loading={loading}
               error={error}
+              customerProfile={profile}
+              termsAccepted={termsAccepted}
+              onTermsAcceptedChange={setTermsAccepted}
             />
           )}
 
@@ -1086,6 +1242,7 @@ export default function CheckoutClient() {
               <StripeCheckout
                 clientSecret={clientSecret}
                 amountCents={paymentAmountCents}
+                orderId={orderId ?? ""}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
               />

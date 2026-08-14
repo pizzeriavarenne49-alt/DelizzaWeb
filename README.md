@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Delizza public website
 
-## Getting Started
+Next.js public client for `appId: d_lizza`, backed by the existing WLHORIZON Firebase project and Functions.
 
-First, run the development server:
+## Runtime configuration
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Use `.env.example` as the non-secret template. Production must provide:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Firebase public browser variables: `NEXT_PUBLIC_FIREBASE_*`
+- `NEXT_PUBLIC_WL_APP_ID=d_lizza`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` from the existing live Stripe account
+- `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` for Firebase App Check
+- `NEXT_PUBLIC_COMING_SOON=true` until real acceptance testing is complete
+- server-side Firebase Admin variables only in private deployment environment storage
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Never commit Stripe secret keys, webhook secrets, Firebase service account keys, tokens, or private keys.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Checkout invariants
 
-## Learn More
+- The catalogue and cart are displayed client-side, but `createOrder` recalculates prices server-side.
+- The checkout attempt key is stored in `sessionStorage` and is tied to cart, pickup slot, customer profile, and reward usage.
+- Changing cart, slot, or essential order data produces a different idempotency fingerprint.
+- The public web checkout sends only scheduled V2 pickup payloads from `previewContinuousPickupWindows`.
+- Stripe payment uses the existing WLHORIZON `createPaymentIntent` Function and signed `stripeWebhook`.
+- The confirmation page reads the backend order/payment status; URL parameters are never proof of payment.
 
-To learn more about Next.js, take a look at the following resources:
+## Coming Soon
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`NEXT_PUBLIC_COMING_SOON=true` keeps the public site locked. The middleware still allows:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- static assets, robots, sitemap, and the maintenance page
+- `/auth?mode=resetPassword&oobCode=...` so Firebase password reset links work
+- `/order-confirmation` so Stripe browser returns can be inspected during recette
 
-## Deploy on Vercel
+Do not remove Coming Soon before manual real-world acceptance testing.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## External checks before recette
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Firebase Console:
+
+- Authorized domains include the public Delizza domain.
+- Password reset email template, sender, language, action URL, and redirect domain are correct.
+- App Check and reCAPTCHA Enterprise are enabled for the web app.
+- Firestore Rules and required indexes are deployed.
+- Production Functions variables/secrets are set in Firebase, not in Git.
+
+Stripe Dashboard live:
+
+- Publishable key used by the site matches the live account used by `STRIPE_SECRET_KEY`.
+- The existing webhook endpoint points to WLHORIZON `stripeWebhook`.
+- Webhook signature secret is configured.
+- PaymentIntents from the site contain `orderId`, `appId: d_lizza`, and the expected metadata.
+- No test/live key mix exists.
+- Retries do not create duplicate active PaymentIntents for one order.

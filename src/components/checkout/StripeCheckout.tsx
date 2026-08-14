@@ -16,12 +16,14 @@ const stripePromise = loadStripe(
 
 interface StripeCheckoutFormProps {
   amountCents: number;
+  orderId: string;
   onSuccess: () => void;
   onError: (error: unknown) => void;
 }
 
 function StripeCheckoutForm({
   amountCents,
+  orderId,
   onSuccess,
   onError,
 }: StripeCheckoutFormProps) {
@@ -32,13 +34,14 @@ function StripeCheckoutForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stripe || !elements) return;
+    if (submitting) return;
 
     setSubmitting(true);
     const { error } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         // Return URL handled by redirect; we never trust client amount
-        return_url: `${window.location.origin}/order-confirmation`,
+        return_url: `${window.location.origin}/order-confirmation?orderId=${encodeURIComponent(orderId)}`,
       },
       redirect: "if_required",
     });
@@ -82,6 +85,7 @@ function StripeCheckoutForm({
 interface StripeCheckoutProps {
   clientSecret: string;
   amountCents: number;
+  orderId: string;
   onSuccess: () => void;
   onError: (error: unknown) => void;
 }
@@ -89,6 +93,7 @@ interface StripeCheckoutProps {
 export default function StripeCheckout({
   clientSecret,
   amountCents,
+  orderId,
   onSuccess,
   onError,
 }: StripeCheckoutProps) {
@@ -113,6 +118,7 @@ export default function StripeCheckout({
     >
       <StripeCheckoutForm
         amountCents={amountCents}
+        orderId={orderId}
         onSuccess={onSuccess}
         onError={onError}
       />

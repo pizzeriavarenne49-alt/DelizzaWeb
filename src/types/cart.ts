@@ -1,8 +1,9 @@
 /**
  * Cart types — aligned with WLHORIZON Flutter app.
  *
- * Mirrors the OrderItem structure used by the backend Cloud Functions
- * (createOrder, createPaymentIntent) so no price recalculation is needed.
+ * These are client-controlled snapshots for display and transport only.
+ * Cloud Functions must always reload catalog data and recalculate prices,
+ * options, taxes, discounts, and totals server-side before accepting an order.
  */
 
 export interface SelectedOption {
@@ -32,4 +33,8 @@ export interface CartItem {
   cartKey: string;
   /** Selected customization options */
   selectedOptions?: SelectedOption[];
+  /** Optional composed menu identifier for formula items */
+  formulaId?: string;
+  /** Formula step choices keyed by step id */
+  formulaStepChoices?: Record<string, string[]>;
 }

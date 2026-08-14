@@ -92,22 +92,19 @@ function optBool(v: unknown): boolean | null {
   return typeof v === "boolean" ? v : null;
 }
 
-function isExplicitlyHidden(v: unknown): boolean {
-  return v === true;
-}
-
 function isPublicCategoryDoc(data: FirestoreDoc): boolean {
   const active = bool(data.isActive, true);
   if (!active) return false;
 
-  if (isExplicitlyHidden(data.visible)) return false;
-  if (isExplicitlyHidden(data.published)) return false;
-  if (isExplicitlyHidden(data.public)) return false;
-  if (isExplicitlyHidden(data.isVisible)) return false;
-  if (isExplicitlyHidden(data.archived)) return false;
-  if (isExplicitlyHidden(data.isArchived)) return false;
-  if (isExplicitlyHidden(data.deleted)) return false;
-  if (isExplicitlyHidden(data.isDeleted)) return false;
+  if (optBool(data.visible) === false) return false;
+  if (optBool(data.published) === false) return false;
+  if (optBool(data.public) === false) return false;
+  if (optBool(data.isVisible) === false) return false;
+  if (optBool(data.hidden) === true) return false;
+  if (optBool(data.archived) === true) return false;
+  if (optBool(data.isArchived) === true) return false;
+  if (optBool(data.deleted) === true) return false;
+  if (optBool(data.isDeleted) === true) return false;
 
   return true;
 }
@@ -351,11 +348,23 @@ function sortOffers(a: FirestoreOffer, b: FirestoreOffer): number {
   return a.id.localeCompare(b.id, "fr");
 }
 
+function toPublicOffer(offer: FirestoreOffer): Offer {
+  return {
+    id: offer.id,
+    title: offer.title,
+    content: offer.content,
+    image: offer.image,
+    start_at: offer.start_at,
+    end_at: offer.end_at,
+    active: offer.active,
+  };
+}
+
 function normalizeOffers(offers: FirestoreOffer[]): Offer[] {
   return offers
     .filter(isOfferActive)
     .sort(sortOffers)
-    .map(({ sort_order: _sortOrder, created_at_ms: _createdAtMs, ...offer }) => offer);
+    .map(toPublicOffer);
 }
 
 // ---------------------------------------------------------------------------
@@ -482,7 +491,7 @@ export class FirebaseRepository implements DataRepository {
         });
     }
 
-    // Merge template-derived options (first) with any inline options
+    // Merge template-derived options (first) with inline options
     return rawProducts.map(({ appliedTemplateIds, ...product }) => {
       const templateOptions = appliedTemplateIds
         .map((id) => templateMap.get(id))

@@ -11,6 +11,8 @@ interface CartDrawerProps {
   onClose: () => void;
 }
 
+const MINIMUM_ORDER_CENTS = 900;
+
 export default function CartDrawer({ open, onClose }: CartDrawerProps) {
   const {
     items,
@@ -26,6 +28,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
   const subtotal = getSubtotalCents();
   const total = getTotalCents();
   const taxBreakdown = getTaxBreakdown();
+  const remainingMinimumCents = Math.max(0, MINIMUM_ORDER_CENTS - total);
 
   if (typeof window === "undefined") return null;
 
@@ -170,15 +173,34 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                   </div>
                 </div>
 
+                  <div className="flex justify-between text-[13px] font-semibold text-[#F5F5F5]">
+                    <span>Commande minimum</span>
+                    <span>9&nbsp;€</span>
+                  </div>
+                  {remainingMinimumCents > 0 && (
+                    <p className="text-[13px] leading-relaxed text-[#E74C3C]">
+                      Ajoutez {formatPrice(remainingMinimumCents)} € pour atteindre le minimum de commande de 9 €.
+                    </p>
+                  )}
                 {/* Actions */}
                 <div className="flex flex-col gap-2">
-                  <Link
-                    href="/checkout"
-                    onClick={onClose}
-                    className="block rounded-[14px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-3.5 text-center text-[15px] font-semibold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)]"
-                  >
-                    Commander
-                  </Link>
+                  {remainingMinimumCents > 0 ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="block rounded-[14px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-3.5 text-center text-[15px] font-semibold text-[#0D0D0D] opacity-50 cursor-not-allowed"
+                    >
+                      Commander
+                    </button>
+                  ) : (
+                    <Link
+                      href="/checkout"
+                      onClick={onClose}
+                      className="block rounded-[14px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-3.5 text-center text-[15px] font-semibold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)]"
+                    >
+                      Commander
+                    </Link>
+                  )}
                   <button
                     onClick={clearCart}
                     className="rounded-[14px] border border-white/10 py-2.5 text-[13px] text-[#A0A0A0] hover:text-[#F5F5F5] hover:border-white/20 transition-colors"

@@ -16,11 +16,16 @@ export const CLIENT_ERROR_MESSAGES = {
     "Si un compte existe avec cette adresse, un e-mail de réinitialisation a été envoyé.",
   tooManyAttempts: "Trop de tentatives. Réessayez dans quelques minutes.",
   network: "Connexion impossible. Vérifiez votre connexion internet.",
-  slotUnavailable: "Ce créneau n'est plus disponible. Choisissez un autre horaire.",
+  slotUnavailable:
+    "Ce créneau vient d'être réservé par un autre client. Choisissez un nouvel horaire.",
+  slotsLoadFailed:
+    "Impossible de charger les créneaux pour le moment. Réessayez dans quelques instants.",
   invalidCart: "Votre panier ne peut pas être validé. Vérifiez son contenu.",
   productNotFound: "Un produit de votre panier est introuvable.",
   productUnavailable: "Un produit de votre panier n'est plus disponible.",
   productOutOfStock: "Produit en rupture.",
+  minimumOrderAmount:
+    "Ajoutez des articles pour atteindre le minimum de commande de 9 €.",
   paymentDeclined: "Le paiement a été refusé. Essayez une autre carte.",
   orderFailed:
     "Impossible de finaliser la commande. Réessayez dans quelques instants.",
@@ -52,11 +57,18 @@ function readCode(error: unknown): string {
 
 function readTechnicalText(error: unknown): string {
   const err = readErrorLike(error);
+  const details =
+    typeof err.details === "object" && err.details !== null
+      ? (err.details as Record<string, unknown>)
+      : null;
   return [
     err.code,
     err.name,
     err.message,
     err.details,
+    details?.code,
+    details?.reason,
+    details?.message,
     err.type,
     err.decline_code,
   ]
@@ -81,6 +93,28 @@ export function getClientErrorMessage(
   }
 
   if (
+    (context === "checkout" || context === "slots") &&
+    hasAny(text, ["production_capacity_conflict"])
+  ) {
+    return CLIENT_ERROR_MESSAGES.slotUnavailable;
+  }
+
+  if (
+    context === "slots" &&
+    hasAny(text, [
+      "preview window",
+      "preview response",
+      "production allocations",
+      "zero-unit preview",
+      "serviceopeningid",
+      "pickupat",
+      "servicedate",
+    ])
+  ) {
+    return CLIENT_ERROR_MESSAGES.slotsLoadFailed;
+  }
+
+  if (
     hasAny(text, [
       "customer-session-sync",
       "customer session sync",
@@ -101,9 +135,7 @@ export function getClientErrorMessage(
       "rate_limit",
     ])
   ) {
-    return context === "slots"
-      ? CLIENT_ERROR_MESSAGES.slotUnavailable
-      : CLIENT_ERROR_MESSAGES.tooManyAttempts;
+    return CLIENT_ERROR_MESSAGES.tooManyAttempts;
   }
 
   if (code.startsWith("auth/") || text.includes("auth/")) {
@@ -164,6 +196,10 @@ export function getClientErrorMessage(
       return CLIENT_ERROR_MESSAGES.productOutOfStock;
     }
 
+    if (hasAny(text, ["minimum_order_amount_not_reached"])) {
+      return CLIENT_ERROR_MESSAGES.minimumOrderAmount;
+    }
+
     if (
       hasAny(text, [
         "permission-denied",
@@ -186,7 +222,7 @@ export function getClientErrorMessage(
       ])
     ) {
       return context === "slots"
-        ? CLIENT_ERROR_MESSAGES.slotUnavailable
+        ? CLIENT_ERROR_MESSAGES.slotsLoadFailed
         : CLIENT_ERROR_MESSAGES.orderFailed;
     }
 
@@ -223,7 +259,9 @@ export function getClientErrorMessage(
     context === "slots" ||
     hasAny(text, ["slot", "creneau", "créneau", "timeslot", "time slot", "full"])
   ) {
-    return CLIENT_ERROR_MESSAGES.slotUnavailable;
+    return context === "slots"
+      ? CLIENT_ERROR_MESSAGES.slotsLoadFailed
+      : CLIENT_ERROR_MESSAGES.unknown;
   }
 
   if (
