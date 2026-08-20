@@ -6,9 +6,13 @@ import {
   type User,
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
-import { getClientAuth, getClientFunctions } from "@/config/firebase-client";
+import {
+  CLIENT_WL_APP_ID,
+  getClientAuth,
+  getClientFunctions,
+} from "@/config/firebase-client";
 
-export const DELIZZA_CUSTOMER_APP_ID = "d_lizza";
+export const DELIZZA_CUSTOMER_APP_ID = CLIENT_WL_APP_ID;
 const ASSIGN_CUSTOMER_TO_APP_FN = "assignCustomerToApp";
 
 const CUSTOMER_SESSION_SYNC_MESSAGE =

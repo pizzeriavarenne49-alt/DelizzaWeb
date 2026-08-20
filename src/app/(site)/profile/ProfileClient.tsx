@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import Link from "next/link";
 import { track } from "@/analytics";
+import { CLIENT_WL_APP_ID } from "@/config/firebase-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatPrice } from "@/types";
 import { normalizeFrenchPhone, formatFrenchPhone } from "@/lib/phone";
+import {
+  getCustomerOrderPresentation,
+  isVisibleInCustomerHistory,
+} from "@/lib/customer-order-presentation";
 import {
   getCustomerProfile,
   listRecentCustomerOrders,
@@ -15,13 +20,13 @@ import {
   type CustomerProfile,
 } from "@/services/customer-profile-service";
 import {
+  claimLoyaltyTicketCode,
   DEFAULT_REWARD_THRESHOLD,
+  getLoyaltyClaimErrorMessage,
   getLoyaltyState,
   type LoyaltyState,
 } from "@/services/loyalty-service";
 import { syncDelizzaCustomerProfile } from "@/services/customer-session";
-
-const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 
 export default function ProfileClient() {
   const { user, loading, signOut } = useAuth();
@@ -31,6 +36,10 @@ export default function ProfileClient() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loyaltyCode, setLoyaltyCode] = useState("");
+  const [claimLoading, setClaimLoading] = useState(false);
+  const [claimMessage, setClaimMessage] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   useEffect(() => {
     track({ name: "view_profile" });
@@ -40,7 +49,7 @@ export default function ProfileClient() {
     if (!user) return;
     let cancelled = false;
     Promise.all([
-      getLoyaltyState(WL_APP_ID, user.uid),
+      getLoyaltyState(CLIENT_WL_APP_ID, user.uid),
       getCustomerProfile(user.uid),
       listRecentCustomerOrders(user.uid),
     ])
@@ -98,6 +107,45 @@ export default function ProfileClient() {
       setSaving(false);
     }
   };
+
+  const claimCode = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (!user || claimLoading) return;
+
+    const trimmedCode = loyaltyCode.trim();
+    if (!trimmedCode) {
+      setClaimError("Entrez votre code fidélité.");
+      setClaimMessage(null);
+      return;
+    }
+
+    setClaimLoading(true);
+    setClaimError(null);
+    setClaimMessage(null);
+    try {
+      const result = await claimLoyaltyTicketCode(trimmedCode);
+      const refreshedLoyalty = await getLoyaltyState(CLIENT_WL_APP_ID, user.uid);
+      setLoyalty(refreshedLoyalty);
+      setLoyaltyCode("");
+      setClaimMessage(
+        result.rewardIssued
+          ? "Code validé. Votre passage est ajouté et une récompense est disponible."
+          : "Code fidélité validé.",
+      );
+    } catch (err) {
+      console.error("[loyalty] Unable to claim ticket code:", {
+        code: typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined,
+      });
+      setClaimError(getLoyaltyClaimErrorMessage(err));
+    } finally {
+      setClaimLoading(false);
+    }
+  };
+
+  const visibleOrders = useMemo(
+    () => orders.filter((order) => isVisibleInCustomerHistory(order)),
+    [orders],
+  );
 
   if (loading) {
     return (
@@ -185,15 +233,34 @@ export default function ProfileClient() {
         <p className="text-[14px] text-[#F5F5F5]">
           Récompenses disponibles : {rewardsAvailable}
         </p>
+        <form onSubmit={claimCode} className="flex flex-col gap-3 rounded-[16px] bg-[#252525] px-4 py-4">
+          <h3 className="text-[15px] font-semibold text-[#F5F5F5]">J&apos;ai un code fidélité</h3>
+          <input
+            value={loyaltyCode}
+            onChange={(event) => setLoyaltyCode(event.target.value)}
+            disabled={claimLoading}
+            placeholder="Votre code"
+            className={inputClassName}
+          />
+          {claimError && <p className="rounded-[10px] bg-red-900/30 px-4 py-2 text-[13px] text-red-400">{claimError}</p>}
+          {claimMessage && <p className="rounded-[10px] bg-[#2ECC71]/10 px-4 py-2 text-[13px] text-[#8FE6B1]">{claimMessage}</p>}
+          <button
+            type="submit"
+            disabled={claimLoading}
+            className="rounded-[14px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-3 text-[15px] font-semibold text-[#0D0D0D] disabled:opacity-60"
+          >
+            {claimLoading ? "Validation..." : "Valider"}
+          </button>
+        </form>
       </section>
 
       <section className="flex flex-col gap-3 rounded-[20px] bg-[#1A1A1A] px-5 py-5">
         <h2 className="text-[16px] font-semibold text-[#F5F5F5]">Mes commandes</h2>
-        {orders.length === 0 ? (
+        {visibleOrders.length === 0 ? (
           <p className="text-[14px] text-[#A0A0A0]">Aucune commande récente à afficher.</p>
         ) : (
           <ul className="flex flex-col gap-3">
-            {orders.map((order) => (
+            {visibleOrders.map((order) => (
               <li key={order.id} className="rounded-[14px] bg-[#252525] px-4 py-3 text-[13px] text-[#A0A0A0]">
                 <div className="flex justify-between gap-3 text-[#F5F5F5]">
                   <span>{order.orderNumber}</span>
@@ -201,7 +268,7 @@ export default function ProfileClient() {
                 </div>
                 <div className="mt-1 flex justify-between gap-3">
                   <span>{order.pickupLabel || order.createdAtLabel}</span>
-                  <span>{order.status} / {order.paymentStatus}</span>
+                  <span className="font-semibold text-[#F5F5F5]">{getCustomerOrderPresentation(order).label}</span>
                 </div>
               </li>
             ))}

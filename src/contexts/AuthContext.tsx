@@ -16,6 +16,7 @@ import {
   verifyPasswordResetCode,
   confirmPasswordReset,
   updateProfile,
+  type ActionCodeSettings,
   type User,
 } from "firebase/auth";
 import { getClientAuth, initAppCheck } from "@/config/firebase-client";
@@ -33,6 +34,19 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const PASSWORD_RESET_AUTH_ROUTE = "/auth";
+
+function buildPasswordResetActionSettings(origin: string): ActionCodeSettings {
+  const authRouteUrl = new URL(PASSWORD_RESET_AUTH_ROUTE, origin);
+  authRouteUrl.search = "";
+  authRouteUrl.hash = "";
+
+  return {
+    // This is the continueUrl; Firebase Auth Console must use this route as the password-reset Action URL too.
+    url: authRouteUrl.toString(),
+    handleCodeInApp: false,
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -70,10 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const sendPasswordReset = async (email: string) => {
     const auth = getClientAuth();
-    await sendPasswordResetEmail(auth, email, {
-      url: `${window.location.origin}/auth`,
-      handleCodeInApp: false,
-    });
+    await sendPasswordResetEmail(
+      auth,
+      email,
+      buildPasswordResetActionSettings(window.location.origin),
+    );
   };
 
   const confirmPasswordResetCode = async (code: string, newPassword: string) => {

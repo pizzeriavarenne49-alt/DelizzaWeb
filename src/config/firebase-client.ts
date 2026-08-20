@@ -40,6 +40,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+export const CLIENT_WL_APP_ID =
+  process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
+
 function getClientApp(): FirebaseApp {
   if (getApps().length > 0) {
     return getApp();

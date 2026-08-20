@@ -7,6 +7,10 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { getClientFirestore } from "@/config/firebase-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
+import {
+  getCustomerOrderPresentation,
+  type CustomerOrderPresentation,
+} from "@/lib/customer-order-presentation";
 import { clearCheckoutAttemptForOrder } from "@/services/checkout-attempt";
 import { DELIZZA_CUSTOMER_APP_ID } from "@/services/customer-session";
 import { formatPrice } from "@/types";
@@ -24,6 +28,9 @@ interface OrderView {
   status: string;
   paymentStatus: string;
   fulfillmentStatus: string;
+  productionAuthorized: boolean;
+  paidTotalCents: number;
+  fulfillmentData: Record<string, unknown> | null;
 }
 
 interface OrderLoadState {
@@ -74,25 +81,30 @@ function mapOrder(id: string, data: Record<string, unknown>): OrderView {
     status: typeof data.status === "string" ? data.status : "unknown",
     paymentStatus: typeof data.paymentStatus === "string" ? data.paymentStatus : "unknown",
     fulfillmentStatus: typeof data.fulfillmentStatus === "string" ? data.fulfillmentStatus : "",
+    productionAuthorized: data.productionAuthorized === true,
+    paidTotalCents: typeof data.paidTotalCents === "number" ? data.paidTotalCents : 0,
+    fulfillmentData:
+      typeof data.fulfillmentData === "object" && data.fulfillmentData !== null
+        ? (data.fulfillmentData as Record<string, unknown>)
+        : null,
   };
 }
 
 function statusMessage(
-  paymentStatus: string,
-  orderStatus: string,
+  presentation: CustomerOrderPresentation,
   prolongedPending: boolean,
 ): { title: string; body: string; tone: "pending" | "paid" | "failed" } {
-  if (paymentStatus === "paid") {
+  if (presentation.state === "validated") {
     return {
-      title: "Commande confirmee",
+      title: "Commande validée",
       body: "Le paiement est valide par le backend. Votre commande est transmise a l'equipe.",
       tone: "paid",
     };
   }
-  if (["cancelled", "expired"].includes(orderStatus) || ["failed", "cancelled", "unpaid"].includes(paymentStatus)) {
+  if (presentation.state === "cancelled") {
     return {
-      title: "Paiement non valide",
-      body: "Le paiement n'a pas ete confirme. Vous pouvez revenir au checkout pour reprendre cette commande si une action est encore disponible.",
+      title: "Commande annulée",
+      body: "Cette commande n'est pas active. Vous pouvez revenir au checkout pour passer une nouvelle commande.",
       tone: "failed",
     };
   }
@@ -130,7 +142,16 @@ function OrderConfirmationContent() {
           ? "Lien de confirmation invalide."
           : loadError;
   const loading = authLoading || (!!listenKey && loadState?.key !== listenKey);
-  const pendingKey = order && !["paid", "failed", "cancelled", "unpaid"].includes(order.paymentStatus)
+  const orderPresentation = useMemo(
+    () => order
+      ? getCustomerOrderPresentation(order)
+      : ({
+          state: "hiddenTemporary",
+          label: "Paiement en cours de validation",
+        } as CustomerOrderPresentation),
+    [order],
+  );
+  const pendingKey = order && orderPresentation.state === "hiddenTemporary"
     ? `${order.id}:${order.paymentStatus}:${order.status}`
     : null;
   const prolongedPending = !!pendingKey && prolongedPendingKey === pendingKey;
@@ -183,15 +204,15 @@ function OrderConfirmationContent() {
   }, [pendingKey]);
 
   useEffect(() => {
-    if (order?.paymentStatus === "paid") {
+    if (order && orderPresentation.state === "validated") {
       clearCheckoutAttemptForOrder(order.id);
       clearCart();
     }
-  }, [clearCart, order]);
+  }, [clearCart, order, orderPresentation.state]);
 
   const message = useMemo(
-    () => statusMessage(order?.paymentStatus ?? "pending", order?.status ?? "unknown", prolongedPending),
-    [order?.paymentStatus, order?.status, prolongedPending],
+    () => statusMessage(orderPresentation, prolongedPending),
+    [orderPresentation, prolongedPending],
   );
 
   return (
@@ -233,9 +254,16 @@ function OrderConfirmationContent() {
               <Row label="Date" value={order.createdAt || "-"} />
               <Row label="Retrait" value={order.pickup || "-"} />
               <Row label="Total TTC" value={`${formatPrice(order.totalCents)} EUR`} />
-              <Row label="Statut commande" value={order.status} />
-              <Row label="Statut paiement" value={order.paymentStatus} />
-              {order.fulfillmentStatus && <Row label="Preparation" value={order.fulfillmentStatus} />}
+              <Row
+                label="Commande"
+                value={
+                  orderPresentation.state === "validated"
+                    ? "Commande validée"
+                    : orderPresentation.state === "cancelled"
+                      ? "Commande annulée"
+                      : "Paiement en cours de validation"
+                }
+              />
             </dl>
           </div>
         )}
@@ -249,7 +277,7 @@ function OrderConfirmationContent() {
               Se connecter
             </Link>
           )}
-          {user && order?.paymentStatus !== "paid" && (
+          {user && orderPresentation.state !== "validated" && (
             <Link
               href="/checkout"
               className="block rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-center text-[15px] font-bold text-[#0D0D0D]"

@@ -30,6 +30,9 @@ export interface CustomerOrderSummary {
   totalCents: number;
   status: string;
   paymentStatus: string;
+  productionAuthorized: boolean;
+  paidTotalCents: number;
+  fulfillmentData: Record<string, unknown> | null;
 }
 
 function dateLabel(value: unknown): string {
@@ -82,7 +85,7 @@ export async function listRecentCustomerOrders(uid: string): Promise<CustomerOrd
     where("appId", "==", DELIZZA_CUSTOMER_APP_ID),
     where("clientUserId", "==", uid),
     orderBy("createdAt", "desc"),
-    limit(10),
+    limit(25),
   ));
 
   return snap.docs.map((orderDoc) => {
@@ -97,6 +100,12 @@ export async function listRecentCustomerOrders(uid: string): Promise<CustomerOrd
       totalCents: typeof data.totalCents === "number" ? data.totalCents : 0,
       status: typeof data.status === "string" ? data.status : "unknown",
       paymentStatus: typeof data.paymentStatus === "string" ? data.paymentStatus : "unknown",
+      productionAuthorized: data.productionAuthorized === true,
+      paidTotalCents: typeof data.paidTotalCents === "number" ? data.paidTotalCents : 0,
+      fulfillmentData:
+        typeof data.fulfillmentData === "object" && data.fulfillmentData !== null
+          ? (data.fulfillmentData as Record<string, unknown>)
+          : null,
     };
   });
 }

@@ -10,18 +10,15 @@ const EXCLUDED_PATHS = new Set([
   "/sitemap.xml",
 ]);
 
-function normalizedAuthActionMode(searchParams?: URLSearchParams): string {
-  return searchParams?.get("mode") ?? "";
+function normalizeAuthPath(pathname: string): string {
+  return pathname !== "/" && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
 
-export function shouldBypassMaintenance(pathname: string, searchParams?: URLSearchParams): boolean {
-  const authResetAllowed =
-    pathname === "/auth" &&
-    normalizedAuthActionMode(searchParams) === "resetPassword" &&
-    !!searchParams?.get("oobCode");
+export function shouldBypassMaintenance(pathname: string, _searchParams?: URLSearchParams): boolean {
+  const authHandlerAllowed = normalizeAuthPath(pathname) === "/auth";
 
   return (
-    authResetAllowed ||
+    authHandlerAllowed ||
     EXCLUDED_PATHS.has(pathname) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/images")

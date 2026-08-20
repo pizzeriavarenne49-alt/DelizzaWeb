@@ -15,6 +15,13 @@ interface LoginFormProps {
 
 type AuthMode = "login" | "register" | "forgot" | "reset";
 
+const passwordResetSentMessage =
+  "Si un compte correspond a cette adresse, un email de reinitialisation vient d'etre envoye.";
+
+function getFirebaseErrorCode(err: unknown): string | undefined {
+  return typeof err === "object" && err !== null ? (err as { code?: string }).code : undefined;
+}
+
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const {
     signIn,
@@ -95,7 +102,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         onSuccess?.();
       } else if (mode === "forgot") {
         await sendPasswordReset(email);
-        setSuccess("Si un compte correspond à cette adresse, un email de réinitialisation vient d'être envoyé.");
+        setSuccess(passwordResetSentMessage);
       } else {
         if (!oobCode) {
           setError("Lien de réinitialisation invalide.");
@@ -109,9 +116,13 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         setMode("login");
       }
     } catch (err: unknown) {
+      if (mode === "forgot" && getFirebaseErrorCode(err) === "auth/user-not-found") {
+        setSuccess(passwordResetSentMessage);
+        return;
+      }
       console.error("[auth] Authentication flow failed:", {
         mode,
-        code: typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined,
+        code: getFirebaseErrorCode(err),
       });
       setError(getClientErrorMessage(err, "auth"));
     } finally {

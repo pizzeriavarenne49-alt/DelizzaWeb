@@ -1,7 +1,12 @@
 "use client";
 
+import { httpsCallable } from "firebase/functions";
 import { doc, getDoc } from "firebase/firestore";
-import { getClientFirestore } from "@/config/firebase-client";
+import {
+  CLIENT_WL_APP_ID,
+  getClientFirestore,
+  getClientFunctions,
+} from "@/config/firebase-client";
 
 export const DEFAULT_REWARD_THRESHOLD = 10;
 export const DEFAULT_PIZZA_CATEGORY_ID = "pizza";
@@ -20,6 +25,14 @@ export interface LoyaltyConfig {
 export interface LoyaltyState {
   account: LoyaltyAccount;
   config: LoyaltyConfig;
+}
+
+export interface ClaimLoyaltyTicketCodeResult {
+  success: boolean;
+  stampsBalance?: number;
+  claimedCode?: string;
+  orderId?: string;
+  rewardIssued?: boolean;
 }
 
 const defaultAccount: LoyaltyAccount = {
@@ -94,4 +107,44 @@ export async function getLoyaltyState(appId: string, uid: string): Promise<Loyal
     account: mapAccount(accountSnap.exists() ? accountSnap.data() : undefined),
     config: mapConfig(configSnap.exists() ? configSnap.data() : undefined),
   };
+}
+
+export async function claimLoyaltyTicketCode(
+  code: string,
+): Promise<ClaimLoyaltyTicketCodeResult> {
+  const functions = getClientFunctions();
+  const callable = httpsCallable(functions, "claimLoyaltyTicketCode");
+  const result = await callable({
+    code: code.trim(),
+    appId: CLIENT_WL_APP_ID,
+  });
+
+  return result.data as ClaimLoyaltyTicketCodeResult;
+}
+
+export function getLoyaltyClaimErrorMessage(error: unknown): string {
+  const err = typeof error === "object" && error !== null
+    ? (error as { message?: unknown; details?: unknown; code?: unknown })
+    : {};
+  const details = typeof err.details === "object" && err.details !== null
+    ? (err.details as { message?: unknown })
+    : null;
+  const message =
+    typeof details?.message === "string" && details.message.trim()
+      ? details.message
+      : typeof err.message === "string" && err.message.trim()
+        ? err.message
+        : "";
+
+  if (message) return message.replace(/^Firebase:\s*/i, "").trim();
+
+  const code = typeof err.code === "string" ? err.code.toLowerCase() : "";
+  if (code.includes("unauthenticated")) {
+    return "Connectez-vous pour valider ce code fidélité.";
+  }
+  if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
+    return "Connexion impossible. Vérifiez votre connexion internet.";
+  }
+
+  return "Impossible de valider ce code pour le moment. Réessayez.";
 }

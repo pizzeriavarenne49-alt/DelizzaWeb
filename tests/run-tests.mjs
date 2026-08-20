@@ -577,9 +577,6 @@ run("coming soon lock covers public routes and api endpoints", () => {
     "/mentions-legales",
     "/privacy",
     "/cgu",
-    "/auth",
-    "/auth/",
-    "/auth?mode=signup",
   ].forEach((pathname) => {
     assert.equal(middleware.resolveMaintenanceAction(pathname, true), "maintenance", pathname);
   });
@@ -591,11 +588,14 @@ run("coming soon lock covers public routes and api endpoints", () => {
   assert.equal(middleware.resolveMaintenanceAction("/_next/static/chunk.js", true), "next");
   assert.equal(middleware.resolveMaintenanceAction("/images/menu-delizza.webp", true), "next");
   assert.equal(middleware.resolveMaintenanceAction("/maintenance", true), "next");
+  assert.equal(middleware.resolveMaintenanceAction("/auth", true), "next");
+  assert.equal(middleware.resolveMaintenanceAction("/auth/", true), "next");
+  assert.equal(middleware.resolveMaintenanceAction("/auth", true, new URLSearchParams("mode=signup")), "next");
   assert.equal(
     middleware.resolveMaintenanceAction("/auth", true, new URLSearchParams("mode=resetPassword&oobCode=abc")),
     "next",
   );
-  assert.equal(middleware.resolveMaintenanceAction("/auth/", true, new URLSearchParams("mode=resetPassword&oobCode=abc")), "maintenance");
+  assert.equal(middleware.resolveMaintenanceAction("/auth/", true, new URLSearchParams("mode=resetPassword&oobCode=abc")), "next");
   assert.equal(middleware.resolveMaintenanceAction("/order-confirmation", true), "next");
 
   assert.equal(middleware.shouldBypassMaintenance("/robots.txt"), true);
