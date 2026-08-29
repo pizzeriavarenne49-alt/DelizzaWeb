@@ -30,10 +30,27 @@ export async function previewScheduledPickupOptions({
     date,
     items: buildPreviewCartItems(items),
   });
+  const response = result.data as ContinuousPickupPreviewResponse;
+  const onlineOrderingStatus = response.onlineOrdering?.status;
+  if (onlineOrderingStatus === "closed" || onlineOrderingStatus === "emergency") {
+    const code =
+      onlineOrderingStatus === "emergency"
+        ? "ONLINE_ORDERING_EMERGENCY"
+        : "ONLINE_ORDERING_CLOSED";
+    const error = new Error(code);
+    Object.assign(error, {
+      code,
+      details: {
+        code,
+        onlineOrderingStatus: response.onlineOrdering,
+      },
+    });
+    throw error;
+  }
 
   return mapPreviewResponseToScheduledOptions({
     appId,
     requestedDate: date,
-    response: result.data as ContinuousPickupPreviewResponse,
+    response,
   });
 }

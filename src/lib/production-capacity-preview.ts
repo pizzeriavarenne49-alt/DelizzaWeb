@@ -36,6 +36,15 @@ export interface ContinuousPickupWindowPreview {
   productionAllocations: ProductionAllocationPreview[];
 }
 
+export interface OnlineOrderingPreviewState {
+  status: "open" | "closed" | "emergency";
+  updatedAt?: unknown;
+  effectiveAt?: unknown;
+  serviceOpeningId?: string | null;
+  serviceDate?: string | null;
+  publicReason?: string | null;
+}
+
 export interface ContinuousPickupPreviewResponse {
   capacityVersion: 2;
   basis: "server_cart" | "staff_estimate";
@@ -43,6 +52,7 @@ export interface ContinuousPickupPreviewResponse {
   totalPizzaUnits: number;
   generatedAt: string;
   windows: ContinuousPickupWindowPreview[];
+  onlineOrdering?: OnlineOrderingPreviewState;
 }
 
 export interface ScheduledPickupOption extends TimeSlotInfo {

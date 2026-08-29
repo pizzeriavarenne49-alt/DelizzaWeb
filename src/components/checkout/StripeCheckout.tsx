@@ -19,6 +19,8 @@ interface StripeCheckoutFormProps {
   orderId: string;
   onSuccess: () => void;
   onError: (error: unknown) => void;
+  disabled?: boolean;
+  disabledMessage?: string | null;
 }
 
 function StripeCheckoutForm({
@@ -26,6 +28,8 @@ function StripeCheckoutForm({
   orderId,
   onSuccess,
   onError,
+  disabled = false,
+  disabledMessage = null,
 }: StripeCheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -35,6 +39,15 @@ function StripeCheckoutForm({
     e.preventDefault();
     if (!stripe || !elements) return;
     if (submitting) return;
+    if (disabled) {
+      const error = new Error("ONLINE_ORDERING_EMERGENCY");
+      Object.assign(error, {
+        code: "ONLINE_ORDERING_EMERGENCY",
+        details: { code: "ONLINE_ORDERING_EMERGENCY", message: disabledMessage },
+      });
+      onError(error);
+      return;
+    }
 
     setSubmitting(true);
     const { error } = await stripe.confirmPayment({
@@ -56,6 +69,12 @@ function StripeCheckoutForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      {disabled && disabledMessage && (
+        <div className="rounded-[14px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
+          {disabledMessage}
+        </div>
+      )}
+
       <div className="rounded-[18px] bg-[#252525] p-5">
         <PaymentElement
           options={{
@@ -66,7 +85,7 @@ function StripeCheckoutForm({
 
       <button
         type="submit"
-        disabled={!stripe || submitting}
+        disabled={!stripe || submitting || disabled}
         className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
       >
         {submitting ? (
@@ -88,6 +107,8 @@ interface StripeCheckoutProps {
   orderId: string;
   onSuccess: () => void;
   onError: (error: unknown) => void;
+  disabled?: boolean;
+  disabledMessage?: string | null;
 }
 
 export default function StripeCheckout({
@@ -96,6 +117,8 @@ export default function StripeCheckout({
   orderId,
   onSuccess,
   onError,
+  disabled = false,
+  disabledMessage = null,
 }: StripeCheckoutProps) {
   return (
     <Elements
@@ -121,6 +144,8 @@ export default function StripeCheckout({
         orderId={orderId}
         onSuccess={onSuccess}
         onError={onError}
+        disabled={disabled}
+        disabledMessage={disabledMessage}
       />
     </Elements>
   );

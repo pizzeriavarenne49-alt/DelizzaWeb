@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,13 @@ import Link from "next/link";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
+import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import { getClientFirestore } from "@/config/firebase-client";
+import {
+  assessCartAvailability,
+  extractCartAvailabilityMessageFromError,
+  type CartAvailabilityIssue,
+} from "@/lib/cart-availability";
 import {
   getServiceDateForKey,
   type SlotDateKey,
@@ -65,7 +71,16 @@ function minimumOrderMessage(payableTotalCents: number): string | null {
   return `Ajoutez ${formatPrice(remainingCents)} € pour atteindre le minimum de commande de 9 €.`;
 }
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Date helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function OnlineOrderingNotice({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <div className="rounded-[14px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
+      {message}
+    </div>
+  );
+}
 
 function findNextAvailableSlot(slots: ScheduledPickupOption[]): ScheduledPickupOption | undefined {
   return slots.find((slot) => slot.status !== "full");
@@ -298,7 +313,7 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
   return { ok: true };
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Step indicator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
   const steps = ["Retrait", "Récapitulatif", "Paiement"];
@@ -346,7 +361,7 @@ function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
   );
 }
 
-// ─── Step 1: Fulfillment ──────────────────────────────────────────────────────
+// â”€â”€â”€ Step 1: Fulfillment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface FulfillmentFormState {
   isAsap: boolean;
@@ -360,9 +375,23 @@ interface Step1Props {
   onNext: () => void;
   isEmpty: boolean;
   onSlotChange: (selection: { dateKey: SlotDateKey; slot: ScheduledPickupOption | null }) => void;
+  onlineOrderingBlocked: boolean;
+  onlineOrderingMessage: string | null;
+  cartAvailabilityLoading: boolean;
+  cartAvailabilityIssues: CartAvailabilityIssue[];
 }
 
-function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: Step1Props) {
+function Step1Fulfillment({
+  state,
+  onChange,
+  onNext,
+  isEmpty,
+  onSlotChange,
+  onlineOrderingBlocked,
+  onlineOrderingMessage,
+  cartAvailabilityLoading,
+  cartAvailabilityIssues,
+}: Step1Props) {
   const { items } = useCart();
   const [selectedDate, setSelectedDate] = useState<SlotDateKey>("today");
   const [selectedSlot, setSelectedSlot] = useState<ScheduledPickupOption | null>(null);
@@ -371,6 +400,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [nextAsapSlot, setNextAsapSlot] = useState<{ dateKey: SlotDateKey; slot: ScheduledPickupOption } | null>(null);
   const previewRequestIdRef = useRef(0);
+  const cartAvailabilityBlocked = cartAvailabilityIssues.length > 0;
 
   const getSlotsForDate = useCallback(async (dateKey: SlotDateKey): Promise<ScheduledPickupOption[]> => {
     if (items.length === 0) return [];
@@ -382,6 +412,19 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
   }, [items]);
 
   const fetchSlots = useCallback(async (dateKey: SlotDateKey) => {
+    if (onlineOrderingBlocked) {
+      previewRequestIdRef.current += 1;
+      setSlots([]);
+      setNextAsapSlot(null);
+      setSelectedSlot(null);
+      setSlotsLoading(false);
+      setSlotsError(onlineOrderingMessage);
+      onSlotChange({ dateKey, slot: null });
+      if (state.scheduledTime) {
+        onChange({ ...state, scheduledTime: "" });
+      }
+      return;
+    }
     const requestId = previewRequestIdRef.current + 1;
     previewRequestIdRef.current = requestId;
     setSlotsLoading(true);
@@ -409,9 +452,22 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
         setSlotsLoading(false);
       }
     }
-  }, [getSlotsForDate, onChange, onSlotChange, selectedSlot, state]);
+  }, [getSlotsForDate, onChange, onSlotChange, onlineOrderingBlocked, onlineOrderingMessage, selectedSlot, state]);
 
   const fetchNextAsapSlot = useCallback(async () => {
+    if (onlineOrderingBlocked) {
+      previewRequestIdRef.current += 1;
+      setSlots([]);
+      setNextAsapSlot(null);
+      setSelectedSlot(null);
+      setSlotsLoading(false);
+      setSlotsError(onlineOrderingMessage);
+      onSlotChange({ dateKey: selectedDate, slot: null });
+      if (state.scheduledTime) {
+        onChange({ ...state, scheduledTime: "" });
+      }
+      return;
+    }
     const requestId = previewRequestIdRef.current + 1;
     previewRequestIdRef.current = requestId;
     setSlotsLoading(true);
@@ -445,7 +501,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
         setSlotsLoading(false);
       }
     }
-  }, [getSlotsForDate]);
+  }, [getSlotsForDate, onChange, onSlotChange, onlineOrderingBlocked, onlineOrderingMessage, selectedDate, state]);
 
   // Fetch slots for schedule mode and compute the next slot for ASAP mode
   useEffect(() => {
@@ -475,6 +531,20 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
 
   return (
     <div className="flex flex-col gap-5">
+      <OnlineOrderingNotice message={onlineOrderingBlocked ? onlineOrderingMessage : null} />
+      {cartAvailabilityLoading && (
+        <div className="rounded-[14px] border border-white/10 bg-[#252525] px-4 py-3 text-[13px] leading-relaxed text-[#A0A0A0]">
+          Verification des articles en cours...
+        </div>
+      )}
+      {cartAvailabilityBlocked && (
+        <div className="rounded-[14px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
+          {cartAvailabilityIssues.map((issue) => (
+            <p key={issue.cartKey}>{issue.message}</p>
+          ))}
+        </div>
+      )}
+
       {/* Fulfillment method */}
       <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-3">
         <h2 className="text-[16px] font-bold text-[#F5F5F5]">Mode de retrait</h2>
@@ -483,7 +553,9 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
             <div className="h-2.5 w-2.5 rounded-full bg-[#D4A053]" />
           </div>
           <span className="text-[14px] text-[#F5F5F5]">Click &amp; Collect</span>
-          <span className="ml-auto rounded-full bg-[#D4A053]/15 px-2 py-0.5 text-[11px] text-[#D4A053] font-medium">Disponible</span>
+          <span className="ml-auto rounded-full bg-[#D4A053]/15 px-2 py-0.5 text-[11px] text-[#D4A053] font-medium">
+            {onlineOrderingBlocked ? "Indisponible" : "Disponible"}
+          </span>
         </label>
         <p className="text-[12px] text-[#6B6B6B]">Récupérez votre commande au restaurant</p>
       </div>
@@ -530,7 +602,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
                 </span>
               </p>
             ) : (
-              <p className="text-[13px] text-[#E74C3C]">
+                <p className="text-[13px] text-[#E74C3C]">
                 Aucun créneau disponible aujourd’hui ou demain. Veuillez choisir un autre horaire.
               </p>
             )}
@@ -577,6 +649,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
                 <button
                   type="button"
                   onClick={() => fetchSlots(selectedDate)}
+                  disabled={onlineOrderingBlocked}
                   className="text-[12px] text-[#D4A053] underline whitespace-nowrap"
                 >
                   Réessayer
@@ -594,7 +667,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
                     <button
                       key={`${slot.serviceOpeningId}_${slot.pickupAt}_${slot.slotId}`}
                       type="button"
-                      disabled={isFull}
+                      disabled={isFull || onlineOrderingBlocked}
                       onClick={() => {
                         setSelectedSlot(slot);
                         onSlotChange({ dateKey: selectedDate, slot });
@@ -645,7 +718,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
       <button
         type="button"
         onClick={onNext}
-        disabled={isEmpty || (!state.isAsap && !selectedSlot) || isAsapBlocked}
+        disabled={isEmpty || onlineOrderingBlocked || (!state.isAsap && !selectedSlot) || isAsapBlocked}
         className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continuer
@@ -654,7 +727,7 @@ function Step1Fulfillment({ state, onChange, onNext, isEmpty, onSlotChange }: St
   );
 }
 
-// ─── Step 2: Summary ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Step 2: Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface Step2Props {
   userEmail: string | null | undefined;
@@ -673,6 +746,10 @@ interface Step2Props {
   customerProfile: CustomerProfile | null;
   termsAccepted: boolean;
   onTermsAcceptedChange: (accepted: boolean) => void;
+  onlineOrderingBlocked: boolean;
+  onlineOrderingMessage: string | null;
+  cartAvailabilityLoading: boolean;
+  cartAvailabilityIssues: CartAvailabilityIssue[];
 }
 
 function Step2Summary({
@@ -692,6 +769,10 @@ function Step2Summary({
   customerProfile,
   termsAccepted,
   onTermsAcceptedChange,
+  onlineOrderingBlocked,
+  onlineOrderingMessage,
+  cartAvailabilityLoading,
+  cartAvailabilityIssues,
 }: Step2Props) {
   const {
     items,
@@ -709,22 +790,48 @@ function Step2Summary({
       ? Math.max(0, rewardPreview.totalAfterRewardCents)
       : total;
   const minimumMessage = minimumOrderMessage(payableTotalCents);
+  const cartAvailabilityBlocked = cartAvailabilityIssues.length > 0;
+  const issuesByCartKey = useMemo(
+    () => new Map(cartAvailabilityIssues.map((issue) => [issue.cartKey, issue])),
+    [cartAvailabilityIssues],
+  );
 
   return (
     <div className="flex flex-col gap-5">
+      <OnlineOrderingNotice message={onlineOrderingBlocked ? onlineOrderingMessage : null} />
+      {cartAvailabilityLoading && (
+        <div className="rounded-[14px] border border-white/10 bg-[#252525] px-4 py-3 text-[13px] leading-relaxed text-[#A0A0A0]">
+          Verification des articles en cours...
+        </div>
+      )}
+      {cartAvailabilityBlocked && (
+        <div className="rounded-[14px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
+          {cartAvailabilityIssues.map((issue) => (
+            <p key={issue.cartKey}>{issue.message}</p>
+          ))}
+        </div>
+      )}
+
       {/* Order items */}
       <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex flex-col gap-3">
         <h2 className="text-[16px] font-bold text-[#F5F5F5]">Votre commande</h2>
         <ul className="flex flex-col gap-2">
           {items.map((item) => (
-            <li key={item.catalogItemId} className="flex justify-between items-center text-[14px]">
-              <span className="text-[#F5F5F5]">
-                <span className="font-semibold text-[#D4A053]">{item.quantity}×</span>{" "}
-                {item.nameSnapshot}
-              </span>
-              <span className="text-[#A0A0A0] whitespace-nowrap">
-                {formatPrice(item.totalCents)}&nbsp;€
-              </span>
+            <li key={item.cartKey} className="text-[14px]">
+              <div className="flex justify-between items-center">
+                <span className="text-[#F5F5F5]">
+                  <span className="font-semibold text-[#D4A053]">{item.quantity}×</span>{" "}
+                  {issuesByCartKey.get(item.cartKey)?.displayLabel ?? item.nameSnapshot}
+                </span>
+                <span className="text-[#A0A0A0] whitespace-nowrap">
+                  {formatPrice(item.totalCents)}&nbsp;€
+                </span>
+              </div>
+              {issuesByCartKey.get(item.cartKey) && (
+                <p className="mt-1 text-[12px] leading-relaxed text-[#F59B90]">
+                  {issuesByCartKey.get(item.cartKey)?.message}
+                </p>
+              )}
             </li>
           ))}
         </ul>
@@ -732,7 +839,7 @@ function Step2Summary({
         <div className="border-t border-white/5 pt-3 flex flex-col gap-1.5">
           <div className="flex justify-between text-[13px] text-[#A0A0A0]">
             <span>Sous-total TTC</span>
-            <span>{formatPrice(subtotal)}&nbsp;€</span>
+              <span>{formatPrice(subtotal)}&nbsp;€</span>
           </div>
           {taxBreakdown.map((entry) => (
             <div key={entry.rateBps} className="flex justify-between text-[13px] text-[#A0A0A0]">
@@ -787,7 +894,7 @@ function Step2Summary({
       <div className="rounded-[18px] bg-[#1A1A1A] p-5">
         <div className="flex justify-between text-[14px] font-semibold text-[#F5F5F5]">
           <span>Commande minimum</span>
-          <span>9&nbsp;€</span>
+            <span>9&nbsp;€</span>
         </div>
         {minimumMessage && (
           <p className="mt-2 text-[13px] leading-relaxed text-[#E74C3C]">
@@ -863,7 +970,14 @@ function Step2Summary({
         <button
           type="button"
           onClick={onNext}
-          disabled={loading || !termsAccepted || minimumMessage !== null}
+          disabled={
+            loading ||
+            cartAvailabilityLoading ||
+            cartAvailabilityBlocked ||
+            onlineOrderingBlocked ||
+            !termsAccepted ||
+            minimumMessage !== null
+          }
           className="flex-[2] rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
@@ -882,12 +996,14 @@ function Step2Summary({
   );
 }
 
-// ─── Main CheckoutClient ──────────────────────────────────────────────────────
+// â”€â”€â”€ Main CheckoutClient â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function CheckoutClient() {
   const router = useRouter();
   const { user } = useAuth();
   const { items, isEmpty, getSubtotalCents, getTaxCents, getTotalCents } = useCart();
+  const onlineOrdering = useOnlineOrderingStatus();
+  const onlineOrderingBlocked = !onlineOrdering.canStartOrder;
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fulfillment, setFulfillment] = useState<FulfillmentFormState>({
@@ -911,6 +1027,8 @@ export default function CheckoutClient() {
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [cartAvailabilityLoading, setCartAvailabilityLoading] = useState(false);
+  const [cartAvailabilityIssues, setCartAvailabilityIssues] = useState<CartAvailabilityIssue[]>([]);
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -972,6 +1090,58 @@ export default function CheckoutClient() {
     }
   }, [canUseReward, useReward]);
 
+  useEffect(() => {
+    if (items.length === 0) {
+      setCartAvailabilityIssues([]);
+      setCartAvailabilityLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCartAvailabilityLoading(true);
+
+    assessCartAvailability(items)
+      .then((result) => {
+        if (!cancelled) {
+          setCartAvailabilityIssues(result.issues);
+        }
+      })
+      .catch((err) => {
+        console.error("[checkout] Unable to validate cart availability:", err);
+        if (!cancelled) {
+          setCartAvailabilityIssues([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCartAvailabilityLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
+
+  useEffect(() => {
+    if (!onlineOrderingBlocked) {
+      setError((current) =>
+        current === CLIENT_ERROR_MESSAGES.onlineOrderingClosed ||
+        current === CLIENT_ERROR_MESSAGES.onlineOrderingEmergency
+          ? null
+          : current,
+      );
+      return;
+    }
+    if (step !== 3) {
+      setError(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
+    }
+  }, [
+    onlineOrdering.message,
+    onlineOrderingBlocked,
+    step,
+  ]);
+
   const handleProceedToPayment = useCallback(async () => {
     if (!user) return;
     if (submittingRef.current) return;
@@ -980,6 +1150,10 @@ export default function CheckoutClient() {
     setError(null);
 
     try {
+      if (onlineOrderingBlocked) {
+        setError(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
+        return;
+      }
       if (!termsAccepted) {
         setError("Vous devez accepter les conditions de commande avant de payer.");
         return;
@@ -1001,10 +1175,16 @@ export default function CheckoutClient() {
         setError(checkoutMinimumMessage);
         return;
       }
-      const cartValidation = await validateCartProductsAvailable(items);
+      if (cartAvailabilityLoading) {
+        setError("Verification des articles en cours...");
+        return;
+      }
+      const cartValidation = await assessCartAvailability(items);
       if (!cartValidation.ok) {
+        const firstIssue = cartValidation.issues[0];
         console.error("[checkout] Refusing before createOrder:", cartValidation);
-        setError(cartValidation.message);
+        setCartAvailabilityIssues(cartValidation.issues);
+        setError(firstIssue?.message ?? "Un produit de votre panier n'est plus disponible.");
         return;
       }
 
@@ -1128,7 +1308,9 @@ export default function CheckoutClient() {
           itemCount: items.length,
         });
       }
-      const message = getClientErrorMessage(err, "checkout");
+      const message =
+        extractCartAvailabilityMessageFromError(err, items) ??
+        getClientErrorMessage(err, "checkout");
       if (message === CLIENT_ERROR_MESSAGES.slotUnavailable) {
         setError(message);
         setStep(1);
@@ -1151,6 +1333,8 @@ export default function CheckoutClient() {
     useReward,
     isFullyCoveredReward,
     rewardPreview,
+    onlineOrdering.message,
+    onlineOrderingBlocked,
     termsAccepted,
     profile,
     profileLoading,
@@ -1200,6 +1384,10 @@ export default function CheckoutClient() {
               onNext={() => setStep(2)}
               isEmpty={isEmpty}
               onSlotChange={setSelectedSlotSelection}
+              onlineOrderingBlocked={onlineOrderingBlocked}
+              onlineOrderingMessage={onlineOrdering.message}
+              cartAvailabilityLoading={cartAvailabilityLoading}
+              cartAvailabilityIssues={cartAvailabilityIssues}
             />
           )}
 
@@ -1221,11 +1409,17 @@ export default function CheckoutClient() {
               customerProfile={profile}
               termsAccepted={termsAccepted}
               onTermsAcceptedChange={setTermsAccepted}
+              onlineOrderingBlocked={onlineOrderingBlocked}
+              onlineOrderingMessage={onlineOrdering.message}
+              cartAvailabilityLoading={cartAvailabilityLoading}
+              cartAvailabilityIssues={cartAvailabilityIssues}
             />
           )}
 
           {step === 3 && clientSecret && (
             <div className="flex flex-col gap-5">
+              <OnlineOrderingNotice message={onlineOrdering.message} />
+
               <div className="rounded-[18px] bg-[#1A1A1A] p-5 flex justify-between items-center">
                 <span className="text-[14px] text-[#A0A0A0]">Total à payer</span>
                 <span className="text-[20px] font-bold text-[#D4A053]">
@@ -1245,6 +1439,8 @@ export default function CheckoutClient() {
                 orderId={orderId ?? ""}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
+                disabled={false}
+                disabledMessage={null}
               />
             </div>
           )}

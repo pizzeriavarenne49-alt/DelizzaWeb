@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import type { Product } from "@/types";
 import type { SelectedOption } from "@/types/cart";
 import type { ProductOption } from "@/types/product-options";
@@ -71,6 +72,7 @@ export default function ProductCustomizeModal({
   onClose,
   onConfirm,
 }: ProductCustomizeModalProps) {
+  const onlineOrdering = useOnlineOrderingStatus();
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [quantity, setQuantity] = useState(1);
 
@@ -97,9 +99,10 @@ export default function ProductCustomizeModal({
   const unitPriceCents = product.price_cents + deltasCents;
   const totalTtcCents = unitPriceCents * quantity;
   const canAdd = areRequiredOptionsFilled(sortedOptions, selections);
+  const orderingBlocked = !onlineOrdering.canStartOrder;
 
   const handleConfirm = () => {
-    if (!canAdd) return;
+    if (!canAdd || orderingBlocked) return;
     const selectedOptions = buildSelectedOptions(sortedOptions, selections);
     onConfirm(selectedOptions, quantity);
   };
@@ -197,6 +200,7 @@ export default function ProductCustomizeModal({
                         <button
                           key={choice.id}
                           type="button"
+                          disabled={orderingBlocked}
                           onClick={() =>
                             option.type === "single"
                               ? handleSingleSelect(option.id, choice.id)
@@ -248,6 +252,7 @@ export default function ProductCustomizeModal({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
+                  disabled={orderingBlocked}
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   aria-label="Diminuer la quantité"
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-[#252525] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors text-[18px] font-bold leading-none"
@@ -259,6 +264,7 @@ export default function ProductCustomizeModal({
                 </span>
                 <button
                   type="button"
+                  disabled={orderingBlocked}
                   onClick={() => setQuantity((q) => q + 1)}
                   aria-label="Augmenter la quantité"
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D] text-[18px] font-bold leading-none"
@@ -271,13 +277,20 @@ export default function ProductCustomizeModal({
 
           {/* Sticky footer: Add button */}
           <div className="shrink-0 border-t border-white/5 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {orderingBlocked && onlineOrdering.message && (
+              <div className="mb-3 rounded-[14px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
+                {onlineOrdering.message}
+              </div>
+            )}
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={!canAdd}
+              disabled={!canAdd || orderingBlocked}
               className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
             >
-              {canAdd
+              {orderingBlocked
+                ? "Commande indisponible"
+                : canAdd
                 ? `Ajouter — ${formatPrice(totalTtcCents)} €`
                 : "Veuillez compléter les options obligatoires"}
             </button>

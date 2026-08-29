@@ -27,6 +27,10 @@ export const CLIENT_ERROR_MESSAGES = {
   minimumOrderAmount:
     "Ajoutez des articles pour atteindre le minimum de commande de 9 €.",
   paymentDeclined: "Le paiement a été refusé. Essayez une autre carte.",
+  onlineOrderingClosed:
+    "Les commandes en ligne sont actuellement fermées.",
+  onlineOrderingEmergency:
+    "Les commandes en ligne sont temporairement indisponibles. Merci de réessayer plus tard.",
   orderFailed:
     "Impossible de finaliser la commande. Réessayez dans quelques instants.",
   server: "Une erreur serveur est survenue. Réessayez dans quelques instants.",
@@ -77,6 +81,34 @@ function readTechnicalText(error: unknown): string {
     .toLowerCase();
 }
 
+function readUserFacingMessage(error: unknown): string | null {
+  const err = readErrorLike(error);
+  const details =
+    typeof err.details === "object" && err.details !== null
+      ? (err.details as Record<string, unknown>)
+      : null;
+
+  const messages = [
+    err.message,
+    details?.message,
+    details?.reason,
+  ].filter((value): value is string => typeof value === "string" && value.trim() !== "");
+
+  for (const message of messages) {
+    const trimmed = message.trim();
+    const normalized = trimmed.toLowerCase();
+    if (
+      normalized.includes("n'est plus disponible") ||
+      normalized.includes("est en rupture") ||
+      normalized.includes("une option sélectionnée")
+    ) {
+      return trimmed;
+    }
+  }
+
+  return null;
+}
+
 function hasAny(text: string, tokens: string[]): boolean {
   return tokens.some((token) => text.includes(token));
 }
@@ -87,6 +119,19 @@ export function getClientErrorMessage(
 ): string {
   const code = readCode(error);
   const text = readTechnicalText(error);
+  const userFacingMessage = readUserFacingMessage(error);
+
+  if (userFacingMessage) {
+    return userFacingMessage;
+  }
+
+  if (hasAny(text, ["online_ordering_emergency"])) {
+    return CLIENT_ERROR_MESSAGES.onlineOrderingEmergency;
+  }
+
+  if (hasAny(text, ["online_ordering_closed"])) {
+    return CLIENT_ERROR_MESSAGES.onlineOrderingClosed;
+  }
 
   if (hasAny(text, ["network", "fetch", "offline", "unavailable"])) {
     return CLIENT_ERROR_MESSAGES.network;
@@ -227,6 +272,17 @@ export function getClientErrorMessage(
     }
 
     if (hasAny(text, ["invalid-argument", "out-of-range"])) {
+      if (
+        hasAny(text, [
+          'choice "',
+          'option "',
+          "selectedlegacyoptions",
+          "selectedtemplateoptions",
+          "option template not found",
+        ])
+      ) {
+        return "Une option sélectionnée n'est plus disponible. Merci de modifier votre article.";
+      }
       return CLIENT_ERROR_MESSAGES.invalidCart;
     }
 

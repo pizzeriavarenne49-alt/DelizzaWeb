@@ -9,6 +9,7 @@ import type { SelectedOption } from "@/types/cart";
 import { formatPrice } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
+import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import { useToast } from "@/contexts/ToastContext";
 import ProductCustomizeModal from "@/components/ui/ProductCustomizeModal";
 
@@ -18,11 +19,18 @@ interface ProductCardProps {
 
 export default function ProductCard({ product }: ProductCardProps) {
   const { addItem, addItemWithOptions } = useCart();
+  const onlineOrdering = useOnlineOrderingStatus();
   const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const isUnavailable = product.manualOutOfStock === true;
+  const orderingDisabled = !onlineOrdering.canStartOrder;
+  const cannotOrder = isUnavailable || orderingDisabled;
 
   const handleAdd = () => {
+    if (orderingDisabled) {
+      showToast(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
+      return;
+    }
     if (isUnavailable) {
       showToast(`${product.name} est indisponible`);
       return;
@@ -38,6 +46,11 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   const handleModalConfirm = (selectedOptions: SelectedOption[], quantity: number) => {
+    if (orderingDisabled) {
+      showToast(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
+      setModalOpen(false);
+      return;
+    }
     if (isUnavailable) {
       showToast(`${product.name} est indisponible`);
       setModalOpen(false);
@@ -93,23 +106,29 @@ export default function ProductCard({ product }: ProductCardProps) {
               {product.options.length > 0 ? "dès " : ""}
               {formatPrice(product.price_cents)}&nbsp;€
             </span>
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={isUnavailable}
-              aria-label={isUnavailable ? `${product.name} indisponible` : `Ajouter ${product.name} au panier`}
+          <button
+            type="button"
+            onClick={handleAdd}
+              disabled={cannotOrder}
+              aria-label={
+                isUnavailable
+                  ? `${product.name} indisponible`
+                  : orderingDisabled
+                    ? "Commandes en ligne indisponibles"
+                    : `Ajouter ${product.name} au panier`
+              }
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full",
-                isUnavailable
+                cannotOrder
                   ? "bg-[#3A3A3A] text-[#8A8A8A] cursor-not-allowed"
                   : "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
                 "text-[18px] font-bold leading-none",
-                !isUnavailable && "shadow-[0_4px_20px_rgba(212,160,83,0.3)] active:scale-90",
+                !cannotOrder && "shadow-[0_4px_20px_rgba(212,160,83,0.3)] active:scale-90",
                 "transition-transform",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
               )}
             >
-              {isUnavailable ? "x" : "+"}
+              {cannotOrder ? "x" : "+"}
             </button>
           </div>
         </div>

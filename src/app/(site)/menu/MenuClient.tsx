@@ -5,6 +5,7 @@ import SearchBar from "@/components/ui/SearchBar";
 import Chip from "@/components/ui/Chip";
 import ProductCard from "@/components/ui/ProductCard";
 import SectionHeader from "@/components/ui/SectionHeader";
+import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import type { Product, Category } from "@/types";
 import { track } from "@/analytics";
 
@@ -37,6 +38,7 @@ function normalizeText(value: string) {
 export default function MenuClient({ categories, products }: MenuClientProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
+  const onlineOrdering = useOnlineOrderingStatus();
 
   useEffect(() => {
     track({ name: "view_menu" });
@@ -148,6 +150,12 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
   return (
     <div className="flex flex-col gap-5 px-4 pt-4">
       <h1 className="text-[22px] font-bold text-[#F5F5F5]">Menu</h1>
+
+      {!onlineOrdering.canStartOrder && (
+        <div className="rounded-[14px] border border-[#D4A053]/30 bg-[#D4A053]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
+          {onlineOrdering.message}
+        </div>
+      )}
 
       <SearchBar
         value={search}
