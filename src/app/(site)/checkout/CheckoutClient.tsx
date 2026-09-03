@@ -105,10 +105,22 @@ function findRewardPreview(
     config.pizzaCategoryId,
     ...config.eligiblePizzaCategoryIds,
   ]);
+  const sizeTemplateId = config.sizeTemplateId;
+  const classicSizeChoiceIds = new Set(config.classicSizeChoiceIds);
 
   let best: RewardPreview | null = null;
   items.forEach((item, index) => {
-    if (!item.categoryId || !eligibleCategoryIds.has(item.categoryId) || item.quantity <= 0) {
+    if (
+      item.formulaId ||
+      !item.categoryId ||
+      !eligibleCategoryIds.has(item.categoryId) ||
+      item.quantity <= 0
+    ) {
+      return;
+    }
+    const sizeOption = item.selectedOptions?.find((option) => option.optionId === sizeTemplateId);
+    const selectedSizeChoiceId = sizeOption?.choiceIds?.[0];
+    if (selectedSizeChoiceId && !classicSizeChoiceIds.has(selectedSizeChoiceId)) {
       return;
     }
 
@@ -789,7 +801,10 @@ function Step2Summary({
     useReward && rewardPreview
       ? Math.max(0, rewardPreview.totalAfterRewardCents)
       : total;
-  const minimumMessage = minimumOrderMessage(payableTotalCents);
+  const minimumMessage =
+    useReward && rewardPreview?.isFullyCovered
+      ? null
+      : minimumOrderMessage(payableTotalCents);
   const cartAvailabilityBlocked = cartAvailabilityIssues.length > 0;
   const issuesByCartKey = useMemo(
     () => new Map(cartAvailabilityIssues.map((issue) => [issue.cartKey, issue])),
@@ -1170,7 +1185,10 @@ export default function CheckoutClient() {
         useReward && rewardPreview
           ? Math.max(0, rewardPreview.totalAfterRewardCents)
           : getTotalCents();
-      const checkoutMinimumMessage = minimumOrderMessage(payableTotalCents);
+      const checkoutMinimumMessage =
+        useReward && rewardPreview?.isFullyCovered
+          ? null
+          : minimumOrderMessage(payableTotalCents);
       if (checkoutMinimumMessage) {
         setError(checkoutMinimumMessage);
         return;

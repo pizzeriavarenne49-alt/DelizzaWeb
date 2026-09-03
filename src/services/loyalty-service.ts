@@ -20,6 +20,8 @@ export interface LoyaltyConfig {
   rewardThreshold: number;
   pizzaCategoryId: string;
   eligiblePizzaCategoryIds: string[];
+  sizeTemplateId: string;
+  classicSizeChoiceIds: string[];
 }
 
 export interface LoyaltyState {
@@ -44,6 +46,8 @@ const defaultConfig: LoyaltyConfig = {
   rewardThreshold: DEFAULT_REWARD_THRESHOLD,
   pizzaCategoryId: DEFAULT_PIZZA_CATEGORY_ID,
   eligiblePizzaCategoryIds: [DEFAULT_PIZZA_CATEGORY_ID],
+  sizeTemplateId: "taille",
+  classicSizeChoiceIds: ["classique"],
 };
 
 function num(value: unknown, fallback: number): number {
@@ -81,11 +85,17 @@ function mapConfig(data: Record<string, unknown> | undefined): LoyaltyConfig {
   ];
   const eligiblePizzaCategoryIds =
     configuredCategoryIds.length > 0 ? configuredCategoryIds : [pizzaCategoryId];
+  const classicSizeChoiceIds = strArray(data.classicSizeChoiceIds);
 
   return {
     rewardThreshold: num(data.rewardThreshold ?? data.stampsRequired, DEFAULT_REWARD_THRESHOLD),
     pizzaCategoryId,
     eligiblePizzaCategoryIds,
+    sizeTemplateId: str(data.sizeTemplateId, defaultConfig.sizeTemplateId),
+    classicSizeChoiceIds:
+      classicSizeChoiceIds.length > 0
+        ? classicSizeChoiceIds
+        : defaultConfig.classicSizeChoiceIds,
   };
 }
 
