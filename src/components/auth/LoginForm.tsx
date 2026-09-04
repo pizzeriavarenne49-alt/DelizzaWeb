@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { getClientErrorMessage } from "@/lib/client-error-message";
@@ -11,36 +10,30 @@ import { normalizeFrenchPhone } from "@/lib/phone";
 
 interface LoginFormProps {
   onSuccess?: () => void;
+  initialMode?: AuthMode;
 }
 
-type AuthMode = "login" | "register" | "forgot" | "reset";
+type AuthMode = "login" | "register" | "forgot";
 
 const passwordResetSentMessage =
-  "Si un compte correspond a cette adresse, un email de reinitialisation vient d'etre envoye.";
+  "Si un compte Delizza est associé à cette adresse, vous recevrez un e-mail permettant de réinitialiser votre mot de passe.";
 
 function getFirebaseErrorCode(err: unknown): string | undefined {
   return typeof err === "object" && err !== null ? (err as { code?: string }).code : undefined;
 }
 
-export default function LoginForm({ onSuccess }: LoginFormProps) {
+export default function LoginForm({ onSuccess, initialMode = "login" }: LoginFormProps) {
   const {
     signIn,
     signUp,
     sendPasswordReset,
-    verifyResetCode,
-    confirmPasswordResetCode,
   } = useAuth();
-  const searchParams = useSearchParams();
-  const oobCode = searchParams.get("oobCode");
   const registrationEnabled = process.env.NEXT_PUBLIC_COMING_SOON !== "true";
-  const [mode, setMode] = useState<AuthMode>(
-    searchParams.get("mode") === "resetPassword" && oobCode ? "reset" : "login",
-  );
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,18 +43,14 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       ? "Connexion"
       : mode === "register"
         ? "Créer un compte"
-        : mode === "forgot"
-          ? "Mot de passe oublié"
-          : "Nouveau mot de passe";
+        : "Mot de passe oublié";
 
   const subtitle =
     mode === "login"
       ? "Connectez-vous pour commander"
       : mode === "register"
         ? "Inscrivez-vous pour commander"
-        : mode === "forgot"
-          ? "Saisissez l'adresse email de votre compte"
-          : "Choisissez un nouveau mot de passe";
+        : "Saisissez l'adresse e-mail de votre compte";
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -103,20 +92,13 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       } else if (mode === "forgot") {
         await sendPasswordReset(email);
         setSuccess(passwordResetSentMessage);
-      } else {
-        if (!oobCode) {
-          setError("Lien de réinitialisation invalide.");
-          return;
-        }
-        await verifyResetCode(oobCode);
-        await confirmPasswordResetCode(oobCode, newPassword);
-        setPassword("");
-        setNewPassword("");
-        setSuccess("Votre mot de passe a été modifié. Vous pouvez vous reconnecter.");
-        setMode("login");
       }
     } catch (err: unknown) {
-      if (mode === "forgot" && getFirebaseErrorCode(err) === "auth/user-not-found") {
+      const code = getFirebaseErrorCode(err);
+      if (
+        mode === "forgot" &&
+        (code === "auth/user-not-found" || code === "auth/invalid-email")
+      ) {
         setSuccess(passwordResetSentMessage);
         return;
       }
@@ -170,20 +152,18 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             </>
           )}
 
-          {mode !== "reset" && (
-            <Field label="Email" htmlFor="email">
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClassName}
-                placeholder="votre@email.com"
-              />
-            </Field>
-          )}
+          <Field label="Email" htmlFor="email">
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClassName}
+              placeholder="votre@email.com"
+            />
+          </Field>
 
           {(mode === "login" || mode === "register") && (
             <Field label="Mot de passe" htmlFor="password">
@@ -195,22 +175,6 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={inputClassName}
-                placeholder="••••••••"
-              />
-            </Field>
-          )}
-
-          {mode === "reset" && (
-            <Field label="Nouveau mot de passe" htmlFor="new-password">
-              <input
-                id="new-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
                 className={inputClassName}
                 placeholder="••••••••"
               />
@@ -251,9 +215,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                 ? "Se connecter"
                 : mode === "register"
                   ? "Créer mon compte"
-                  : mode === "forgot"
-                    ? "Envoyer le lien"
-                    : "Modifier le mot de passe"}
+                  : "Envoyer le lien"}
           </motion.button>
         </form>
 

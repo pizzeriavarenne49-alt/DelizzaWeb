@@ -387,6 +387,7 @@ interface Step1Props {
   onNext: () => void;
   isEmpty: boolean;
   onSlotChange: (selection: { dateKey: SlotDateKey; slot: ScheduledPickupOption | null }) => void;
+  refreshVersion: number;
   onlineOrderingBlocked: boolean;
   onlineOrderingMessage: string | null;
   cartAvailabilityLoading: boolean;
@@ -399,6 +400,7 @@ function Step1Fulfillment({
   onNext,
   isEmpty,
   onSlotChange,
+  refreshVersion,
   onlineOrderingBlocked,
   onlineOrderingMessage,
   cartAvailabilityLoading,
@@ -412,125 +414,264 @@ function Step1Fulfillment({
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [nextAsapSlot, setNextAsapSlot] = useState<{ dateKey: SlotDateKey; slot: ScheduledPickupOption } | null>(null);
   const previewRequestIdRef = useRef(0);
+  const selectedDateRef = useRef(selectedDate);
+  const selectedSlotRef = useRef<ScheduledPickupOption | null>(selectedSlot);
+  const stateRef = useRef(state);
+  const slotsRef = useRef(slots);
+  const nextAsapSlotRef = useRef(nextAsapSlot);
+  const onlineOrderingBlockedRef = useRef(onlineOrderingBlocked);
+  const onlineOrderingMessageRef = useRef(onlineOrderingMessage);
+  const refreshInFlightRef = useRef<Map<string, Promise<ScheduledPickupOption[]>>>(new Map());
   const cartAvailabilityBlocked = cartAvailabilityIssues.length > 0;
+  const pickupSlotStaleMessage = "Ce créneau vient d'être rempli. Merci d'en choisir un autre.";
 
-  const getSlotsForDate = useCallback(async (dateKey: SlotDateKey): Promise<ScheduledPickupOption[]> => {
-    if (items.length === 0) return [];
-    return previewScheduledPickupOptions({
-      appId: WL_APP_ID,
-      date: getServiceDateForKey(dateKey),
-      items,
-    });
-  }, [items]);
+  useEffect(() => {
+    selectedDateRef.current = selectedDate;
+  }, [selectedDate]);
 
-  const fetchSlots = useCallback(async (dateKey: SlotDateKey) => {
-    if (onlineOrderingBlocked) {
-      previewRequestIdRef.current += 1;
-      setSlots([]);
-      setNextAsapSlot(null);
-      setSelectedSlot(null);
-      setSlotsLoading(false);
-      setSlotsError(onlineOrderingMessage);
-      onSlotChange({ dateKey, slot: null });
-      if (state.scheduledTime) {
-        onChange({ ...state, scheduledTime: "" });
+  useEffect(() => {
+    selectedSlotRef.current = selectedSlot;
+  }, [selectedSlot]);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
+
+  useEffect(() => {
+    nextAsapSlotRef.current = nextAsapSlot;
+  }, [nextAsapSlot]);
+
+  useEffect(() => {
+    onlineOrderingBlockedRef.current = onlineOrderingBlocked;
+    onlineOrderingMessageRef.current = onlineOrderingMessage;
+  }, [onlineOrderingBlocked, onlineOrderingMessage]);
+
+  const loadPickupOptionsForDate = useCallback(
+    async (dateKey: SlotDateKey): Promise<ScheduledPickupOption[]> => {
+      const existing = refreshInFlightRef.current.get(dateKey);
+      if (existing) {
+        return existing;
       }
-      return;
-    }
-    const requestId = previewRequestIdRef.current + 1;
-    previewRequestIdRef.current = requestId;
-    setSlotsLoading(true);
-    setSlotsError(null);
-    try {
-      const result = await getSlotsForDate(dateKey);
-      if (previewRequestIdRef.current !== requestId) return;
-      setSlots(result);
-      if (selectedSlot) {
-        const liveSelection = result.find((slot) => isSameScheduledPickupOption(slot, selectedSlot));
-        if (!liveSelection) {
-          setSelectedSlot(null);
-          onSlotChange({ dateKey, slot: null });
-          onChange({ ...state, scheduledTime: "" });
-          setSlotsError(PICKUP_SLOT_UNAVAILABLE_MESSAGE);
+
+      if (items.length === 0) {
+        return [];
+      }
+
+      const requestId = ++previewRequestIdRef.current;
+      const promise = (async () => {
+        const result = await previewScheduledPickupOptions({
+          appId: WL_APP_ID,
+          date: getServiceDateForKey(dateKey),
+          items,
+        });
+        if (previewRequestIdRef.current !== requestId) {
+          return result;
+        }
+        return result;
+      })();
+
+      refreshInFlightRef.current.set(dateKey, promise);
+      try {
+        return await promise;
+      } finally {
+        if (refreshInFlightRef.current.get(dateKey) === promise) {
+          refreshInFlightRef.current.delete(dateKey);
         }
       }
-    } catch (err) {
-      if (previewRequestIdRef.current !== requestId) return;
-      console.error("[production-capacity-service] previewContinuousPickupWindows unexpected response or error:", err);
-      setSlotsError(getClientErrorMessage(err, "slots"));
-      setSlots([]);
-    } finally {
-      if (previewRequestIdRef.current === requestId) {
-        setSlotsLoading(false);
-      }
-    }
-  }, [getSlotsForDate, onChange, onSlotChange, onlineOrderingBlocked, onlineOrderingMessage, selectedSlot, state]);
+    },
+    [items],
+  );
 
-  const fetchNextAsapSlot = useCallback(async () => {
-    if (onlineOrderingBlocked) {
-      previewRequestIdRef.current += 1;
-      setSlots([]);
-      setNextAsapSlot(null);
-      setSelectedSlot(null);
-      setSlotsLoading(false);
-      setSlotsError(onlineOrderingMessage);
-      onSlotChange({ dateKey: selectedDate, slot: null });
-      if (state.scheduledTime) {
-        onChange({ ...state, scheduledTime: "" });
-      }
-      return;
-    }
-    const requestId = previewRequestIdRef.current + 1;
-    previewRequestIdRef.current = requestId;
-    setSlotsLoading(true);
-    setSlotsError(null);
-    try {
-      const todaySlots = await getSlotsForDate("today");
-      if (previewRequestIdRef.current !== requestId) return;
-      setSlots(todaySlots);
-      const todayNextSlot = findNextAvailableSlot(todaySlots);
-      if (todayNextSlot) {
-        setNextAsapSlot({ dateKey: "today", slot: todayNextSlot });
-        return;
-      }
+  const refreshSchedulePickupOptions = useCallback(
+    async (dateKey: SlotDateKey, { preserveVisibleSlotsOnError = true } = {}): Promise<ScheduledPickupOption[]> => {
+      const normalizedDate = dateKey;
+      const requestId = ++previewRequestIdRef.current;
+      setSlotsLoading(true);
+      setSlotsError(null);
 
-      const tomorrowSlots = await getSlotsForDate("tomorrow");
-      if (previewRequestIdRef.current !== requestId) return;
-      const tomorrowNextSlot = findNextAvailableSlot(tomorrowSlots);
-      if (tomorrowNextSlot) {
-        setNextAsapSlot({ dateKey: "tomorrow", slot: tomorrowNextSlot });
-      } else {
-        setNextAsapSlot(null);
+      try {
+        const result = await loadPickupOptionsForDate(normalizedDate);
+        if (previewRequestIdRef.current !== requestId) {
+          return result;
+        }
+
+        if (selectedDateRef.current === normalizedDate) {
+          setSlots(result);
+
+          const currentSelection = selectedSlotRef.current;
+          if (currentSelection) {
+            const liveSelection = result.find((slot) => isSameScheduledPickupOption(slot, currentSelection));
+            const selectionUnavailable =
+              !liveSelection ||
+              liveSelection.status === "full" ||
+              liveSelection.remainingUnits <= 0;
+
+            if (selectionUnavailable) {
+              setSelectedSlot(null);
+              onSlotChange({ dateKey: normalizedDate, slot: null });
+              setSlotsError(pickupSlotStaleMessage);
+              onChange({ ...stateRef.current, scheduledTime: "" });
+            } else {
+              setSelectedSlot(liveSelection);
+              onSlotChange({ dateKey: normalizedDate, slot: liveSelection });
+              setSlotsError((current) => (current === pickupSlotStaleMessage ? null : current));
+            }
+          }
+        }
+
+        return result;
+      } catch (err) {
+        if (previewRequestIdRef.current !== requestId) {
+          return slotsRef.current;
+        }
+
+        console.error("[production-capacity-service] previewContinuousPickupWindows unexpected response or error:", err);
+        const message = getClientErrorMessage(err, "slots");
+        setSlotsError(message);
+        if (!preserveVisibleSlotsOnError || slotsRef.current.length === 0) {
+          setSlots([]);
+        }
+        return slotsRef.current;
+      } finally {
+        if (previewRequestIdRef.current === requestId) {
+          setSlotsLoading(false);
+        }
       }
-    } catch (err) {
-      if (previewRequestIdRef.current !== requestId) return;
-      console.error("[production-capacity-service] previewContinuousPickupWindows unexpected response or error:", err);
-      setSlotsError(getClientErrorMessage(err, "slots"));
-      setSlots([]);
-      setNextAsapSlot(null);
-    } finally {
-      if (previewRequestIdRef.current === requestId) {
-        setSlotsLoading(false);
+    },
+    [loadPickupOptionsForDate, onChange, onSlotChange],
+  );
+
+  const refreshAsapPickupOptions = useCallback(
+    async ({ preserveVisibleSlotsOnError = true } = {}): Promise<void> => {
+      const requestId = ++previewRequestIdRef.current;
+      setSlotsLoading(true);
+      setSlotsError(null);
+
+      try {
+        const todaySlots = await loadPickupOptionsForDate("today");
+        if (previewRequestIdRef.current !== requestId) return;
+        setSlots(todaySlots);
+        const todayNextSlot = findNextAvailableSlot(todaySlots);
+        if (todayNextSlot) {
+          setNextAsapSlot({ dateKey: "today", slot: todayNextSlot });
+          return;
+        }
+
+        const tomorrowSlots = await loadPickupOptionsForDate("tomorrow");
+        if (previewRequestIdRef.current !== requestId) return;
+        const tomorrowNextSlot = findNextAvailableSlot(tomorrowSlots);
+        if (tomorrowNextSlot) {
+          setNextAsapSlot({ dateKey: "tomorrow", slot: tomorrowNextSlot });
+        } else {
+          setNextAsapSlot(null);
+        }
+      } catch (err) {
+        if (previewRequestIdRef.current !== requestId) return;
+        console.error("[production-capacity-service] previewContinuousPickupWindows unexpected response or error:", err);
+        setSlotsError(getClientErrorMessage(err, "slots"));
+        if (!preserveVisibleSlotsOnError || slotsRef.current.length === 0) {
+          setSlots([]);
+          setNextAsapSlot(null);
+        }
+      } finally {
+        if (previewRequestIdRef.current === requestId) {
+          setSlotsLoading(false);
+        }
       }
-    }
-  }, [getSlotsForDate, onChange, onSlotChange, onlineOrderingBlocked, onlineOrderingMessage, selectedDate, state]);
+    },
+    [loadPickupOptionsForDate],
+  );
 
   // Fetch slots for schedule mode and compute the next slot for ASAP mode
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      if (state.isAsap) {
-        fetchNextAsapSlot();
+      if (onlineOrderingBlockedRef.current) {
+        setSlots([]);
+        setSelectedSlot(null);
+        setNextAsapSlot(null);
+        setSlotsLoading(false);
+        setSlotsError(onlineOrderingMessageRef.current);
+        onSlotChange({ dateKey: selectedDateRef.current, slot: null });
+        if (stateRef.current.scheduledTime) {
+          onChange({ ...stateRef.current, scheduledTime: "" });
+        }
         return;
       }
+
+      if (state.isAsap) {
+        void refreshAsapPickupOptions();
+        return;
+      }
+
       setNextAsapSlot(null);
-      fetchSlots(selectedDate);
+      void refreshSchedulePickupOptions(selectedDateRef.current);
     }, 250);
 
     return () => {
       window.clearTimeout(timeout);
       previewRequestIdRef.current += 1;
     };
-  }, [state.isAsap, selectedDate, fetchSlots, fetchNextAsapSlot]);
+  }, [onChange, onSlotChange, refreshAsapPickupOptions, refreshSchedulePickupOptions, refreshVersion, selectedDate, state.isAsap]);
+
+  useEffect(() => {
+    if (onlineOrderingBlocked) {
+      return;
+    }
+
+    const refreshVisiblePickupOptions = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      if (stateRef.current.isAsap) {
+        void refreshAsapPickupOptions();
+        return;
+      }
+      void refreshSchedulePickupOptions(selectedDateRef.current);
+    };
+
+    const handleFocus = () => {
+      refreshVisiblePickupOptions();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshVisiblePickupOptions();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [onlineOrderingBlocked, refreshAsapPickupOptions, refreshSchedulePickupOptions]);
+
+  useEffect(() => {
+    if (onlineOrderingBlocked || document.visibilityState !== "visible") {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      if (stateRef.current.isAsap) {
+        void refreshAsapPickupOptions();
+        return;
+      }
+      void refreshSchedulePickupOptions(selectedDateRef.current);
+    }, 12000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [onlineOrderingBlocked, refreshAsapPickupOptions, refreshSchedulePickupOptions]);
 
   const handleDateChange = (dateKey: SlotDateKey) => {
     setSelectedDate(dateKey);
@@ -660,7 +801,7 @@ function Step1Fulfillment({
                 <p className="text-[13px] text-[#E74C3C]">{slotsError}</p>
                 <button
                   type="button"
-                  onClick={() => fetchSlots(selectedDate)}
+                  onClick={() => void refreshSchedulePickupOptions(selectedDate)}
                   disabled={onlineOrderingBlocked}
                   className="text-[12px] text-[#D4A053] underline whitespace-nowrap"
                 >
@@ -1030,6 +1171,7 @@ export default function CheckoutClient() {
     dateKey: SlotDateKey;
     slot: ScheduledPickupOption | null;
   } | null>(null);
+  const [pickupRefreshVersion, setPickupRefreshVersion] = useState(0);
 
   // Payment state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -1329,8 +1471,34 @@ export default function CheckoutClient() {
       const message =
         extractCartAvailabilityMessageFromError(err, items) ??
         getClientErrorMessage(err, "checkout");
-      if (message === CLIENT_ERROR_MESSAGES.slotUnavailable) {
-        setError(message);
+      const errorText = (() => {
+        if (typeof err !== "object" || err === null) return "";
+        const details = (err as { details?: unknown }).details;
+        const detailsText =
+          typeof details === "object" && details !== null
+            ? [
+                (details as { code?: unknown }).code,
+                (details as { reason?: unknown }).reason,
+                (details as { message?: unknown }).message,
+              ]
+                .filter((value): value is string => typeof value === "string")
+                .join(" ")
+            : "";
+        return [
+          (err as { code?: unknown }).code,
+          (err as { message?: unknown }).message,
+          detailsText,
+        ]
+          .filter((value): value is string => typeof value === "string")
+          .join(" ")
+          .toLowerCase();
+      })();
+      const capacityConflict = errorText.includes("production_capacity_conflict");
+      if (capacityConflict || message === CLIENT_ERROR_MESSAGES.slotUnavailable) {
+        setSelectedSlotSelection(null);
+        setFulfillment({ ...fulfillment, scheduledTime: "" });
+        setError("Ce créneau vient d'être rempli. Merci d'en choisir un autre.");
+        setPickupRefreshVersion((current) => current + 1);
         setStep(1);
       } else {
         setError(message);
@@ -1402,6 +1570,7 @@ export default function CheckoutClient() {
               onNext={() => setStep(2)}
               isEmpty={isEmpty}
               onSlotChange={setSelectedSlotSelection}
+              refreshVersion={pickupRefreshVersion}
               onlineOrderingBlocked={onlineOrderingBlocked}
               onlineOrderingMessage={onlineOrdering.message}
               cartAvailabilityLoading={cartAvailabilityLoading}

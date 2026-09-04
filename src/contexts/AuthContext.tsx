@@ -34,15 +34,20 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const PASSWORD_RESET_AUTH_ROUTE = "/auth";
+const PASSWORD_RESET_AUTH_ROUTE = "/auth/action";
 
 function buildPasswordResetActionSettings(origin: string): ActionCodeSettings {
-  const authRouteUrl = new URL(PASSWORD_RESET_AUTH_ROUTE, origin);
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const baseUrl =
+    process.env.NODE_ENV === "production" && configuredSiteUrl
+      ? configuredSiteUrl
+      : origin;
+  const authRouteUrl = new URL(PASSWORD_RESET_AUTH_ROUTE, baseUrl);
   authRouteUrl.search = "";
   authRouteUrl.hash = "";
 
   return {
-    // This is the continueUrl; Firebase Auth Console must use this route as the password-reset Action URL too.
+    // Firebase also needs this path configured as the custom Action URL in Authentication templates.
     url: authRouteUrl.toString(),
     handleCodeInApp: false,
   };

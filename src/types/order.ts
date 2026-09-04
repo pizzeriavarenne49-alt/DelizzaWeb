@@ -50,7 +50,7 @@ export type FulfillmentData =
       paymentTiming?: PaymentTiming;
     });
 
-/** Mirrors the slot structure returned by the WLHORIZON `getAvailableSlots` Cloud Function */
+/** Mirrors the pickup option structure returned by WLHORIZON Capacity V2 previews. */
 export interface TimeSlotInfo {
   start: string;
   end: string;

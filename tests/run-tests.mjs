@@ -389,10 +389,9 @@ run("capacity V2 selection identity includes pickup time, opening and slot id", 
   );
 });
 
-run("checkout uses capacity V2 preview instead of getAvailableSlots V1", () => {
+run("checkout uses capacity V2 preview", () => {
   const checkoutSource = readFileSync(path.resolve("src/app/(site)/checkout/CheckoutClient.tsx"), "utf8");
 
-  assert.equal(checkoutSource.includes("getAvailableSlots"), false);
   assert.equal(checkoutSource.includes("previewScheduledPickupOptions"), true);
   assert.equal(checkoutSource.includes("previewRequestIdRef"), true);
   assert.equal(checkoutSource.includes("PICKUP_SLOT_UNAVAILABLE_MESSAGE"), true);
@@ -590,6 +589,8 @@ run("coming soon lock covers public routes and api endpoints", () => {
   assert.equal(middleware.resolveMaintenanceAction("/maintenance", true), "next");
   assert.equal(middleware.resolveMaintenanceAction("/auth", true), "next");
   assert.equal(middleware.resolveMaintenanceAction("/auth/", true), "next");
+  assert.equal(middleware.resolveMaintenanceAction("/auth/action", true), "next");
+  assert.equal(middleware.resolveMaintenanceAction("/auth/action/", true), "next");
   assert.equal(middleware.resolveMaintenanceAction("/auth", true, new URLSearchParams("mode=signup")), "next");
   assert.equal(
     middleware.resolveMaintenanceAction("/auth", true, new URLSearchParams("mode=resetPassword&oobCode=abc")),

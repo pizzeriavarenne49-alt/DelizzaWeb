@@ -14,8 +14,10 @@ function normalizeAuthPath(pathname: string): string {
   return pathname !== "/" && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
 
-export function shouldBypassMaintenance(pathname: string, _searchParams?: URLSearchParams): boolean {
-  const authHandlerAllowed = normalizeAuthPath(pathname) === "/auth";
+export function shouldBypassMaintenance(pathname: string): boolean {
+  const normalizedPathname = normalizeAuthPath(pathname);
+  const authHandlerAllowed =
+    normalizedPathname === "/auth" || normalizedPathname === "/auth/action";
 
   return (
     authHandlerAllowed ||
@@ -48,7 +50,7 @@ export function resolveMaintenanceAction(
   maintenanceEnabled: boolean,
   searchParams?: URLSearchParams,
 ): "next" | "api" | "maintenance" {
-  if (!maintenanceEnabled || shouldBypassMaintenance(pathname, searchParams)) {
+  if (!maintenanceEnabled || shouldBypassMaintenance(pathname)) {
     return "next";
   }
 
