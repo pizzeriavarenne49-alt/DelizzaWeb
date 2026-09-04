@@ -461,17 +461,12 @@ function Step1Fulfillment({
         return [];
       }
 
-      const requestId = ++previewRequestIdRef.current;
       const promise = (async () => {
-        const result = await previewScheduledPickupOptions({
+        return previewScheduledPickupOptions({
           appId: WL_APP_ID,
           date: getServiceDateForKey(dateKey),
           items,
         });
-        if (previewRequestIdRef.current !== requestId) {
-          return result;
-        }
-        return result;
       })();
 
       refreshInFlightRef.current.set(dateKey, promise);
