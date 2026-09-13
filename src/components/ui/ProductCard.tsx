@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
 import Image from "next/image";
@@ -45,6 +45,22 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
+  const openDetails = () => {
+    setModalOpen(true);
+  };
+
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openDetails();
+    }
+  };
+
+  const handleAddClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    handleAdd();
+  };
+
   const handleModalConfirm = (selectedOptions: SelectedOption[], quantity: number) => {
     if (orderingDisabled) {
       showToast(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
@@ -66,7 +82,12 @@ export default function ProductCard({ product }: ProductCardProps) {
     <>
       <motion.div
         whileTap={{ scale: 0.97 }}
-        className="rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col"
+        role="button"
+        tabIndex={0}
+        onClick={openDetails}
+        onKeyDown={handleCardKeyDown}
+        aria-label={`Voir le détail de ${product.name}`}
+        className="rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col cursor-pointer transition-colors hover:bg-[#202020] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]"
       >
         {/* Image */}
         <div className="relative aspect-[4/3] bg-[#252525]">
@@ -106,30 +127,35 @@ export default function ProductCard({ product }: ProductCardProps) {
               {product.options.length > 0 ? "dès " : ""}
               {formatPrice(product.price_cents)}&nbsp;€
             </span>
-          <button
-            type="button"
-            onClick={handleAdd}
-              disabled={cannotOrder}
-              aria-label={
-                isUnavailable
-                  ? `${product.name} indisponible`
-                  : orderingDisabled
-                    ? "Commandes en ligne indisponibles"
-                    : `Ajouter ${product.name} au panier`
-              }
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full",
-                cannotOrder
-                  ? "bg-[#3A3A3A] text-[#8A8A8A] cursor-not-allowed"
-                  : "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
-                "text-[18px] font-bold leading-none",
-                !cannotOrder && "shadow-[0_4px_20px_rgba(212,160,83,0.3)] active:scale-90",
-                "transition-transform",
-                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
-              )}
+            <div
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
             >
-              {cannotOrder ? "x" : "+"}
-            </button>
+              <button
+                type="button"
+                onClick={handleAddClick}
+                disabled={cannotOrder}
+                aria-label={
+                  isUnavailable
+                    ? `${product.name} indisponible`
+                    : orderingDisabled
+                      ? "Commandes en ligne indisponibles"
+                      : `Ajouter ${product.name} au panier`
+                }
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full",
+                  cannotOrder
+                    ? "bg-[#3A3A3A] text-[#8A8A8A] cursor-not-allowed"
+                    : "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
+                  "text-[18px] font-bold leading-none",
+                  !cannotOrder && "shadow-[0_4px_20px_rgba(212,160,83,0.3)] active:scale-90",
+                  "transition-transform",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
+                )}
+              >
+                {cannotOrder ? "x" : "+"}
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>

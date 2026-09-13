@@ -21,6 +21,7 @@ interface StripeCheckoutFormProps {
   onError: (error: unknown) => void;
   disabled?: boolean;
   disabledMessage?: string | null;
+  disabledCode?: "ONLINE_ORDERING_CLOSED" | "ONLINE_ORDERING_EMERGENCY";
 }
 
 function StripeCheckoutForm({
@@ -30,6 +31,7 @@ function StripeCheckoutForm({
   onError,
   disabled = false,
   disabledMessage = null,
+  disabledCode = "ONLINE_ORDERING_CLOSED",
 }: StripeCheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -40,10 +42,10 @@ function StripeCheckoutForm({
     if (!stripe || !elements) return;
     if (submitting) return;
     if (disabled) {
-      const error = new Error("ONLINE_ORDERING_EMERGENCY");
+      const error = new Error(disabledCode);
       Object.assign(error, {
-        code: "ONLINE_ORDERING_EMERGENCY",
-        details: { code: "ONLINE_ORDERING_EMERGENCY", message: disabledMessage },
+        code: disabledCode,
+        details: { code: disabledCode, message: disabledMessage },
       });
       onError(error);
       return;
@@ -109,6 +111,7 @@ interface StripeCheckoutProps {
   onError: (error: unknown) => void;
   disabled?: boolean;
   disabledMessage?: string | null;
+  disabledCode?: "ONLINE_ORDERING_CLOSED" | "ONLINE_ORDERING_EMERGENCY";
 }
 
 export default function StripeCheckout({
@@ -119,6 +122,7 @@ export default function StripeCheckout({
   onError,
   disabled = false,
   disabledMessage = null,
+  disabledCode = "ONLINE_ORDERING_CLOSED",
 }: StripeCheckoutProps) {
   return (
     <Elements
@@ -146,6 +150,7 @@ export default function StripeCheckout({
         onError={onError}
         disabled={disabled}
         disabledMessage={disabledMessage}
+        disabledCode={disabledCode}
       />
     </Elements>
   );

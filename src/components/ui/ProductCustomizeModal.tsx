@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
@@ -100,12 +100,26 @@ export default function ProductCustomizeModal({
   const totalTtcCents = unitPriceCents * quantity;
   const canAdd = areRequiredOptionsFilled(sortedOptions, selections);
   const orderingBlocked = !onlineOrdering.canStartOrder;
+  const hasOptions = sortedOptions.length > 0;
+  const hasIngredients = product.ingredients.length > 0;
+  const hasTags = product.tags.length > 0;
 
   const handleConfirm = () => {
     if (!canAdd || orderingBlocked) return;
     const selectedOptions = buildSelectedOptions(sortedOptions, selections);
     onConfirm(selectedOptions, quantity);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   return (
     <AnimatePresence>
@@ -116,22 +130,22 @@ export default function ProductCustomizeModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
           className="fixed inset-0 z-[9990] bg-black/70 backdrop-blur-sm"
           aria-hidden="true"
         />
 
-        {/* Bottom sheet */}
+        {/* Product detail sheet */}
+        <div className="fixed inset-0 z-[9991] flex items-end justify-center px-0 md:items-center md:px-4 pointer-events-none">
         <motion.div
           key="modal-sheet"
-          initial={{ y: "100%" }}
-          animate={{ y: 0 }}
-          exit={{ y: "100%" }}
+          initial={{ opacity: 0, y: 32, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 32, scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="fixed bottom-0 left-0 right-0 z-[9991] flex flex-col max-h-[92dvh] rounded-t-[24px] bg-[#1A1A1A] shadow-[0_-8px_40px_rgba(0,0,0,0.6)]"
+          className="pointer-events-auto flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[24px] bg-[#1A1A1A] shadow-[0_-8px_40px_rgba(0,0,0,0.6)] md:max-h-[88dvh] md:max-w-[720px] md:rounded-[22px] md:shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
           aria-modal="true"
           role="dialog"
-          aria-label={`Personnaliser ${product.name}`}
+          aria-label={`Détail de ${product.name}`}
         >
           {/* Drag handle */}
           <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -151,27 +165,74 @@ export default function ProductCustomizeModal({
           </button>
 
           {/* Scrollable content */}
-          <div className="overflow-y-auto overscroll-contain flex-1 px-5 pb-4">
+          <div className="overflow-y-auto overscroll-contain flex-1 px-5 pb-4 md:px-6">
             {/* Product header */}
-            <div className="flex gap-4 py-4 border-b border-white/5">
-              <div className="relative h-20 w-20 shrink-0 rounded-[14px] overflow-hidden bg-[#252525]">
+            <div className="border-b border-white/5 py-4">
+              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[18px] bg-[#252525]">
                 <Image
                   src={product.image}
                   alt={product.name}
                   fill
-                  sizes="80px"
+                  sizes="(max-width: 768px) 100vw, 680px"
                   className="object-cover"
+                  priority
                 />
               </div>
-              <div className="flex flex-col justify-center gap-1">
-                <h2 className="text-[17px] font-bold text-[#F5F5F5] leading-tight">
+              <div className="mt-4 flex flex-col gap-2">
+                <h2 className="pr-10 text-[22px] font-bold leading-tight text-[#F5F5F5] md:text-[24px]">
                   {product.name}
                 </h2>
-                <p className="text-[14px] font-semibold text-[#D4A053]">
-                  À partir de {formatPrice(product.price_cents)}&nbsp;€
+                <p className="text-[16px] font-semibold text-[#D4A053]">
+                  {hasOptions ? "À partir de " : ""}
+                  {formatPrice(product.price_cents)}&nbsp;€
                 </p>
+                {product.description_short && (
+                  <p className="text-[14px] leading-relaxed text-[#CFCFCF]">
+                    {product.description_short}
+                  </p>
+                )}
               </div>
             </div>
+
+            {(hasIngredients || hasTags) && (
+              <div className="mt-5 flex flex-col gap-4 border-b border-white/5 pb-5">
+                {hasIngredients && (
+                  <section aria-labelledby={`ingredients-${product.id}`}>
+                    <h3 id={`ingredients-${product.id}`} className="text-[14px] font-bold text-[#F5F5F5]">
+                      Ingrédients
+                    </h3>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {product.ingredients.map((ingredient) => (
+                        <span
+                          key={ingredient}
+                          className="rounded-full border border-white/10 bg-[#252525] px-3 py-1.5 text-[13px] text-[#D8D8D8]"
+                        >
+                          {ingredient}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {hasTags && (
+                  <section aria-labelledby={`infos-${product.id}`}>
+                    <h3 id={`infos-${product.id}`} className="text-[14px] font-bold text-[#F5F5F5]">
+                      Informations
+                    </h3>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {product.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full bg-[#D4A053]/12 px-3 py-1.5 text-[13px] text-[#E8C078]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
 
             {/* Options */}
             {sortedOptions.map((option) => {
@@ -296,6 +357,7 @@ export default function ProductCustomizeModal({
             </button>
           </div>
         </motion.div>
+        </div>
       </>
     </AnimatePresence>
   );

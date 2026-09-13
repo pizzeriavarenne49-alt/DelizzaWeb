@@ -9,6 +9,7 @@ const middleware = loadTsModule(path.resolve("middleware.ts"));
 const robots = loadTsModule(path.resolve("src/app/robots.ts"));
 const sitemap = loadTsModule(path.resolve("src/app/sitemap.ts"));
 const checkoutAttempt = loadTsModule(path.resolve("src/services/checkout-attempt.ts"));
+const clientErrorMessage = loadTsModule(path.resolve("src/lib/client-error-message.ts"));
 
 function run(name, fn) {
   try {
@@ -541,14 +542,33 @@ run("checkout source uses stable idempotency and submission lock", () => {
   const checkoutSource = readFileSync(path.resolve("src/app/(site)/checkout/CheckoutClient.tsx"), "utf8");
   const orderServiceSource = readFileSync(path.resolve("src/services/order-service.ts"), "utf8");
   const confirmationSource = readFileSync(path.resolve("src/app/(site)/order-confirmation/OrderConfirmationClient.tsx"), "utf8");
+  const stripeCheckoutSource = readFileSync(path.resolve("src/components/checkout/StripeCheckout.tsx"), "utf8");
 
   assert.equal(orderServiceSource.includes("Date.now()"), false);
   assert.equal(orderServiceSource.includes("randomUUID().slice"), false);
   assert.equal(checkoutSource.includes("submittingRef.current"), true);
   assert.equal(checkoutSource.includes("getOrCreateCheckoutAttempt"), true);
   assert.equal(checkoutSource.includes("clearCheckoutAttempt"), false);
+  assert.equal(checkoutSource.includes("card_with_loyalty_reward"), true);
+  assert.equal(checkoutSource.includes("disabledCode={"), true);
+  assert.equal(stripeCheckoutSource.includes("disabledCode"), true);
+  assert.equal(stripeCheckoutSource.includes("ONLINE_ORDERING_CLOSED"), true);
   assert.equal(confirmationSource.includes("clearCheckoutAttemptForOrder"), true);
-  assert.equal(confirmationSource.includes('order?.paymentStatus === "paid"'), true);
+  assert.equal(confirmationSource.includes("paymentStatus"), true);
+});
+
+run("payment error mapping keeps closed online ordering out of card declines", () => {
+  const closedError = { code: "ONLINE_ORDERING_CLOSED", message: "ONLINE_ORDERING_CLOSED" };
+  const emergencyError = { code: "ONLINE_ORDERING_EMERGENCY", message: "ONLINE_ORDERING_EMERGENCY" };
+
+  assert.equal(
+    clientErrorMessage.getClientErrorMessage(closedError, "payment"),
+    clientErrorMessage.CLIENT_ERROR_MESSAGES.onlineOrderingClosed,
+  );
+  assert.equal(
+    clientErrorMessage.getClientErrorMessage(emergencyError, "payment"),
+    clientErrorMessage.CLIENT_ERROR_MESSAGES.onlineOrderingEmergency,
+  );
 });
 
 run("confirmation source reads backend status and does not trust Stripe redirect status", () => {

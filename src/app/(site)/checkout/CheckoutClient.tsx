@@ -1392,6 +1392,11 @@ export default function CheckoutClient() {
         rewardPreview.itemIndex >= 0
           ? rewardPreview.itemIndex
           : undefined;
+      const paymentMethod = isFullyCoveredReward
+        ? "loyalty_reward"
+        : useReward
+          ? "card_with_loyalty_reward"
+          : "card";
       const customerName = profile?.displayName?.trim() || user.displayName || "";
       const customerPhone = profile?.phone?.trim() || "";
       const fingerprint = buildCheckoutAttemptFingerprint({
@@ -1418,7 +1423,7 @@ export default function CheckoutClient() {
         // Temporary placeholder — the real paymentIntentId is set server-side
         // by createPaymentIntent and updated via Stripe webhook on completion.
         paymentId: `web_pending_${attempt.idempotencyKey}`,
-        paymentMethod: "card",
+        paymentMethod,
         source: "web",
         idempotencyKey: attempt.idempotencyKey,
         customerName,
@@ -1621,8 +1626,13 @@ export default function CheckoutClient() {
                 orderId={orderId ?? ""}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
-                disabled={false}
-                disabledMessage={null}
+                disabled={onlineOrderingBlocked}
+                disabledMessage={onlineOrdering.message}
+                disabledCode={
+                  onlineOrdering.isEmergency
+                    ? "ONLINE_ORDERING_EMERGENCY"
+                    : "ONLINE_ORDERING_CLOSED"
+                }
               />
             </div>
           )}
