@@ -1,6 +1,16 @@
 import type { Product } from "@/types";
 
-export const products: Product[] = [
+type MockProduct = Omit<
+  Product,
+  | "baseIngredientIds"
+  | "availableSupplementIds"
+  | "allowIngredientRemoval"
+  | "appliedTemplateIds"
+  | "templatePriceOverrides"
+  | "ingredientLibrary"
+>;
+
+const mockProducts: MockProduct[] = [
   {
     id: "p1",
     name: "Margherita Classica",
@@ -124,3 +134,13 @@ export const products: Product[] = [
     options: [],
   },
 ];
+
+export const products: Product[] = mockProducts.map((product) => ({
+  ...product,
+  baseIngredientIds: [],
+  availableSupplementIds: [],
+  allowIngredientRemoval: false,
+  appliedTemplateIds: [],
+  templatePriceOverrides: {},
+  ingredientLibrary: [],
+}));

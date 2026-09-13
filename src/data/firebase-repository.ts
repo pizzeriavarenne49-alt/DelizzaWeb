@@ -12,7 +12,7 @@
  */
 
 import { FieldPath } from "firebase-admin/firestore";
-import type { Product, Category, HeroSlide, Offer } from "@/types";
+import type { Product, Category, HeroSlide, Offer, ProductIngredient } from "@/types";
 import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
 import type { DataRepository } from "@/data/repository";
 import { buildFeaturedProducts } from "@/data/repository";
@@ -85,11 +85,40 @@ function bool(v: unknown, fallback = false): boolean {
   return typeof v === "boolean" ? v : fallback;
 }
 function arr(v: unknown): string[] {
-  return Array.isArray(v) ? (v as string[]) : [];
+  return Array.isArray(v) ? v.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
 function optBool(v: unknown): boolean | null {
   return typeof v === "boolean" ? v : null;
+}
+
+function money(raw: unknown): { amountCents: number; currency: string } {
+  if (typeof raw !== "object" || raw === null) {
+    return { amountCents: 0, currency: "EUR" };
+  }
+  const value = raw as Record<string, unknown>;
+  return {
+    amountCents: typeof value.amountCents === "number" ? value.amountCents : 0,
+    currency: str(value.currency, "EUR"),
+  };
+}
+
+function parseTemplatePriceOverrides(raw: unknown): Record<string, Record<string, number>> {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).map(([templateId, choices]) => {
+      if (typeof choices !== "object" || choices === null || Array.isArray(choices)) {
+        return [templateId, {}];
+      }
+      return [
+        templateId,
+        Object.fromEntries(
+          Object.entries(choices as Record<string, unknown>)
+            .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+        ),
+      ];
+    }),
+  );
 }
 
 function isPublicCategoryDoc(data: FirestoreDoc): boolean {
@@ -240,18 +269,12 @@ function parseOptions(raw: unknown): ProductOption[] {
             .map((c): OptionChoice | null => {
               if (typeof c !== "object" || c === null) return null;
               const ch = c as Record<string, unknown>;
-              const modifier =
-                typeof ch.priceModifier === "object" && ch.priceModifier !== null
-                  ? (ch.priceModifier as Record<string, unknown>)
-                  : undefined;
               return {
                 id: str(ch.id),
                 name: str(ch.name),
-                priceModifier: {
-                  amountCents: typeof modifier?.amountCents === "number" ? modifier.amountCents : 0,
-                  currency: str(modifier?.currency, "EUR"),
-                },
+                priceModifier: money(ch.priceModifier),
                 isActive: bool(ch.isActive, false),
+                ...(ch.absolutePrice ? { absolutePrice: money(ch.absolutePrice) } : {}),
               };
             })
             .filter((c): c is OptionChoice => c !== null)
@@ -264,6 +287,7 @@ function parseOptions(raw: unknown): ProductOption[] {
         required: bool(o.required, false),
         choices,
         order: num(o.order, 0),
+        pricingMode: o.pricingMode === "absolute" ? "absolute" : "delta",
       };
     })
     .filter((opt): opt is ProductOption => opt !== null)
@@ -283,18 +307,12 @@ function mapTemplateToOption(id: string, data: FirestoreDoc, order: number): Pro
         .map((c): OptionChoice | null => {
           if (typeof c !== "object" || c === null) return null;
           const ch = c as Record<string, unknown>;
-          const modifier =
-            typeof ch.priceModifier === "object" && ch.priceModifier !== null
-              ? (ch.priceModifier as Record<string, unknown>)
-              : undefined;
           return {
             id: str(ch.id),
             name: str(ch.name),
-            priceModifier: {
-              amountCents: typeof modifier?.amountCents === "number" ? modifier.amountCents : 0,
-              currency: str(modifier?.currency, "EUR"),
-            },
+            priceModifier: money(ch.priceModifier),
             isActive: bool(ch.isActive, false),
+            ...(ch.absolutePrice ? { absolutePrice: money(ch.absolutePrice) } : {}),
           };
         })
         .filter((c): c is OptionChoice => c !== null)
@@ -307,6 +325,18 @@ function mapTemplateToOption(id: string, data: FirestoreDoc, order: number): Pro
     required: bool(data.required, false),
     choices,
     order,
+    pricingMode: data.pricingMode === "absolute" ? "absolute" : "delta",
+  };
+}
+
+function mapIngredient(id: string, data: FirestoreDoc): ProductIngredient {
+  return {
+    id,
+    appId: str(data.appId),
+    name: str(data.name),
+    emoji: str(data.emoji),
+    defaultPriceModifier: money(data.defaultPriceModifier),
+    isActive: bool(data.isActive, true),
   };
 }
 
@@ -411,7 +441,12 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
     is_popular: bool(data.isPopular, false),
     tags: arr(data.tags),
     options: parseOptions(data.options),
+    baseIngredientIds: arr(data.baseIngredientIds),
+    availableSupplementIds: arr(data.availableSupplementIds),
+    allowIngredientRemoval: bool(data.allowIngredientRemoval, false),
     appliedTemplateIds: parseTemplateIds(data.appliedTemplateIds),
+    templatePriceOverrides: parseTemplatePriceOverrides(data.templatePriceOverrides),
+    ingredientLibrary: [],
   };
 }
 
@@ -491,14 +526,54 @@ export class FirebaseRepository implements DataRepository {
         });
     }
 
-    // Merge template-derived options (first) with inline options
-    return rawProducts.map(({ appliedTemplateIds, ...product }) => {
-      const templateOptions = appliedTemplateIds
+    const allIngredientIds = [
+      ...new Set(rawProducts.flatMap((p) => [
+        ...p.baseIngredientIds,
+        ...p.availableSupplementIds,
+      ])),
+    ];
+
+    const ingredientMap = new Map<string, ProductIngredient>();
+    if (allIngredientIds.length > 0) {
+      const db = getDb();
+      const chunks: string[][] = [];
+      for (let i = 0; i < allIngredientIds.length; i += 30) {
+        chunks.push(allIngredientIds.slice(i, i + 30));
+      }
+      const ingredientSnaps = await Promise.all(
+        chunks.map((chunk) =>
+          db
+            .collection("wl_ingredient_library")
+            .where("appId", "==", WL_APP_ID)
+            .where(FieldPath.documentId(), "in", chunk)
+            .get()
+        )
+      );
+      ingredientSnaps
+        .flatMap((s) => s.docs)
+        .forEach((doc) => {
+          const ingredient = mapIngredient(doc.id, doc.data());
+          ingredientMap.set(doc.id, ingredient);
+        });
+    }
+
+    // Merge template-derived options (first) with inline options and resolved ingredients.
+    return rawProducts.map((product) => {
+      const templateOptions = product.appliedTemplateIds
         .map((id) => templateMap.get(id))
         .filter((opt): opt is ProductOption => opt !== undefined);
+      const ingredientLibrary = [
+        ...new Set([
+          ...product.baseIngredientIds,
+          ...product.availableSupplementIds,
+        ]),
+      ]
+        .map((id) => ingredientMap.get(id))
+        .filter((ingredient): ingredient is ProductIngredient => ingredient !== undefined);
       return {
         ...product,
         options: [...templateOptions, ...product.options],
+        ingredientLibrary,
       };
     });
   }

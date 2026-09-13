@@ -23,6 +23,22 @@ export interface Product {
   tags: string[];
   /** Customization options (size, toppings, etc.) embedded in Firestore document */
   options: ProductOption[];
+  /** WLHORIZON canonical ingredient customization fields. */
+  baseIngredientIds: string[];
+  availableSupplementIds: string[];
+  allowIngredientRemoval: boolean;
+  appliedTemplateIds: string[];
+  templatePriceOverrides: Record<string, Record<string, number>>;
+  ingredientLibrary: ProductIngredient[];
+}
+
+export interface ProductIngredient {
+  id: string;
+  appId: string;
+  name: string;
+  emoji: string;
+  defaultPriceModifier: { amountCents: number; currency: string };
+  isActive: boolean;
 }
 
 export interface Category {

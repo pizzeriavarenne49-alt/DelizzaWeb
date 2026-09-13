@@ -17,6 +17,13 @@ type LiveOption = {
   choices: LiveChoice[];
 };
 
+type LiveIngredient = {
+  id: string;
+  appId: string;
+  name: string;
+  isActive: boolean;
+};
+
 type LiveProduct = {
   appId: string;
   name: string;
@@ -31,12 +38,16 @@ type LiveProduct = {
   manualOutOfStock: boolean;
   priceCents: number;
   options: LiveOption[];
+  baseIngredientIds: string[];
+  availableSupplementIds: string[];
+  allowIngredientRemoval: boolean;
 };
 
 export type CartAvailabilityIssueKind =
   | "product_not_found"
   | "product_unavailable"
   | "product_out_of_stock"
+  | "ingredient_unavailable"
   | "option_unavailable";
 
 export interface CartAvailabilityIssue {
@@ -181,6 +192,25 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
     manualOutOfStock: typeof data.manualOutOfStock === "boolean" ? data.manualOutOfStock : false,
     priceCents: priceCentsFromData(data),
     options: await loadLiveOptions(data),
+    baseIngredientIds: stringArray(data.baseIngredientIds),
+    availableSupplementIds: stringArray(data.availableSupplementIds),
+    allowIngredientRemoval: typeof data.allowIngredientRemoval === "boolean" ? data.allowIngredientRemoval : false,
+  };
+}
+
+async function loadLiveIngredient(ingredientId: string): Promise<LiveIngredient | null> {
+  const db = getClientFirestore();
+  const snap = await getDoc(doc(db, "wl_ingredient_library", ingredientId));
+  if (!snap.exists()) return null;
+
+  const data = snap.data();
+  if (data.appId !== WL_APP_ID) return null;
+
+  return {
+    id: snap.id,
+    appId: stringOrEmpty(data.appId),
+    name: stringOrEmpty(data.name),
+    isActive: typeof data.isActive === "boolean" ? data.isActive : true,
   };
 }
 
@@ -200,6 +230,36 @@ function validateSelectedOptions(
 
   for (const selected of item.selectedOptions) {
     const invalidIssue = validateSelectedOption(item, productName, selected, optionMap);
+    if (invalidIssue) return invalidIssue;
+  }
+
+  return null;
+}
+
+function validateSelectedTemplateOptions(
+  item: CartItem,
+  productName: string,
+  options: LiveOption[],
+): CartAvailabilityIssue | null {
+  const selectedTemplateOptions = item.selectedTemplateOptions ?? {};
+  const entries = Object.entries(selectedTemplateOptions).filter(([, choiceIds]) => choiceIds.length > 0);
+  if (entries.length === 0) return null;
+
+  const optionMap = new Map(options.map((option) => [option.id, option]));
+
+  for (const [optionId, choiceIds] of entries) {
+    const invalidIssue = validateSelectedOption(
+      item,
+      productName,
+      {
+        optionId,
+        optionName: optionId,
+        choiceIds,
+        choiceNames: [],
+        priceDeltaCents: 0,
+      },
+      optionMap,
+    );
     if (invalidIssue) return invalidIssue;
   }
 
@@ -238,6 +298,46 @@ function validateSelectedOption(
   };
 }
 
+function validateIngredientCustomizations(
+  item: CartItem,
+  productName: string,
+  product: LiveProduct,
+  ingredients: Map<string, LiveIngredient | null>,
+): CartAvailabilityIssue | null {
+  const availableSupplementIds = new Set(product.availableSupplementIds);
+  const baseIngredientIds = new Set(product.baseIngredientIds);
+
+  for (const supplementId of item.addedSupplements ?? []) {
+    const ingredient = ingredients.get(supplementId) ?? null;
+    if (!ingredient || !availableSupplementIds.has(supplementId) || ingredient.isActive !== true) {
+      return {
+        cartKey: item.cartKey,
+        catalogItemId: item.catalogItemId,
+        productName,
+        kind: "ingredient_unavailable",
+        message: `Un supplément sélectionné sur ${productName} n'est plus disponible. Merci de modifier cet article.`,
+        displayLabel: `${productName} — supplément indisponible`,
+      };
+    }
+  }
+
+  for (const ingredientId of item.removedIngredients ?? []) {
+    const ingredient = ingredients.get(ingredientId) ?? null;
+    if (!ingredient || !baseIngredientIds.has(ingredientId)) {
+      return {
+        cartKey: item.cartKey,
+        catalogItemId: item.catalogItemId,
+        productName,
+        kind: "ingredient_unavailable",
+        message: `Un retrait d'ingrédient sur ${productName} n'est plus disponible. Merci de modifier cet article.`,
+        displayLabel: `${productName} — ingrédient indisponible`,
+      };
+    }
+  }
+
+  return null;
+}
+
 function buildProductIssue(
   item: CartItem,
   productName: string,
@@ -264,6 +364,23 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
   await Promise.all(
     [...new Set(items.map((item) => item.catalogItemId))].map(async (catalogItemId) => {
       productCache.set(catalogItemId, await loadLiveProduct(catalogItemId));
+    }),
+  );
+
+  const ingredientIds = new Set<string>();
+  for (const item of items) {
+    for (const ingredientId of item.addedSupplements ?? []) {
+      ingredientIds.add(ingredientId);
+    }
+    for (const ingredientId of item.removedIngredients ?? []) {
+      ingredientIds.add(ingredientId);
+    }
+  }
+
+  const ingredientCache = new Map<string, LiveIngredient | null>();
+  await Promise.all(
+    [...ingredientIds].map(async (ingredientId) => {
+      ingredientCache.set(ingredientId, await loadLiveIngredient(ingredientId));
     }),
   );
 
@@ -333,9 +450,17 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
       continue;
     }
 
-    const optionIssue = validateSelectedOptions(item, productName, product.options);
+    const optionIssue =
+      validateSelectedTemplateOptions(item, productName, product.options) ??
+      validateSelectedOptions(item, productName, product.options);
     if (optionIssue) {
       issues.push(optionIssue);
+      continue;
+    }
+
+    const ingredientIssue = validateIngredientCustomizations(item, productName, product, ingredientCache);
+    if (ingredientIssue) {
+      issues.push(ingredientIssue);
     }
   }
 
@@ -397,7 +522,11 @@ export function extractCartAvailabilityMessageFromError(
     normalizedText.includes("selectedtemplateoptions") ||
     normalizedText.includes("option template not found")
   ) {
-    const firstConfiguredItem = items.find((item) => (item.selectedOptions?.length ?? 0) > 0);
+    const firstConfiguredItem = items.find(
+      (item) =>
+        Object.keys(item.selectedTemplateOptions ?? {}).length > 0 ||
+        (item.selectedOptions?.length ?? 0) > 0,
+    );
     if (firstConfiguredItem) {
       return `Une option sélectionnée sur ${firstConfiguredItem.nameSnapshot} n'est plus disponible. Merci de modifier cet article.`;
     }

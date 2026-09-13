@@ -4,18 +4,23 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
-import type { Product } from "@/types";
-import type { SelectedOption } from "@/types/cart";
+import type { Product, ProductIngredient } from "@/types";
+import type { CartItemCustomizations, SelectedOption } from "@/types/cart";
 import type { ProductOption } from "@/types/product-options";
 import { formatPrice } from "@/types";
 
 interface ProductCustomizeModalProps {
   product: Product;
   onClose: () => void;
-  onConfirm: (selectedOptions: SelectedOption[], quantity: number) => void;
+  onConfirm: (
+    customizations: CartItemCustomizations,
+    quantity: number,
+    selectedOptions: SelectedOption[],
+  ) => void;
 }
 
 function computeOptionsDeltaCents(
+  product: Product,
   options: ProductOption[],
   selections: Record<string, string[]>,
 ): number {
@@ -24,13 +29,15 @@ function computeOptionsDeltaCents(
     const choiceIds = selections[opt.id] ?? [];
     for (const choiceId of choiceIds) {
       const choice = opt.choices.find((c) => c.id === choiceId);
-      if (choice) delta += choice.priceModifier.amountCents;
+      if (!choice) continue;
+      delta += optionChoiceDeltaCents(product, opt, choice);
     }
   }
   return delta;
 }
 
 function buildSelectedOptions(
+  product: Product,
   options: ProductOption[],
   selections: Record<string, string[]>,
 ): SelectedOption[] {
@@ -44,7 +51,7 @@ function buildSelectedOptions(
         const choice = opt.choices.find((c) => c.id === choiceId);
         if (choice) {
           choiceNames.push(choice.name);
-          priceDelta += choice.priceModifier.amountCents;
+          priceDelta += optionChoiceDeltaCents(product, opt, choice);
         }
       }
       return {
@@ -56,6 +63,40 @@ function buildSelectedOptions(
       };
     })
     .filter((o): o is SelectedOption => o !== null);
+}
+
+function buildSelectedTemplateOptions(
+  options: ProductOption[],
+  selections: Record<string, string[]>,
+): Record<string, string[]> {
+  return Object.fromEntries(
+    options
+      .map((opt) => [opt.id, selections[opt.id] ?? []] as const)
+      .filter(([, choiceIds]) => choiceIds.length > 0),
+  );
+}
+
+function resolveIngredients(product: Product, ids: string[]): ProductIngredient[] {
+  const byId = new Map(product.ingredientLibrary.map((ingredient) => [ingredient.id, ingredient]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((ingredient): ingredient is ProductIngredient => ingredient !== undefined);
+}
+
+function resolveActiveIngredients(product: Product, ids: string[]): ProductIngredient[] {
+  return resolveIngredients(product, ids).filter((ingredient) => ingredient.isActive);
+}
+
+function optionChoiceDeltaCents(
+  product: Product,
+  option: ProductOption,
+  choice: ProductOption["choices"][number],
+): number {
+  const overridePrice = product.templatePriceOverrides[option.id]?.[choice.id];
+  if (option.pricingMode === "absolute") {
+    return (overridePrice ?? choice.absolutePrice?.amountCents ?? product.price_cents) - product.price_cents;
+  }
+  return overridePrice ?? choice.priceModifier.amountCents;
 }
 
 function areRequiredOptionsFilled(
@@ -74,6 +115,8 @@ export default function ProductCustomizeModal({
 }: ProductCustomizeModalProps) {
   const onlineOrdering = useOnlineOrderingStatus();
   const [selections, setSelections] = useState<Record<string, string[]>>({});
+  const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
+  const [addedSupplements, setAddedSupplements] = useState<string[]>([]);
   const [quantity, setQuantity] = useState(1);
 
   const sortedOptions = useMemo(
@@ -95,19 +138,72 @@ export default function ProductCustomizeModal({
     });
   }, []);
 
-  const deltasCents = computeOptionsDeltaCents(sortedOptions, selections);
+  const baseIngredients = useMemo(
+    () => resolveIngredients(product, product.baseIngredientIds),
+    [product],
+  );
+  const supplementIngredients = useMemo(
+    () => resolveActiveIngredients(product, product.availableSupplementIds),
+    [product],
+  );
+  const selectedSupplementIngredients = supplementIngredients.filter((ingredient) =>
+    addedSupplements.includes(ingredient.id),
+  );
+
+  const supplementDeltasCents = selectedSupplementIngredients.reduce(
+    (sum, ingredient) => sum + ingredient.defaultPriceModifier.amountCents,
+    0,
+  );
+  const deltasCents =
+    computeOptionsDeltaCents(product, sortedOptions, selections) +
+    supplementDeltasCents;
   const unitPriceCents = product.price_cents + deltasCents;
   const totalTtcCents = unitPriceCents * quantity;
   const canAdd = areRequiredOptionsFilled(sortedOptions, selections);
   const orderingBlocked = !onlineOrdering.canStartOrder;
   const hasOptions = sortedOptions.length > 0;
   const hasIngredients = product.ingredients.length > 0;
+  const hasRemovableIngredients = baseIngredients.length > 0;
+  const hasSupplements = supplementIngredients.length > 0;
+  const hasCustomizations = hasOptions || hasRemovableIngredients || hasSupplements;
   const hasTags = product.tags.length > 0;
+
+  const toggleRemovedIngredient = useCallback((ingredientId: string) => {
+    setRemovedIngredients((prev) =>
+      prev.includes(ingredientId)
+        ? prev.filter((id) => id !== ingredientId)
+        : [...prev, ingredientId],
+    );
+  }, []);
+
+  const toggleSupplement = useCallback((ingredientId: string) => {
+    setAddedSupplements((prev) =>
+      prev.includes(ingredientId)
+        ? prev.filter((id) => id !== ingredientId)
+        : [...prev, ingredientId],
+    );
+  }, []);
 
   const handleConfirm = () => {
     if (!canAdd || orderingBlocked) return;
-    const selectedOptions = buildSelectedOptions(sortedOptions, selections);
-    onConfirm(selectedOptions, quantity);
+    const selectedOptions = buildSelectedOptions(product, sortedOptions, selections);
+    const customizations: CartItemCustomizations = {
+      selectedTemplateOptions: buildSelectedTemplateOptions(sortedOptions, selections),
+      addedSupplements,
+      removedIngredients,
+      addedSupplementSnapshots: selectedSupplementIngredients.map((ingredient) => ({
+        ingredientId: ingredient.id,
+        ingredientName: ingredient.name,
+        priceDeltaCents: ingredient.defaultPriceModifier.amountCents,
+      })),
+      removedIngredientSnapshots: baseIngredients
+        .filter((ingredient) => removedIngredients.includes(ingredient.id))
+        .map((ingredient) => ({
+          ingredientId: ingredient.id,
+          ingredientName: ingredient.name,
+        })),
+    };
+    onConfirm(customizations, quantity, selectedOptions);
   };
 
   useEffect(() => {
@@ -183,7 +279,7 @@ export default function ProductCustomizeModal({
                   {product.name}
                 </h2>
                 <p className="text-[16px] font-semibold text-[#D4A053]">
-                  {hasOptions ? "À partir de " : ""}
+                  {hasCustomizations ? "À partir de " : ""}
                   {formatPrice(product.price_cents)}&nbsp;€
                 </p>
                 {product.description_short && (
@@ -237,6 +333,7 @@ export default function ProductCustomizeModal({
             {/* Options */}
             {sortedOptions.map((option) => {
               const selected = selections[option.id] ?? [];
+              const isSingleChoice = option.type === "single" || option.pricingMode === "absolute";
               return (
                 <div key={option.id} className="mt-5">
                   <div className="flex items-center gap-2 mb-3">
@@ -253,9 +350,10 @@ export default function ProductCustomizeModal({
                   <div className="flex flex-col gap-2">
                     {option.choices.map((choice) => {
                       const isSelected =
-                        option.type === "single"
+                        isSingleChoice
                           ? selected[0] === choice.id
                           : selected.includes(choice.id);
+                      const deltaCents = optionChoiceDeltaCents(product, option, choice);
 
                       return (
                         <button
@@ -263,7 +361,7 @@ export default function ProductCustomizeModal({
                           type="button"
                           disabled={orderingBlocked}
                           onClick={() =>
-                            option.type === "single"
+                            isSingleChoice
                               ? handleSingleSelect(option.id, choice.id)
                               : handleMultiToggle(option.id, choice.id)
                           }
@@ -275,7 +373,7 @@ export default function ProductCustomizeModal({
                         >
                           <div className="flex items-center gap-3">
                             {/* Radio or Checkbox indicator */}
-                            {option.type === "single" ? (
+                            {isSingleChoice ? (
                               <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected ? "border-[#D4A053]" : "border-[#505050]"}`}>
                                 {isSelected && (
                                   <div className="h-2.5 w-2.5 rounded-full bg-[#D4A053]" />
@@ -294,9 +392,9 @@ export default function ProductCustomizeModal({
                               {choice.name}
                             </span>
                           </div>
-                          <span className={`text-[13px] ${choice.priceModifier.amountCents > 0 ? "text-[#A0A0A0]" : "text-[#6B6B6B]"}`}>
-                            {choice.priceModifier.amountCents > 0
-                              ? `+${formatPrice(choice.priceModifier.amountCents)} €`
+                          <span className={`text-[13px] ${deltaCents > 0 ? "text-[#A0A0A0]" : "text-[#6B6B6B]"}`}>
+                            {deltaCents > 0
+                              ? `+${formatPrice(deltaCents)} €`
                               : "Inclus"}
                           </span>
                         </button>
@@ -306,6 +404,85 @@ export default function ProductCustomizeModal({
                 </div>
               );
             })}
+
+            {(hasRemovableIngredients || hasSupplements) && (
+              <section className="mt-5">
+                <h3 className="text-[15px] font-bold text-[#F5F5F5]">
+                  Personnaliser
+                </h3>
+                {hasRemovableIngredients && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <h4 className="text-[13px] font-semibold text-[#CFCFCF]">
+                    Ingrédients
+                  </h4>
+                  {baseIngredients.map((ingredient) => {
+                    const isRemoved = removedIngredients.includes(ingredient.id);
+                    const isKept = !isRemoved;
+                    return (
+                      <button
+                        key={ingredient.id}
+                        type="button"
+                        disabled={orderingBlocked}
+                        onClick={() => toggleRemovedIngredient(ingredient.id)}
+                        className={`flex items-center justify-between rounded-[14px] border px-4 py-3 transition-colors ${
+                          isRemoved
+                            ? "border-[#E74C3C]/40 bg-[#E74C3C]/10"
+                            : "border-[#D4A053]/50 bg-[#D4A053]/15"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`h-5 w-5 rounded-[5px] border-2 flex items-center justify-center shrink-0 ${isKept ? "border-[#D4A053] bg-[#D4A053]" : "border-[#505050]"}`}>
+                            {isKept && (
+                              <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" aria-hidden="true">
+                                <path d="M2 6l3 3 5-5" stroke="#0D0D0D" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[14px] ${isRemoved ? "text-[#F59B90] line-through" : "text-[#F5F5F5]"}`}>
+                            {ingredient.emoji ? `${ingredient.emoji} ` : ""}{ingredient.name}
+                          </span>
+                        </div>
+                        <span className="text-[13px] text-[#A0A0A0]">
+                          {isRemoved ? "Retiré" : "Inclus"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                )}
+                {hasSupplements && (
+                <div className="mt-4 flex flex-col gap-2">
+                  <h4 className="text-[13px] font-semibold text-[#CFCFCF]">
+                    Suppléments
+                  </h4>
+                  {supplementIngredients.map((ingredient) => {
+                    const isAdded = addedSupplements.includes(ingredient.id);
+                    const priceCents = ingredient.defaultPriceModifier.amountCents;
+                    return (
+                      <button
+                        key={ingredient.id}
+                        type="button"
+                        disabled={orderingBlocked}
+                        onClick={() => toggleSupplement(ingredient.id)}
+                        className={`flex items-center justify-between rounded-[14px] border px-4 py-3 transition-colors ${
+                          isAdded
+                            ? "border-[#D4A053]/50 bg-[#D4A053]/15"
+                            : "border-transparent bg-[#252525]"
+                        }`}
+                      >
+                        <span className="text-[14px] text-[#F5F5F5]">
+                          {ingredient.emoji ? `${ingredient.emoji} ` : ""}{ingredient.name}
+                        </span>
+                        <span className={`text-[13px] ${priceCents > 0 ? "text-[#A0A0A0]" : "text-[#6B6B6B]"}`}>
+                          {priceCents > 0 ? `+${formatPrice(priceCents)} €` : "Gratuit"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                )}
+              </section>
+            )}
 
             {/* Quantity selector */}
             <div className="mt-6 flex items-center justify-between">

@@ -5,6 +5,7 @@ export interface OptionChoice {
   name: string;
   priceModifier: { amountCents: number; currency: string };
   isActive: boolean;
+  absolutePrice?: { amountCents: number; currency: string };
 }
 
 export type OptionType = "single" | "multiple";
@@ -16,4 +17,5 @@ export interface ProductOption {
   required: boolean;
   choices: OptionChoice[];
   order: number;
+  pricingMode?: "delta" | "absolute";
 }

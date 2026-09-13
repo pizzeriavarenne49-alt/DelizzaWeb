@@ -169,6 +169,21 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                                 ))}
                               </div>
                             )}
+                            {((item.removedIngredientSnapshots?.length ?? 0) > 0 ||
+                              (item.addedSupplementSnapshots?.length ?? 0) > 0) && (
+                              <div className="mt-0.5 flex flex-col gap-0.5">
+                                {item.removedIngredientSnapshots?.map((ingredient) => (
+                                  <span key={`remove-${ingredient.ingredientId}`} className="text-[12px] leading-snug text-[#A0A0A0]">
+                                    Sans {ingredient.ingredientName}
+                                  </span>
+                                ))}
+                                {item.addedSupplementSnapshots?.map((ingredient) => (
+                                  <span key={`add-${ingredient.ingredientId}`} className="text-[12px] leading-snug text-[#A0A0A0]">
+                                    + {ingredient.ingredientName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <span className="whitespace-nowrap text-[14px] font-semibold text-[#D4A053]">
                             {formatPrice(item.totalCents)}&nbsp;€

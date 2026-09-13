@@ -205,6 +205,12 @@ function mapProduct(raw: DirectusRecord): Product {
     is_popular: bool(raw.is_popular),
     tags: arr(raw.tags),
     options: [],
+    baseIngredientIds: [],
+    availableSupplementIds: [],
+    allowIngredientRemoval: false,
+    appliedTemplateIds: [],
+    templatePriceOverrides: {},
+    ingredientLibrary: [],
   };
 }
 

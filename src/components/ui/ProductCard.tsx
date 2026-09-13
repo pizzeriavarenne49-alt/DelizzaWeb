@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import type { Product } from "@/types";
-import type { SelectedOption } from "@/types/cart";
+import type { CartItemCustomizations, SelectedOption } from "@/types/cart";
 import { formatPrice } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
@@ -17,6 +17,15 @@ interface ProductCardProps {
   product: Product;
 }
 
+function hasProductCustomizations(product: Product): boolean {
+  return (
+    product.options.length > 0 ||
+    product.appliedTemplateIds.length > 0 ||
+    product.baseIngredientIds.length > 0 ||
+    product.availableSupplementIds.length > 0
+  );
+}
+
 export default function ProductCard({ product }: ProductCardProps) {
   const { addItem, addItemWithOptions } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
@@ -25,6 +34,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const isUnavailable = product.manualOutOfStock === true;
   const orderingDisabled = !onlineOrdering.canStartOrder;
   const cannotOrder = isUnavailable || orderingDisabled;
+  const hasCustomizations = hasProductCustomizations(product);
 
   const handleAdd = () => {
     if (orderingDisabled) {
@@ -37,7 +47,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
 
     track({ name: "click_add_product", payload: { productId: product.id } });
-    if (product.options.length > 0) {
+    if (hasCustomizations) {
       setModalOpen(true);
     } else {
       addItem(product);
@@ -61,7 +71,11 @@ export default function ProductCard({ product }: ProductCardProps) {
     handleAdd();
   };
 
-  const handleModalConfirm = (selectedOptions: SelectedOption[], quantity: number) => {
+  const handleModalConfirm = (
+    customizations: CartItemCustomizations,
+    quantity: number,
+    selectedOptions: SelectedOption[],
+  ) => {
     if (orderingDisabled) {
       showToast(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
       setModalOpen(false);
@@ -73,7 +87,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       return;
     }
 
-    addItemWithOptions(product, selectedOptions, quantity);
+    addItemWithOptions(product, customizations, quantity, selectedOptions);
     showToast(`${product.name} ajouté au panier ✓`);
     setModalOpen(false);
   };
@@ -124,7 +138,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
           <div className="flex items-center justify-between pt-1">
             <span className="text-[15px] font-bold text-[#D4A053]">
-              {product.options.length > 0 ? "dès " : ""}
+              {hasCustomizations ? "dès " : ""}
               {formatPrice(product.price_cents)}&nbsp;€
             </span>
             <div

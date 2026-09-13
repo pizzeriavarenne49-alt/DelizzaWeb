@@ -36,7 +36,7 @@ import {
   CLIENT_ERROR_MESSAGES,
   getClientErrorMessage,
 } from "@/lib/client-error-message";
-import { createOrder, createPaymentIntent } from "@/services/order-service";
+import { createOrder, createPaymentIntent, type CreateOrderItem } from "@/services/order-service";
 import {
   buildCheckoutAttemptFingerprint,
   getOrCreateCheckoutAttempt,
@@ -64,6 +64,34 @@ const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? 
 const TERMS_VERSION = "cgu-2026-07";
 const PRIVACY_VERSION = "privacy-2026-07";
 const MINIMUM_ORDER_CENTS = 900;
+
+function nonEmptyRecord(value: Record<string, string[]> | undefined): Record<string, string[]> | undefined {
+  if (!value) return undefined;
+  const entries = Object.entries(value)
+    .map(([key, choiceIds]) => [key, choiceIds.filter((choiceId) => typeof choiceId === "string" && choiceId.trim() !== "")] as const)
+    .filter(([, choiceIds]) => choiceIds.length > 0);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function nonEmptyArray(value: string[] | undefined): string[] | undefined {
+  const entries = (value ?? []).filter((entry) => typeof entry === "string" && entry.trim() !== "");
+  return entries.length > 0 ? entries : undefined;
+}
+
+function toCreateOrderItem(item: CartItem): CreateOrderItem {
+  const selectedTemplateOptions = nonEmptyRecord(item.selectedTemplateOptions);
+  const addedSupplements = nonEmptyArray(item.addedSupplements);
+  const removedIngredients = nonEmptyArray(item.removedIngredients);
+  return {
+    catalogItemId: item.catalogItemId,
+    quantity: item.quantity,
+    ...(item.formulaId ? { formulaId: item.formulaId } : {}),
+    ...(item.formulaStepChoices ? { formulaStepChoices: item.formulaStepChoices } : {}),
+    ...(selectedTemplateOptions ? { selectedTemplateOptions } : {}),
+    ...(addedSupplements ? { addedSupplements } : {}),
+    ...(removedIngredients ? { removedIngredients } : {}),
+  };
+}
 
 function minimumOrderMessage(payableTotalCents: number): string | null {
   const remainingCents = MINIMUM_ORDER_CENTS - payableTotalCents;
@@ -118,8 +146,9 @@ function findRewardPreview(
     ) {
       return;
     }
-    const sizeOption = item.selectedOptions?.find((option) => option.optionId === sizeTemplateId);
-    const selectedSizeChoiceId = sizeOption?.choiceIds?.[0];
+    const selectedSizeChoiceId =
+      item.selectedTemplateOptions?.[sizeTemplateId]?.[0] ??
+      item.selectedOptions?.find((option) => option.optionId === sizeTemplateId)?.choiceIds?.[0];
     if (selectedSizeChoiceId && !classicSizeChoiceIds.has(selectedSizeChoiceId)) {
       return;
     }
@@ -1399,6 +1428,7 @@ export default function CheckoutClient() {
           : "card";
       const customerName = profile?.displayName?.trim() || user.displayName || "";
       const customerPhone = profile?.phone?.trim() || "";
+      const orderItems = items.map(toCreateOrderItem);
       const fingerprint = buildCheckoutAttemptFingerprint({
         appId: WL_APP_ID,
         userId: user.uid,
@@ -1415,7 +1445,7 @@ export default function CheckoutClient() {
         appId: WL_APP_ID,
         userId: user.uid,
         userEmail: user.email ?? "",
-        items,
+        items: orderItems,
         subtotalCents: getSubtotalCents(),
         taxCents: getTaxCents(),
         totalCents: payableTotalCents,

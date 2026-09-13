@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import type { CartItem, SelectedOption } from "@/types/cart";
+import type { CartItem, CartItemCustomizations, SelectedOption } from "@/types/cart";
 import type { Product } from "@/types";
 import { computeTaxFromTtcCents } from "@/types";
 
@@ -28,7 +28,12 @@ export interface TaxBreakdownEntry {
 interface CartContextValue {
   items: CartItem[];
   addItem: (product: Product) => void;
-  addItemWithOptions: (product: Product, selectedOptions: SelectedOption[], quantity: number) => void;
+  addItemWithOptions: (
+    product: Product,
+    customizations: CartItemCustomizations,
+    quantity: number,
+    selectedOptions?: SelectedOption[],
+  ) => void;
   removeItem: (cartKey: string) => void;
   updateQuantity: (cartKey: string, quantity: number) => void;
   clearCart: () => void;
@@ -59,14 +64,22 @@ const EMPTY_CART_CONTEXT: CartContextValue = {
   isEmpty: true,
 };
 
-/** Generate a stable cartKey from a productId and sorted selectedOptions */
-function buildCartKey(productId: string, selectedOptions: SelectedOption[]): string {
-  if (selectedOptions.length === 0) return productId;
-  const hash = selectedOptions
-    .slice()
-    .sort((a, b) => a.optionId.localeCompare(b.optionId))
-    .map((o) => `${o.optionId}:${o.choiceIds.slice().sort().join(",")}`)
-    .join("|");
+function selectedOptionsToTemplateOptions(selectedOptions: SelectedOption[] = []): Record<string, string[]> {
+  return Object.fromEntries(
+    selectedOptions.map((option) => [option.optionId, [...option.choiceIds]]),
+  );
+}
+
+function buildCartKey(productId: string, customizations: CartItemCustomizations): string {
+  const parts = [
+    ...Object.entries(customizations.selectedTemplateOptions)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([templateId, choiceIds]) => `${templateId}:${choiceIds.slice().sort().join(",")}`),
+    `add:${customizations.addedSupplements.slice().sort().join(",")}`,
+    `remove:${customizations.removedIngredients.slice().sort().join(",")}`,
+  ].filter((part) => !part.endsWith(":") && !part.endsWith("add:") && !part.endsWith("remove:"));
+  if (parts.length === 0) return productId;
+  const hash = parts.join("|");
   return `${productId}__${hash}`;
 }
 
@@ -76,6 +89,13 @@ function migrateLegacyItems(items: CartItem[]): CartItem[] {
     ...item,
     taxRateBps: typeof item.taxRateBps === "number" ? item.taxRateBps : DEFAULT_TAX_RATE_BPS,
     cartKey: item.cartKey ?? item.catalogItemId,
+    selectedTemplateOptions:
+      item.selectedTemplateOptions ??
+      selectedOptionsToTemplateOptions(item.selectedOptions),
+    addedSupplements: item.addedSupplements ?? [],
+    removedIngredients: item.removedIngredients ?? [],
+    addedSupplementSnapshots: item.addedSupplementSnapshots ?? [],
+    removedIngredientSnapshots: item.removedIngredientSnapshots ?? [],
   }));
 }
 
@@ -181,7 +201,11 @@ function CartStateProvider({
   const addItem = useCallback((product: Product) => {
     if (product.manualOutOfStock === true) return;
 
-    const cartKey = buildCartKey(product.id, []);
+    const cartKey = buildCartKey(product.id, {
+      selectedTemplateOptions: {},
+      addedSupplements: [],
+      removedIngredients: [],
+    });
     setItems((prev) => {
       const existing = prev.find((i) => i.cartKey === cartKey);
       if (existing) {
@@ -212,11 +236,19 @@ function CartStateProvider({
   }, []);
 
   const addItemWithOptions = useCallback(
-    (product: Product, selectedOptions: SelectedOption[], quantity: number) => {
+    (
+      product: Product,
+      customizations: CartItemCustomizations,
+      quantity: number,
+      selectedOptions: SelectedOption[] = [],
+    ) => {
       if (product.manualOutOfStock === true) return;
 
-      const cartKey = buildCartKey(product.id, selectedOptions);
-      const deltasCents = selectedOptions.reduce((sum, o) => sum + o.priceDeltaCents, 0);
+      const cartKey = buildCartKey(product.id, customizations);
+      const optionDeltasCents = selectedOptions.reduce((sum, o) => sum + o.priceDeltaCents, 0);
+      const supplementDeltasCents = (customizations.addedSupplementSnapshots ?? [])
+        .reduce((sum, supplement) => sum + (supplement.priceDeltaCents ?? 0), 0);
+      const deltasCents = optionDeltasCents + supplementDeltasCents;
       const unitPriceCents = product.price_cents + deltasCents;
 
       setItems((prev) => {
@@ -241,6 +273,11 @@ function CartStateProvider({
             taxRateBps: product.tax_rate_bps,
             cartKey,
             selectedOptions: selectedOptions.length > 0 ? selectedOptions : undefined,
+            selectedTemplateOptions: customizations.selectedTemplateOptions,
+            addedSupplements: customizations.addedSupplements,
+            removedIngredients: customizations.removedIngredients,
+            addedSupplementSnapshots: customizations.addedSupplementSnapshots,
+            removedIngredientSnapshots: customizations.removedIngredientSnapshots,
           },
         ];
       });

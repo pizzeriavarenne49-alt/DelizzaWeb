@@ -1,7 +1,7 @@
 "use client";
 
-import type { CartItem } from "@/types/cart";
 import type { FulfillmentData } from "@/types/order";
+import type { CartItem } from "@/types/cart";
 
 const STORAGE_KEY = "delizza_checkout_attempt_v1";
 
@@ -102,13 +102,9 @@ export function buildCheckoutAttemptFingerprint(input: CheckoutAttemptInput): st
         unitPriceCents: Number(item.unitPriceCents),
         totalCents: Number(item.totalCents),
         taxRateBps: Number(item.taxRateBps),
-        selectedOptions: (item.selectedOptions ?? [])
-          .map((option) => stableValue({
-            optionId: option.optionId,
-            choiceIds: [...(option.choiceIds ?? [])].sort(),
-            priceDeltaCents: Number(option.priceDeltaCents),
-          }))
-          .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+        selectedTemplateOptions: stableValue(item.selectedTemplateOptions ?? {}),
+        addedSupplements: [...(item.addedSupplements ?? [])].sort(),
+        removedIngredients: [...(item.removedIngredients ?? [])].sort(),
         formulaId: item.formulaId ?? null,
         formulaStepChoices: canonicalFormulaChoices,
       });

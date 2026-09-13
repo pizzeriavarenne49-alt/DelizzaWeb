@@ -8,14 +8,23 @@
 
 import { httpsCallable } from "firebase/functions";
 import { getClientFunctions } from "@/config/firebase-client";
-import type { CartItem } from "@/types/cart";
 import type { FulfillmentData } from "@/types/order";
+
+export interface CreateOrderItem {
+  catalogItemId: string;
+  quantity: number;
+  formulaId?: string;
+  formulaStepChoices?: Record<string, string[]>;
+  selectedTemplateOptions?: Record<string, string[]>;
+  addedSupplements?: string[];
+  removedIngredients?: string[];
+}
 
 export interface CreateOrderParams {
   appId: string;
   userId: string;
   userEmail: string;
-  items: CartItem[];
+  items: CreateOrderItem[];
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
