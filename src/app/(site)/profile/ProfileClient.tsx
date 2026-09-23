@@ -7,6 +7,7 @@ import type React from "react";
 import { track } from "@/analytics";
 import { CLIENT_WL_APP_ID } from "@/config/firebase-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import { cn } from "@/lib/cn";
 import {
   getCustomerOrderPresentation,
@@ -36,6 +37,7 @@ const emptyProfile: CustomerProfile = { displayName: "", phone: "" };
 
 export default function ProfileClient() {
   const { user, loading, signOut } = useAuth();
+  const { showToast } = useToast();
   const ordersRef = useRef<HTMLElement | null>(null);
   const loadGenerationRef = useRef(0);
 
@@ -227,12 +229,18 @@ export default function ProfileClient() {
     setClaimMessage(null);
     try {
       const result = await claimLoyaltyTicketCode(trimmedCode);
+      const successMessage = result.idempotent
+        ? "Ce code avait déjà été validé sur votre compte. Votre progression fidélité est bien enregistrée."
+        : result.rewardIssued
+          ? "Votre passage a bien été ajouté et une récompense est maintenant disponible."
+          : "Votre passage a bien été ajouté à votre compte.";
+      const successTitle = result.idempotent
+        ? "Code déjà pris en compte"
+        : "Code fidélité validé";
+
       setLoyaltyCode("");
-      setClaimMessage(
-        result.rewardIssued
-          ? "Code validé. Votre passage est ajouté et une récompense est disponible."
-          : "Code fidélité validé.",
-      );
+      setClaimMessage(`${successTitle}. ${successMessage}`);
+      showToast(`${successTitle} — ${successMessage}`);
       try {
         setLoyalty(await getLoyaltyState(CLIENT_WL_APP_ID, user.uid));
         setLoyaltyStatus("success");
@@ -244,7 +252,12 @@ export default function ProfileClient() {
             : undefined,
         });
         setLoyaltyStatus("error");
-        setLoyaltyError("Code validé, mais la fidélité n'a pas pu être actualisée.");
+        setLoyaltyError("L'affichage de votre fidélité n'a pas pu être actualisé.");
+        setClaimMessage(
+          result.idempotent
+            ? "Code déjà pris en compte. Votre progression fidélité est bien enregistrée, mais son affichage n'a pas pu être actualisé. Actualisez la page dans quelques instants."
+            : "Code fidélité validé. Votre passage a bien été enregistré, mais l'affichage de votre fidélité n'a pas pu être actualisé. Actualisez la page dans quelques instants.",
+        );
       }
     } catch (err) {
       console.error("[loyalty] Unable to claim ticket code:", {
@@ -793,9 +806,9 @@ function getLoyaltyMetrics(loyalty: LoyaltyState | null) {
       ? Math.floor(configuredThreshold)
       : DEFAULT_REWARD_THRESHOLD;
   const threshold = normalizedThreshold >= 1 ? normalizedThreshold : DEFAULT_REWARD_THRESHOLD;
-  const passages = clampNonNegativeInteger(loyalty?.account.stampsBalance ?? 0);
+  const totalPassages = clampNonNegativeInteger(loyalty?.account.stampsBalance ?? 0);
   const rewardsAvailable = clampNonNegativeInteger(loyalty?.account.rewardsAvailable ?? 0);
-  const currentCyclePassages = threshold > 0 ? Math.min(passages, threshold) : 0;
+  const currentCyclePassages = threshold > 0 ? totalPassages % threshold : 0;
   const remaining = Math.max(0, threshold - currentCyclePassages);
   const progressPercent = threshold > 0
     ? Math.min(100, Math.max(0, (currentCyclePassages / threshold) * 100))
@@ -806,8 +819,10 @@ function getLoyaltyMetrics(loyalty: LoyaltyState | null) {
     message = rewardsAvailable === 1
       ? "Votre récompense est prête"
       : "Vos récompenses sont prêtes";
-  } else if (passages === 0) {
+  } else if (totalPassages === 0) {
     message = "Votre prochaine commande lance votre progression";
+  } else if (currentCyclePassages === 0) {
+    message = "Un nouveau cycle fidélité commence";
   } else if (remaining === 1) {
     message = "Encore une commande";
   } else if (remaining === 0) {

@@ -35,6 +35,7 @@ export interface ClaimLoyaltyTicketCodeResult {
   claimedCode?: string;
   orderId?: string;
   rewardIssued?: boolean;
+  idempotent?: boolean;
 }
 
 const defaultAccount: LoyaltyAccount = {
@@ -134,27 +135,43 @@ export async function claimLoyaltyTicketCode(
 
 export function getLoyaltyClaimErrorMessage(error: unknown): string {
   const err = typeof error === "object" && error !== null
-    ? (error as { message?: unknown; details?: unknown; code?: unknown })
+    ? (error as { details?: unknown; code?: unknown })
     : {};
   const details = typeof err.details === "object" && err.details !== null
-    ? (err.details as { message?: unknown })
+    ? (err.details as { reason?: unknown })
     : null;
-  const message =
-    typeof details?.message === "string" && details.message.trim()
-      ? details.message
-      : typeof err.message === "string" && err.message.trim()
-        ? err.message
-        : "";
+  const reason = typeof details?.reason === "string" ? details.reason.toLowerCase() : "";
+  const code = typeof err.code === "string"
+    ? err.code.toLowerCase().replace(/^functions\//, "")
+    : "";
 
-  if (message) return message.replace(/^Firebase:\s*/i, "").trim();
+  const reasonMessages: Record<string, string> = {
+    "invalid-code": "Ce code fidélité est invalide. Vérifiez-le puis réessayez.",
+    "no-stamps-to-credit": "Ce code fidélité ne contient aucun passage à créditer.",
+    "expired-code": "Ce code fidélité a expiré.",
+    "already-redeemed": "Ce code fidélité a déjà été utilisé.",
+    "app-mismatch": "Ce code fidélité n'appartient pas à Deli'Zza.",
+    "customer-account-required": "Un compte client Deli'Zza actif est nécessaire pour valider ce code.",
+    "customer-account-inactive": "Votre compte client est inactif. Contactez Deli'Zza pour obtenir de l'aide.",
+    "loyalty-disabled": "Le programme fidélité est momentanément indisponible.",
+  };
+  if (reason && reasonMessages[reason]) return reasonMessages[reason];
 
-  const code = typeof err.code === "string" ? err.code.toLowerCase() : "";
-  if (code.includes("unauthenticated")) {
-    return "Connectez-vous pour valider ce code fidélité.";
-  }
-  if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
-    return "Connexion impossible. Vérifiez votre connexion internet.";
-  }
+  const codeMessages: Record<string, string> = {
+    "invalid-argument": "Ce code fidélité est invalide. Vérifiez-le puis réessayez.",
+    "not-found": "Ce code fidélité est introuvable. Vérifiez-le puis réessayez.",
+    "already-exists": "Ce code fidélité a déjà été utilisé.",
+    "permission-denied": "Votre compte client ne permet pas de valider ce code fidélité.",
+    "failed-precondition": "La validation sécurisée du code a échoué. Actualisez la page puis réessayez.",
+    "resource-exhausted": "Trop de tentatives. Patientez 15 minutes avant de réessayer.",
+    "unauthenticated": "Reconnectez-vous pour valider ce code fidélité.",
+    "unavailable": "La connexion au service fidélité est impossible. Vérifiez votre connexion internet.",
+    "deadline-exceeded": "La validation du code a pris trop de temps. Vérifiez votre connexion puis réessayez.",
+    "cancelled": "La validation du code a été interrompue. Réessayez.",
+    "internal": "Le service fidélité rencontre un problème. Réessayez dans quelques instants.",
+    "unknown": "Le service fidélité rencontre un problème. Réessayez dans quelques instants.",
+  };
+  if (code && codeMessages[code]) return codeMessages[code];
 
-  return "Impossible de valider ce code pour le moment. Réessayez.";
+  return "Une erreur est survenue lors de la validation du code. Réessayez.";
 }
