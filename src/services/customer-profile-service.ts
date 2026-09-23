@@ -82,8 +82,8 @@ export async function listRecentCustomerOrders(uid: string): Promise<CustomerOrd
   const db = getClientFirestore();
   const snap = await getDocs(query(
     collection(db, "orders"),
-    where("appId", "==", DELIZZA_CUSTOMER_APP_ID),
     where("clientUserId", "==", uid),
+    where("appId", "==", DELIZZA_CUSTOMER_APP_ID),
     orderBy("createdAt", "desc"),
     limit(25),
   ));
