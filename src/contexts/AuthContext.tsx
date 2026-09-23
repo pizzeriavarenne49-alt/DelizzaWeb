@@ -60,11 +60,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initAppCheck();
     const auth = getClientAuth();
+    let active = true;
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setLoading(false);
+      void (async () => {
+        if (!firebaseUser) {
+          if (!active) return;
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        // A persisted Firebase session does not go through signIn(), so legacy or
+        // stale sessions may be missing the customer document / customerAppId claim.
+        // Repair the B2C session before profile, loyalty and order reads start.
+        setLoading(true);
+        try {
+          await ensureDelizzaCustomerSession(true);
+        } catch (error) {
+          console.error("[auth] Unable to synchronize persisted customer session:", {
+            code:
+              typeof error === "object" && error !== null
+                ? (error as { code?: unknown }).code
+                : undefined,
+          });
+        }
+
+        if (!active || auth.currentUser?.uid !== firebaseUser.uid) return;
+        setUser(auth.currentUser ?? firebaseUser);
+        setLoading(false);
+      })();
     });
-    return unsubscribe;
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
