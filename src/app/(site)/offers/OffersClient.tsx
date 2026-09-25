@@ -19,7 +19,7 @@ export default function OffersClient({ offers }: OffersClientProps) {
     <div className="flex flex-col gap-5 px-4 pt-4">
       <h1 className="text-[22px] font-bold text-[#F5F5F5]">Offres</h1>
       <p className="text-[13px] text-[#A0A0A0]">
-        Profitez de nos promotions exclusives
+        Retrouvez ici les offres publiées par Deli&apos;Zza.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

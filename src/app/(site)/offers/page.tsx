@@ -7,14 +7,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "Offres et promotions — Pizza Deli'Zza",
+  title: "Offres et promotions",
   description:
-    "Retrouvez les offres et promotions de Pizza Deli'Zza, votre pizzeria artisanale à La Varenne.",
+    "Retrouvez les offres et promotions de Pizza Deli'Zza, votre pizzeria à La Varenne.",
   alternates: { canonical: "/offers" },
   openGraph: {
     title: "Offres et promotions — Pizza Deli'Zza",
     description:
-      "Découvrez les offres et promotions de Pizza Deli'Zza. Pizzeria artisanale à La Varenne, Orée d'Anjou.",
+      "Découvrez les offres et promotions de Pizza Deli'Zza. Pizzeria à La Varenne, Orée d'Anjou.",
     url: `${SITE_URL}/offers`,
     images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Pizza Deli'Zza — Offres et promotions" }],
   },
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Offres et promotions — Pizza Deli'Zza",
     description:
-      "Découvrez les offres et promotions de Pizza Deli'Zza. Pizzeria artisanale à La Varenne.",
+      "Découvrez les offres et promotions de Pizza Deli'Zza. Pizzeria à La Varenne.",
     images: [OG_IMAGE],
   },
 };

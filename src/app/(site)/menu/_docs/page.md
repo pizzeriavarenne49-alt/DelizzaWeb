@@ -29,7 +29,7 @@ Données lues via `src/data/repository.ts` avec fallback mock automatique.
 | `products.price_cents` | Prix (divisé par 100, format `XX.XX €`) |
 | `products.category` | FK pour filtre par catégorie |
 | `products.image` | Photo produit (via `assetUrl()`) |
-| `products.badge` | Badge (Best-seller, Premium…) |
+| `products.badge` | Badge descriptif (À découvrir…) |
 
 ## Redirections / events
 | Action | URL | Event analytics |

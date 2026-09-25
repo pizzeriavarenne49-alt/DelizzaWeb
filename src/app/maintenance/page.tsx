@@ -63,9 +63,9 @@ export default function MaintenancePage() {
                   <span>Mardi : fermé</span>
                   <span>Mercredi : 18h30-21h30</span>
                   <span>Jeudi : 18h30-21h30</span>
-                  <span>Vendredi : 18h00-22h00</span>
-                  <span>Samedi : 18h00-22h00</span>
-                  <span>Dimanche : 18h00-22h00</span>
+                  <span>Vendredi : 18h30-22h00</span>
+                  <span>Samedi : 18h30-22h00</span>
+                  <span>Dimanche : 18h30-22h00</span>
                 </div>
               </div>
             </div>

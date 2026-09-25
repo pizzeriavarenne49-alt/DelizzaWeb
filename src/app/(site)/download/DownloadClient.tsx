@@ -25,7 +25,7 @@ function DownloadContent() {
           Deli&apos;Zza
         </h1>
         <p className="text-[15px] text-[#A0A0A0] leading-relaxed max-w-xs">
-          L&apos;application arrive bientôt&nbsp;! En attendant, commandez directement sur notre site.
+          Pour commander vos pizzas, rendez-vous sur le menu de notre site.
         </p>
       </div>
 

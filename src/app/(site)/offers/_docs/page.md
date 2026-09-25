@@ -5,7 +5,7 @@ Affiche les promotions et offres spéciales en cours. Incite à la commande via 
 
 ## UI breakdown
 1. **Titre** — "Offres"
-2. **Sous-titre** — "Profitez de nos promotions exclusives"
+2. **Sous-titre** — "Retrouvez ici les offres publiées par Deli’Zza."
 3. **Liste d'offres** — article cards avec image (16:9), titre, contenu descriptif, date de validité (end_at)
 4. **État vide** — message si aucune offre active
 

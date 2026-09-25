@@ -28,16 +28,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const isVariante = slug.startsWith("pizzeria-");
   const prefix = isVariante ? "Pizzeria à emporter" : "Pizza à emporter";
+  const location = ["La Varenne", "Orée d'Anjou"].includes(commune.name) ? "à" : "depuis";
+  const title = `${prefix} ${location} ${commune.name} — Pizza Deli'Zza`;
 
   return {
-    title: `${prefix} à ${commune.name} — Pizza Deli'Zza`,
-    description: `${prefix} à ${commune.name} (${commune.driveTime} d'Orée d'Anjou). Pâte longue fermentation, ingrédients frais et locaux. Commandez en click & collect chez Pizza Deli'Zza.`,
+    title: { absolute: title },
+    description: commune.intro,
     alternates: { canonical: `/${slug}` },
+    twitter: { card: "summary_large_image", title, description: commune.intro, images: [OG_IMAGE] },
     openGraph: {
-      title: `${prefix} à ${commune.name} — Pizza Deli'Zza`,
-      description: `Commandez vos pizzas artisanales en click & collect depuis ${commune.name}. Retrait à La Varenne en ${commune.driveTime}.`,
+      title,
+      description: commune.intro,
       url: `${SITE_URL}/${slug}`,
-      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: `Pizza Deli'Zza — ${prefix} à ${commune.name}` }],
+      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Pizza Deli'Zza — Pizzas à emporter à La Varenne" }],
     },
   };
 }
@@ -53,13 +56,14 @@ export default async function CommunePage({ params }: PageProps) {
 
   const isVariante = slug.startsWith("pizzeria-");
   const h1Prefix = isVariante ? "Pizzeria à emporter" : "Pizza à emporter";
+  const location = ["La Varenne", "Orée d'Anjou"].includes(commune.name) ? "à" : "depuis";
 
   const faqs = communeFaqs(commune);
   const nearby = nearbyCommunes(slug);
 
   const breadcrumbs = [
     { name: "Accueil", href: "/" },
-    { name: `${h1Prefix} à ${commune.name}`, href: `/${slug}` },
+    { name: `${h1Prefix} ${location} ${commune.name}`, href: `/${slug}` },
   ];
 
   return (
@@ -70,18 +74,16 @@ export default async function CommunePage({ params }: PageProps) {
       <article className="flex flex-col gap-8 px-4 pt-6 pb-10">
         {/* H1 */}
         <h1 className="text-[26px] font-bold text-[#F5F5F5] leading-tight">
-          {h1Prefix} à {commune.name} — Pizza Deli&apos;Zza
+          {h1Prefix} {location} {commune.name} — Pizza Deli&apos;Zza
         </h1>
 
         {/* Intro */}
         <section className="flex flex-col gap-4 text-[15px] text-[#A0A0A0] leading-relaxed">
           <p>{commune.intro}</p>
           <p>
-            Chez Pizza Deli&apos;Zza, chaque pizza est préparée à la commande avec une pâte à longue
-            fermentation (48 heures minimum), de la mozzarella de qualité et des ingrédients
-            soigneusement sélectionnés. Notre savoir-faire artisanal se goûte dès la première
-            bouchée : une pâte aérienne, croustillante à l&apos;extérieur, moelleuse à
-            l&apos;intérieur.
+            Chez Pizza Deli&apos;Zza, chaque pizza est préparée à la commande. La pâte bénéficie
+            d&apos;une maturation d&apos;environ 24 heures au froid. Nous sélectionnons les
+            ingrédients avec soin et recherchons un équilibre entre pâte, sauce, fromage et garnitures.
           </p>
         </section>
 
@@ -92,15 +94,14 @@ export default async function CommunePage({ params }: PageProps) {
           </h2>
           <div className="text-[15px] text-[#A0A0A0] leading-relaxed flex flex-col gap-3">
             <p>
-              Pas envie d&apos;attendre sur place ? Commandez directement en ligne sur{" "}
+              Composez votre commande en ligne sur{" "}
               <Link href="/menu" className="text-[#D4A053] underline">
                 notre menu
               </Link>{" "}
-              et récupérez votre commande à La Varenne, prête à l&apos;heure que vous choisissez.
-              C&apos;est simple, rapide et sans surprise.
+              et choisissez votre créneau de retrait à La Varenne.
             </p>
             <p>
-              Vous pouvez également commander par téléphone au{" "}
+              Pour toute question, contactez-nous au{" "}
               <span className="text-[#D4A053]">{BUSINESS.telephone}</span> pendant nos heures
               d&apos;ouverture.
             </p>
@@ -125,25 +126,26 @@ export default async function CommunePage({ params }: PageProps) {
             {BUSINESS.openingHoursText}. Lundi et mardi : fermés.
           </p>
           <p className="text-[15px] text-[#A0A0A0]">
-            Nous vous conseillons de commander en avance pour les créneaux du soir, très demandés
-            le week-end.
+            Consultez les créneaux de retrait proposés lors de votre commande.
           </p>
         </section>
 
         {/* Qualité */}
         <section className="flex flex-col gap-3">
           <h2 className="text-[20px] font-semibold text-[#F5F5F5]">
-            Notre engagement qualité
+            Notre façon de préparer les pizzas
           </h2>
           <div className="text-[15px] text-[#A0A0A0] leading-relaxed flex flex-col gap-3">
             <p>
-              Tout est fait maison chez Pizza Deli&apos;Zza. Notre pâte repose pendant au moins 48 heures
-              pour développer des arômes complexes et une texture incomparable. Nous travaillons avec
-              des producteurs locaux pour nos légumes, notre charcuterie et nos fromages.
+              Nous travaillons une carte volontairement resserrée, avec un soin particulier
+              porté à la pâte, aux ingrédients et à la cuisson. Nos pizzas sont enfournées
+              à haute température.
             </p>
             <p>
-              Pas de pizza industrielle, pas de surgelé, pas de raccourci. Juste du bon, du frais,
-              du local. C&apos;est notre promesse pour chaque pizza qui sort de notre four.
+              Retrouvez les détails de notre préparation sur la page{" "}
+              <Link href="/notre-savoir-faire" className="text-[#D4A053] underline">
+                Notre savoir-faire
+              </Link>.
             </p>
           </div>
         </section>
@@ -167,7 +169,7 @@ export default async function CommunePage({ params }: PageProps) {
         {nearby.length > 0 && (
           <section className="flex flex-col gap-3">
             <h2 className="text-[15px] font-medium text-[#6B6B6B]">
-              Pizza à emporter près de chez vous
+              Commander depuis une autre commune
             </h2>
             <div className="flex flex-wrap gap-2">
               {nearby.map((c) => (
@@ -186,7 +188,7 @@ export default async function CommunePage({ params }: PageProps) {
         {/* CTAs */}
         <section className="flex flex-col items-center gap-3 rounded-[24px] bg-gradient-to-br from-[#1A1A1A] to-[#252525] p-6 text-center">
           <p className="text-[15px] text-[#A0A0A0]">
-            Envie d&apos;une pizza artisanale ce soir ?
+            Envie d&apos;une pizza ce soir ?
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link

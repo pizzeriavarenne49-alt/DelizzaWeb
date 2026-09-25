@@ -7,9 +7,9 @@ import { BUSINESS, SITE_URL } from "@/lib/seo";
 /* ------------------------------------------------------------------ */
 
 export const metadata: Metadata = {
-  title: "Conditions Générales d'Utilisation — Pizza Deli'Zza",
+  title: "Conditions Générales d'Utilisation",
   description:
-    "Conditions Générales d'Utilisation de Pizza Deli'Zza. Règles régissant l'utilisation du site delizza.fr et de l'application mobile pour la commande en ligne de pizzas artisanales.",
+    "Conditions Générales d'Utilisation de Pizza Deli'Zza. Règles régissant l'utilisation du site delizza.fr et de l'application mobile pour la commande en ligne de pizzas.",
   robots: { index: true, follow: true },
   alternates: { canonical: "/cgu" },
   openGraph: {
@@ -47,7 +47,7 @@ export default function CguPage() {
           Les présentes Conditions Générales d&apos;Utilisation (CGU) régissent l&apos;utilisation
           du site <span className="text-[#F5F5F5]">delizza.fr</span> et de l&apos;application
           mobile <span className="text-[#F5F5F5]">Pizza Deli&apos;Zza</span> pour la commande en
-          ligne de pizzas artisanales à emporter (click &amp; collect).
+          ligne de pizzas à emporter (click &amp; collect).
         </p>
         <p>
           Les informations relatives à l&apos;éditeur du site et à son hébergement sont disponibles
@@ -74,7 +74,7 @@ export default function CguPage() {
       <Section emoji="🍕" title="Description du service">
         <p>
           <span className="text-[#F5F5F5]">Pizza Deli&apos;Zza</span> propose un service de
-          commande en ligne de pizzas artisanales à emporter. Le client passe commande via le site
+          commande en ligne de pizzas à emporter. Le client passe commande via le site
           ou l&apos;application, effectue le paiement en ligne par carte bancaire (via{" "}
           <strong className="text-[#F5F5F5]">Stripe</strong>), puis retire sa commande
           au restaurant au créneau choisi :

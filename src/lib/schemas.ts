@@ -4,9 +4,6 @@
 
 import { BUSINESS, SITE_URL, type Commune } from "@/lib/seo";
 
-const SEO_DESCRIPTION =
-  "Pizza Deli'Zza à Orée d'Anjou : pizzas artisanales à emporter, commande par téléphone au 02 21 68 81 82. Découvrez la carte, les horaires et les informations pratiques.";
-
 export function restaurantSchema() {
   return {
     "@context": "https://schema.org",
@@ -16,10 +13,8 @@ export function restaurantSchema() {
     url: BUSINESS.url,
     telephone: BUSINESS.telephone,
     email: BUSINESS.email,
-    description: SEO_DESCRIPTION,
+    description: BUSINESS.description,
     image: `${SITE_URL}/images/og-default.png`,
-    logo: `${SITE_URL}/images/og-default.png`,
-    priceRange: BUSINESS.priceRange,
     servesCuisine: BUSINESS.servesCuisine,
     address: {
       "@type": "PostalAddress",
@@ -36,14 +31,6 @@ export function restaurantSchema() {
       closes: spec.closes,
     })),
     hasMenu: `${SITE_URL}/menu`,
-    areaServed: [
-      { "@type": "City", name: "La Varenne" },
-      { "@type": "City", name: "Orée d'Anjou" },
-      { "@type": "City", name: "Saint-Florent-le-Vieil" },
-      { "@type": "City", name: "Champtoceaux" },
-      { "@type": "City", name: "Drain" },
-      { "@type": "City", name: "Ancenis-Saint-Géréon" },
-    ],
   };
 }
 
@@ -97,17 +84,14 @@ export function faqSchema(faqs: FaqItem[]) {
 }
 
 export function communeFaqs(commune: Commune): FaqItem[] {
-  const isLaVarenne = commune.driveTime === "0 min";
   return [
     {
-      question: `Où se trouve la pizzeria Pizza Deli'Zza près de ${commune.name} ?`,
-      answer: `Pizza Deli'Zza est située au ${BUSINESS.address.streetAddress}, ${BUSINESS.address.postalCode} ${BUSINESS.address.addressLocality} (La Varenne).${
-        isLaVarenne ? "" : ` Depuis ${commune.name}, comptez environ ${commune.driveTime} en voiture.`
-      }`,
+      question: `Où retirer une commande Pizza Deli'Zza passée depuis ${commune.name} ?`,
+      answer: `Pizza Deli'Zza est située au ${BUSINESS.address.streetAddress}, ${BUSINESS.address.postalCode} ${BUSINESS.address.addressLocality} (La Varenne).`,
     },
     {
       question: `Quels sont les horaires de la pizzeria à La Varenne ?`,
-      answer: `Nous sommes ouverts uniquement le soir du mercredi au dimanche. Lundi et mardi : fermés. Mercredi et jeudi : 18h30 à 21h30. Vendredi, samedi et dimanche : 18h00 à 22h00.`,
+      answer: `Nous sommes ouverts uniquement le soir du mercredi au dimanche. Lundi et mardi : fermés. Mercredi et jeudi : 18h30 à 21h30. Vendredi, samedi et dimanche : 18h30 à 22h00.`,
     },
     {
       question: `Peut-on commander depuis ${commune.name} ?`,
@@ -119,7 +103,7 @@ export function communeFaqs(commune: Commune): FaqItem[] {
     },
     {
       question: `Quelles pizzas propose Pizza Deli'Zza ?`,
-      answer: `Pizza Deli'Zza propose des pizzas artisanales à emporter. La carte, les horaires et les informations pratiques sont disponibles sur delizza.fr/menu.`,
+      answer: `Pizza Deli'Zza propose des pizzas à emporter. Consultez les recettes de la carte sur delizza.fr/menu.`,
     },
   ];
 }
@@ -130,7 +114,7 @@ export function menuSectionSchema() {
     "@type": "Menu",
     "@id": `${SITE_URL}/menu#menu`,
     name: "Menu Pizza Deli'Zza",
-    description: "Carte des pizzas artisanales à emporter de Pizza Deli'Zza à Orée d'Anjou.",
+    description: "Carte des pizzas à emporter de Pizza Deli'Zza à Orée d'Anjou.",
     url: `${SITE_URL}/menu`,
     inLanguage: "fr",
   };

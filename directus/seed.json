@@ -9,7 +9,7 @@
       "id": "prod-margherita",
       "name": "Margherita Classica",
       "slug": "margherita-classica",
-      "description_short": "Tomate, mozzarella, basilic frais, huile d'olive vierge",
+      "description_short": "Tomate, mozzarella, basilic, huile d'olive",
       "ingredients": ["tomate", "mozzarella", "basilic", "huile d'olive"],
       "price_cents": 1190,
       "active": true,
@@ -21,7 +21,7 @@
       "id": "prod-pepperoni",
       "name": "Pepperoni Inferno",
       "slug": "pepperoni-inferno",
-      "description_short": "Double pepperoni, mozzarella, sauce piquante maison",
+      "description_short": "Pepperoni, mozzarella, sauce piquante",
       "ingredients": ["pepperoni", "mozzarella", "sauce piquante"],
       "price_cents": 1450,
       "active": true,
@@ -33,19 +33,19 @@
       "id": "prod-truffe",
       "name": "Truffe & Parmesan",
       "slug": "truffe-parmesan",
-      "description_short": "Crème truffée, champignons, copeaux de parmesan 24 mois",
+      "description_short": "Crème truffée, champignons, copeaux de parmesan",
       "ingredients": ["crème truffée", "champignons", "parmesan"],
       "price_cents": 1890,
       "active": true,
       "is_popular": true,
-      "tags": ["premium", "truffe"],
+      "tags": ["truffe"],
       "category": "cat-pizzas"
     },
     {
       "id": "prod-4fromages",
       "name": "Quattro Formaggi",
       "slug": "quattro-formaggi",
-      "description_short": "Gorgonzola, mozzarella, emmental, chèvre frais",
+      "description_short": "Gorgonzola, mozzarella, emmental, chèvre",
       "ingredients": ["gorgonzola", "mozzarella", "emmental", "chèvre"],
       "price_cents": 1550,
       "active": true,
@@ -57,7 +57,7 @@
       "id": "prod-bruschetta",
       "name": "Bruschetta Trio",
       "slug": "bruschetta-trio",
-      "description_short": "Tomates cerises, olives noires, tapenade provençale",
+      "description_short": "Tomates cerises, olives noires, tapenade",
       "ingredients": ["tomates cerises", "olives noires", "tapenade"],
       "price_cents": 890,
       "active": true,
@@ -69,7 +69,7 @@
       "id": "prod-salade-cesar",
       "name": "Salade César Deli'Zza",
       "slug": "salade-cesar",
-      "description_short": "Poulet grillé, parmesan, croûtons, sauce César maison",
+      "description_short": "Poulet grillé, parmesan, croûtons, sauce César",
       "ingredients": ["poulet grillé", "parmesan", "croûtons", "sauce César"],
       "price_cents": 1050,
       "active": true,
@@ -79,7 +79,7 @@
     },
     {
       "id": "prod-tiramisu",
-      "name": "Tiramisu Maison",
+      "name": "Tiramisu",
       "slug": "tiramisu-maison",
       "description_short": "Mascarpone, café espresso, biscuits cuillère, cacao",
       "ingredients": ["mascarpone", "café", "biscuits cuillère", "cacao"],
@@ -93,7 +93,7 @@
       "id": "prod-pannacotta",
       "name": "Panna Cotta Vanille",
       "slug": "panna-cotta-vanille",
-      "description_short": "Crème vanille de Madagascar, coulis fruits rouges",
+      "description_short": "Crème vanille, coulis fruits rouges",
       "ingredients": ["crème vanille", "coulis fruits rouges"],
       "price_cents": 690,
       "active": true,
@@ -102,38 +102,13 @@
       "category": "cat-desserts"
     }
   ],
-  "offers": [
-    {
-      "id": "offer-duo",
-      "title": "Menu Duo -20%",
-      "content": "2 pizzas au choix + 2 desserts pour seulement 29,90 €. Code : DUO20",
-      "start_at": "2026-03-01T00:00:00Z",
-      "end_at": "2026-04-30T23:59:59Z",
-      "active": true
-    },
-    {
-      "id": "offer-pickup",
-      "title": "Retrait express",
-      "content": "Commandez en ligne et récupérez vos pizzas au créneau choisi.",
-      "start_at": "2026-02-15T00:00:00Z",
-      "end_at": "2026-03-31T23:59:59Z",
-      "active": true
-    },
-    {
-      "id": "offer-happy",
-      "title": "Happy Hour -30%",
-      "content": "Toutes les pizzas à -30 % entre 14h et 17h. Code : HAPPY30",
-      "start_at": "2026-03-01T00:00:00Z",
-      "end_at": "2026-05-15T23:59:59Z",
-      "active": true
-    }
-  ],
+  "offers": [],
   "home_hero_slides": [
     {
       "id": "slide-truffe",
       "title": "Truffe & Parmesan",
-      "subtitle": "Spéciale de la semaine",
-      "badge": "Nouveauté",
+      "subtitle": "Découvrez cette recette",
+      "badge": "À découvrir",
       "cta_label": "Commander",
       "cta_target": "/go?trigger=hero_cta",
       "price_cents": 1890,
@@ -144,23 +119,12 @@
       "id": "slide-pepperoni",
       "title": "Pepperoni Inferno",
       "subtitle": "Le classique revisité",
-      "badge": "Populaire",
+      "badge": "À découvrir",
       "cta_label": "Commander",
       "cta_target": "/go?trigger=hero_cta",
       "price_cents": 1450,
       "active": true,
       "order": 2
-    },
-    {
-      "id": "slide-duo",
-      "title": "Menu Duo -20%",
-      "subtitle": "2 pizzas + 2 desserts",
-      "badge": "Offre",
-      "cta_label": "En profiter",
-      "cta_target": "/go?trigger=hero_cta",
-      "price_cents": 2990,
-      "active": true,
-      "order": 3
     }
   ]
 }

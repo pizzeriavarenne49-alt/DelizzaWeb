@@ -3,9 +3,9 @@ import Link from "next/link";
 const links = [
   { href: "/notre-savoir-faire", label: "Notre savoir-faire" },
   { href: "/pizza-champtoceaux", label: "Pizza Champtoceaux" },
-  { href: "/pizzeria-ancenis", label: "Pizzeria Ancenis" },
+  { href: "/pizzeria-ancenis", label: "Pizzeria depuis Ancenis" },
   { href: "/pizza-drain", label: "Pizza Drain" },
-  { href: "/pizzeria-oudon", label: "Pizzeria Oudon" },
+  { href: "/pizzeria-oudon", label: "Pizzeria depuis Oudon" },
   { href: "/pizza-la-varenne", label: "Pizza La Varenne" },
   { href: "/pizzeria-oree-danjou", label: "Pizzeria Orée d'Anjou" },
   { href: "/pizza-saint-florent-le-vieil", label: "Pizza Saint-Florent-le-Vieil" },
@@ -32,7 +32,7 @@ export default function SeoFooter() {
         ))}
       </nav>
       <p className="mt-2 text-[10px] text-[#2A2A2A]">
-        © 2025 Pizza Deli&apos;Zza — Pizzeria artisanale à La Varenne, Orée d&apos;Anjou
+        © {new Date().getFullYear()} Pizza Deli&apos;Zza — Pizzeria à La Varenne, Orée d&apos;Anjou
       </p>
     </footer>
   );

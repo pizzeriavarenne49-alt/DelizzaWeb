@@ -6,8 +6,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import GoogleAnalytics from "@/components/seo/GoogleAnalytics";
 import { restaurantSchema, webSiteSchema } from "@/lib/schemas";
 
-const SEO_DESCRIPTION =
-  "Pizza Deli'Zza à Orée d'Anjou : pizzas artisanales à emporter, commande par téléphone au 02 21 68 81 82. Découvrez la carte, les horaires et les informations pratiques.";
+const SEO_DESCRIPTION = BUSINESS.description;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -23,13 +22,13 @@ export const metadata: Metadata = {
     siteName: BUSINESS.name,
     locale: "fr_FR",
     url: SITE_URL,
-    title: "Pizza Deli'Zza — Pizzeria artisanale à La Varenne",
+    title: "Pizza Deli'Zza — Pizzeria à La Varenne",
     description: SEO_DESCRIPTION,
-    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Pizza artisanale Deli'Zza" }],
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Pizza Deli'Zza" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pizza Deli'Zza — Pizzeria artisanale à La Varenne",
+    title: "Pizza Deli'Zza — Pizzeria à La Varenne",
     description: SEO_DESCRIPTION,
     images: [OG_IMAGE],
   },
