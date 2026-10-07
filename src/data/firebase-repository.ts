@@ -438,6 +438,10 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
     badge: typeof data.badge === "string" ? data.badge : undefined,
     active: bool(data.isActive, true),
     manualOutOfStock: bool(data.manualOutOfStock, false),
+    stockManaged: bool(data.stockManaged, false),
+    stockQty: typeof data.stockQty === "number" && Number.isFinite(data.stockQty)
+      ? data.stockQty
+      : undefined,
     is_popular: bool(data.isPopular, false),
     tags: arr(data.tags),
     options: parseOptions(data.options),

@@ -109,6 +109,18 @@ function readUserFacingMessage(error: unknown): string | null {
   return null;
 }
 
+function productNameFromStockError(error: unknown): string | null {
+  const err = readErrorLike(error);
+  const details =
+    typeof err.details === "object" && err.details !== null
+      ? (err.details as Record<string, unknown>)
+      : null;
+  const name = details?.productName;
+  if (typeof name !== "string") return null;
+  const trimmed = name.trim().replace(/[\u0000-\u001F\u007F]/g, "");
+  return trimmed.length > 0 && trimmed.length <= 160 ? trimmed : null;
+}
+
 function hasAny(text: string, tokens: string[]): boolean {
   return tokens.some((token) => text.includes(token));
 }
@@ -119,6 +131,25 @@ export function getClientErrorMessage(
 ): string {
   const code = readCode(error);
   const text = readTechnicalText(error);
+  const details = readErrorLike(error).details;
+  const detailCode =
+    typeof details === "object" && details !== null && typeof (details as Record<string, unknown>).code === "string"
+      ? (details as Record<string, unknown>).code
+      : "";
+  const productName = productNameFromStockError(error);
+
+  if (detailCode === "STOCK_INSUFFICIENT" || text.includes("stock_insufficient")) {
+    return productName
+      ? `${productName} vient de passer en rupture.`
+      : CLIENT_ERROR_MESSAGES.productOutOfStock;
+  }
+
+  if (detailCode === "PRODUCT_UNAVAILABLE" || text.includes("product_unavailable")) {
+    return productName
+      ? `${productName} n'est plus disponible.`
+      : CLIENT_ERROR_MESSAGES.productUnavailable;
+  }
+
   const userFacingMessage = readUserFacingMessage(error);
 
   if (userFacingMessage) {

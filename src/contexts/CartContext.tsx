@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { CartItem, CartItemCustomizations, SelectedOption } from "@/types/cart";
 import type { Product } from "@/types";
 import { computeTaxFromTtcCents } from "@/types";
+import { isProductUnavailable } from "@/lib/product-availability";
 
 const LEGACY_STORAGE_KEYS = ["delizza_cart", "cart", "basket", "panier"];
 const GUEST_STORAGE_KEY = "delizza_cart_guest";
@@ -199,7 +200,7 @@ function CartStateProvider({
   }, [items, storageKey]);
 
   const addItem = useCallback((product: Product) => {
-    if (product.manualOutOfStock === true) return;
+    if (isProductUnavailable(product)) return;
 
     const cartKey = buildCartKey(product.id, {
       selectedTemplateOptions: {},
@@ -242,7 +243,7 @@ function CartStateProvider({
       quantity: number,
       selectedOptions: SelectedOption[] = [],
     ) => {
-      if (product.manualOutOfStock === true) return;
+      if (isProductUnavailable(product)) return;
 
       const cartKey = buildCartKey(product.id, customizations);
       const optionDeltasCents = selectedOptions.reduce((sum, o) => sum + o.priceDeltaCents, 0);

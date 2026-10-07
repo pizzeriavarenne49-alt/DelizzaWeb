@@ -8,6 +8,7 @@ import type { Product, ProductIngredient } from "@/types";
 import type { CartItemCustomizations, SelectedOption } from "@/types/cart";
 import type { ProductOption } from "@/types/product-options";
 import { formatPrice } from "@/types";
+import { isProductUnavailable } from "@/lib/product-availability";
 
 interface ProductCustomizeModalProps {
   product: Product;
@@ -159,7 +160,7 @@ export default function ProductCustomizeModal({
     supplementDeltasCents;
   const unitPriceCents = product.price_cents + deltasCents;
   const totalTtcCents = unitPriceCents * quantity;
-  const canAdd = areRequiredOptionsFilled(sortedOptions, selections);
+  const canAdd = areRequiredOptionsFilled(sortedOptions, selections) && !isProductUnavailable(product);
   const orderingBlocked = !onlineOrdering.canStartOrder;
   const hasOptions = sortedOptions.length > 0;
   const hasIngredients = product.ingredients.length > 0;

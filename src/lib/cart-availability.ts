@@ -33,7 +33,7 @@ type LiveProduct = {
   published: boolean | null;
   archived: boolean | null;
   deleted: boolean | null;
-  stock: number | null;
+  stockQty: number | null;
   stockManaged: boolean;
   manualOutOfStock: boolean;
   priceCents: number;
@@ -187,7 +187,7 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
     published: boolOrNull(data.published),
     archived: boolOrNull(data.archived),
     deleted: boolOrNull(data.deleted),
-    stock: numberOrNull(data.stock),
+    stockQty: numberOrNull(data.stockQty),
     stockManaged: typeof data.stockManaged === "boolean" ? data.stockManaged : false,
     manualOutOfStock: typeof data.manualOutOfStock === "boolean" ? data.manualOutOfStock : false,
     priceCents: priceCentsFromData(data),
@@ -437,7 +437,7 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
       continue;
     }
 
-    if (product.stockManaged === true && product.stock !== null && product.stock <= 0) {
+    if (product.stockManaged === true && (product.stockQty === null || product.stockQty <= 0)) {
       issues.push(
         buildProductIssue(
           item,

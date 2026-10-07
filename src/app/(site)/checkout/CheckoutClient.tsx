@@ -185,7 +185,7 @@ type CartProductDiagnostic = {
   published: boolean | null;
   archived: boolean | null;
   deleted: boolean | null;
-  stock: number | null;
+  stockQty: number | null;
   stockManaged: boolean;
   manualOutOfStock: boolean;
   priceCents: number;
@@ -241,7 +241,7 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
       published: boolean | null;
       archived: boolean | null;
       deleted: boolean | null;
-      stock: number | null;
+      stockQty: number | null;
       stockManaged: boolean;
       appId: string;
       name: string;
@@ -277,7 +277,7 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
         published: boolOrNull(data.published),
         archived: boolOrNull(data.archived),
         deleted: boolOrNull(data.deleted),
-        stock: numberOrNull(data.stock),
+        stockQty: numberOrNull(data.stockQty),
         stockManaged:
           typeof data.stockManaged === "boolean" ? data.stockManaged : false,
         categoryId: typeof data.categoryId === "string" ? data.categoryId : "",
@@ -322,7 +322,7 @@ async function validateCartProductsAvailable(items: CartItem[]): Promise<CartVal
         details,
       };
     }
-    if (product.stockManaged === true && product.stock !== null && product.stock <= 0) {
+    if (product.stockManaged === true && (product.stockQty === null || product.stockQty <= 0)) {
       logCartValidationFailure("stock_managed_out_of_stock", details, items);
       return {
         ok: false,

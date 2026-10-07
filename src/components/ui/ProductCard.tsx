@@ -12,6 +12,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import { useToast } from "@/contexts/ToastContext";
 import ProductCustomizeModal from "@/components/ui/ProductCustomizeModal";
+import { isProductUnavailable } from "@/lib/product-availability";
 
 interface ProductCardProps {
   product: Product;
@@ -31,7 +32,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const onlineOrdering = useOnlineOrderingStatus();
   const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
-  const isUnavailable = product.manualOutOfStock === true;
+  const isUnavailable = isProductUnavailable(product);
   const orderingDisabled = !onlineOrdering.canStartOrder;
   const cannotOrder = isUnavailable || orderingDisabled;
   const hasCustomizations = hasProductCustomizations(product);

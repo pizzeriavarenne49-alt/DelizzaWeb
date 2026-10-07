@@ -10,6 +10,7 @@ const robots = loadTsModule(path.resolve("src/app/robots.ts"));
 const sitemap = loadTsModule(path.resolve("src/app/sitemap.ts"));
 const checkoutAttempt = loadTsModule(path.resolve("src/services/checkout-attempt.ts"));
 const clientErrorMessage = loadTsModule(path.resolve("src/lib/client-error-message.ts"));
+const productAvailability = loadTsModule(path.resolve("src/lib/product-availability.ts"));
 
 function run(name, fn) {
   try {
@@ -568,6 +569,31 @@ run("payment error mapping keeps closed online ordering out of card declines", (
   assert.equal(
     clientErrorMessage.getClientErrorMessage(emergencyError, "payment"),
     clientErrorMessage.CLIENT_ERROR_MESSAGES.onlineOrderingEmergency,
+  );
+});
+
+run("managed physical stock uses only stockQty for availability", () => {
+  assert.equal(productAvailability.isProductUnavailable({ stockManaged: false }), false);
+  assert.equal(productAvailability.isProductUnavailable({ stockManaged: true }), true);
+  assert.equal(productAvailability.isProductUnavailable({ stockManaged: true, stockQty: 0 }), true);
+  assert.equal(productAvailability.isProductUnavailable({ stockManaged: true, stockQty: 3 }), false);
+  assert.equal(productAvailability.isProductUnavailable({ manualOutOfStock: true, stockManaged: true, stockQty: 3 }), true);
+});
+
+run("checkout maps canonical inventory errors to the affected product", () => {
+  assert.equal(
+    clientErrorMessage.getClientErrorMessage(
+      { code: "functions/resource-exhausted", details: { code: "STOCK_INSUFFICIENT", productName: "Oasis Tropical" } },
+      "checkout",
+    ),
+    "Oasis Tropical vient de passer en rupture.",
+  );
+  assert.equal(
+    clientErrorMessage.getClientErrorMessage(
+      { code: "functions/failed-precondition", details: { code: "PRODUCT_UNAVAILABLE", productName: "Oasis Tropical" } },
+      "checkout",
+    ),
+    "Oasis Tropical n'est plus disponible.",
   );
 });
 

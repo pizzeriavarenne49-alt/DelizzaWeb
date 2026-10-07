@@ -19,6 +19,9 @@ export interface Product {
   badge?: string;
   active: boolean;
   manualOutOfStock?: boolean;
+  /** Canonical physical quantity when stockManaged is enabled. */
+  stockManaged?: boolean;
+  stockQty?: number;
   is_popular: boolean;
   tags: string[];
   /** Customization options (size, toppings, etc.) embedded in Firestore document */
