@@ -390,14 +390,26 @@ import { FirebaseRepository } from "./firebase-repository";
 let activeSource: "firebase" | "directus" | "mock" | "empty" = "mock";
 
 const isProduction = process.env.NODE_ENV === "production";
+const ISOLATED_MARKETING_PROJECT = "demo-acquisition-marketing";
+
+function usesIsolatedMarketingFirestoreEmulator(): boolean {
+  return (
+    process.env.NEXT_PUBLIC_MARKETING_TEST_MODE === "true" &&
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === ISOLATED_MARKETING_PROJECT &&
+    process.env.FIREBASE_PROJECT_ID === ISOLATED_MARKETING_PROJECT &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:9808" &&
+    process.env.WL_APP_ID === "d_lizza"
+  );
+}
 
 function createRepository(): DataRepository {
   // Priority 1: Firebase (same data as WLHORIZON mobile app)
   if (
-    process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_CLIENT_EMAIL &&
-    process.env.FIREBASE_PRIVATE_KEY &&
-    process.env.WL_APP_ID
+    usesIsolatedMarketingFirestoreEmulator() ||
+    (process.env.FIREBASE_PROJECT_ID &&
+      process.env.FIREBASE_CLIENT_EMAIL &&
+      process.env.FIREBASE_PRIVATE_KEY &&
+      process.env.WL_APP_ID)
   ) {
     activeSource = "firebase";
     console.info("[CMS] Using Firebase (WLHORIZON) as data source");

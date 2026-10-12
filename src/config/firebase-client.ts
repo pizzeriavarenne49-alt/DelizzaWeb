@@ -16,9 +16,9 @@
  */
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getFunctions, type Functions } from "firebase/functions";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
+import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
 import {
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
@@ -50,16 +50,49 @@ function getClientApp(): FirebaseApp {
   return initializeApp(firebaseConfig);
 }
 
+function marketingTestMode(): boolean {
+  return process.env.NEXT_PUBLIC_MARKETING_TEST_MODE === "true";
+}
+
+function assertIsolatedMarketingEmulator(): void {
+  if (!marketingTestMode()) return;
+  if (firebaseConfig.projectId !== "demo-acquisition-marketing") {
+    throw new Error("Marketing test mode requires NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-acquisition-marketing.");
+  }
+}
+
+let authEmulatorConnected = false;
+let firestoreEmulatorConnected = false;
+let functionsEmulatorConnected = false;
+
 export function getClientAuth(): Auth {
-  return getAuth(getClientApp());
+  const auth = getAuth(getClientApp());
+  if (marketingTestMode() && !authEmulatorConnected) {
+    assertIsolatedMarketingEmulator();
+    connectAuthEmulator(auth, "http://127.0.0.1:9909", { disableWarnings: true });
+    authEmulatorConnected = true;
+  }
+  return auth;
 }
 
 export function getClientFirestore(): Firestore {
-  return getFirestore(getClientApp());
+  const firestore = getFirestore(getClientApp());
+  if (marketingTestMode() && !firestoreEmulatorConnected) {
+    assertIsolatedMarketingEmulator();
+    connectFirestoreEmulator(firestore, "127.0.0.1", 9808);
+    firestoreEmulatorConnected = true;
+  }
+  return firestore;
 }
 
 export function getClientFunctions(): Functions {
-  return getFunctions(getClientApp(), "europe-west1");
+  const functions = getFunctions(getClientApp(), "europe-west1");
+  if (marketingTestMode() && !functionsEmulatorConnected) {
+    assertIsolatedMarketingEmulator();
+    connectFunctionsEmulator(functions, "127.0.0.1", 9501);
+    functionsEmulatorConnected = true;
+  }
+  return functions;
 }
 
 let appCheckInstance: AppCheck | null = null;
@@ -88,6 +121,13 @@ function isLocalDevelopmentHost(): boolean {
 export function initAppCheck(): void {
   if (typeof window === "undefined") return; // server-side — skip
   if (appCheckInstance) return; // already initialised
+
+  // Browser demonstrations and automated tests use the isolated emulator
+  // project; never initialise a third-party App Check provider in that mode.
+  if (marketingTestMode()) {
+    assertIsolatedMarketingEmulator();
+    return;
+  }
 
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
   const debugToken = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_TOKEN;
