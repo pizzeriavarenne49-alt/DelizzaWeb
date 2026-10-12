@@ -53,6 +53,8 @@ import {
   type LoyaltyState,
 } from "@/services/loyalty-service";
 import { formatFrenchPhone } from "@/lib/phone";
+import { linkOrderMarketing, recordMarketingEvent } from "@/marketing/marketing-client";
+import { useMarketing } from "@/marketing/MarketingProvider";
 
 // Dynamically import Stripe component to avoid SSR issues
 const StripeCheckout = dynamic(
@@ -1183,6 +1185,7 @@ export default function CheckoutClient() {
   const { user } = useAuth();
   const { items, isEmpty, getSubtotalCents, getTaxCents, getTotalCents } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
+  const { consent: marketingConsent, enabled: marketingEnabled } = useMarketing();
   const onlineOrderingBlocked = !onlineOrdering.canStartOrder;
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -1211,6 +1214,13 @@ export default function CheckoutClient() {
   const [cartAvailabilityLoading, setCartAvailabilityLoading] = useState(false);
   const [cartAvailabilityIssues, setCartAvailabilityIssues] = useState<CartAvailabilityIssue[]>([]);
   const submittingRef = useRef(false);
+  const checkoutEntryTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!marketingConsent?.analytics || !marketingEnabled || checkoutEntryTrackedRef.current) return;
+    checkoutEntryTrackedRef.current = true;
+    recordMarketingEvent("checkout_start", { path: "/checkout" });
+  }, [marketingConsent?.analytics, marketingEnabled]);
 
   useEffect(() => {
     if (!user) {
@@ -1468,6 +1478,9 @@ export default function CheckoutClient() {
         ...(rewardItemIndex !== undefined ? { rewardItemIndex } : {}),
       });
       rememberCheckoutAttemptOrder(fingerprint, orderResult.orderId);
+      // This is deliberately decoupled from order creation and payment. A failed
+      // marketing call only leaves this order unattributed; it never blocks commerce.
+      linkOrderMarketing(orderResult.orderId);
 
       if (isFullyCoveredReward) {
         router.push(
@@ -1524,6 +1537,10 @@ export default function CheckoutClient() {
           .toLowerCase();
       })();
       const capacityConflict = errorText.includes("production_capacity_conflict");
+      recordMarketingEvent("checkout_error", {
+        path: "/checkout",
+        errorCode: capacityConflict ? "capacity_unavailable" : "order_or_payment_initialization_failed",
+      });
       if (capacityConflict || message === CLIENT_ERROR_MESSAGES.slotUnavailable) {
         setSelectedSlotSelection(null);
         setFulfillment({ ...fulfillment, scheduledTime: "" });
@@ -1564,6 +1581,7 @@ export default function CheckoutClient() {
 
   const handlePaymentError = useCallback((error: unknown) => {
     console.error("[stripe] Payment failed:", error);
+    recordMarketingEvent("checkout_error", { path: "/checkout", errorCode: "payment_failed" });
     setError(getClientErrorMessage(error, "payment"));
     setStep(2);
   }, []);

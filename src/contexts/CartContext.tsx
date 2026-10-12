@@ -13,6 +13,7 @@ import type { CartItem, CartItemCustomizations, SelectedOption } from "@/types/c
 import type { Product } from "@/types";
 import { computeTaxFromTtcCents } from "@/types";
 import { isProductUnavailable } from "@/lib/product-availability";
+import { recordMarketingEvent } from "@/marketing/marketing-client";
 
 const LEGACY_STORAGE_KEYS = ["delizza_cart", "cart", "basket", "panier"];
 const GUEST_STORAGE_KEY = "delizza_cart_guest";
@@ -202,6 +203,8 @@ function CartStateProvider({
   const addItem = useCallback((product: Product) => {
     if (isProductUnavailable(product)) return;
 
+    recordMarketingEvent("add_to_cart", { productId: product.id, quantity: 1 });
+
     const cartKey = buildCartKey(product.id, {
       selectedTemplateOptions: {},
       addedSupplements: [],
@@ -244,6 +247,9 @@ function CartStateProvider({
       selectedOptions: SelectedOption[] = [],
     ) => {
       if (isProductUnavailable(product)) return;
+      if (!Number.isInteger(quantity) || quantity <= 0) return;
+
+      recordMarketingEvent("add_to_cart", { productId: product.id, quantity });
 
       const cartKey = buildCartKey(product.id, customizations);
       const optionDeltasCents = selectedOptions.reduce((sum, o) => sum + o.priceDeltaCents, 0);
@@ -287,10 +293,13 @@ function CartStateProvider({
   );
 
   const removeItem = useCallback((cartKey: string) => {
+    const existing = items.find((item) => item.cartKey === cartKey);
+    if (!existing) return;
+    recordMarketingEvent("remove_from_cart", { productId: existing.catalogItemId, quantity: 1 });
     setItems((prev) => {
-      const existing = prev.find((i) => i.cartKey === cartKey);
-      if (!existing) return prev;
-      if (existing.quantity > 1) {
+      const current = prev.find((i) => i.cartKey === cartKey);
+      if (!current) return prev;
+      if (current.quantity > 1) {
         return prev.map((i) =>
           i.cartKey === cartKey
             ? {
@@ -303,10 +312,17 @@ function CartStateProvider({
       }
       return prev.filter((i) => i.cartKey !== cartKey);
     });
-  }, []);
+  }, [items]);
 
   const updateQuantity = useCallback(
     (cartKey: string, quantity: number) => {
+      const existing = items.find((item) => item.cartKey === cartKey);
+      if (existing && Number.isFinite(quantity) && quantity !== existing.quantity) {
+        recordMarketingEvent(quantity > existing.quantity ? "add_to_cart" : "remove_from_cart", {
+          productId: existing.catalogItemId,
+          quantity: Math.abs(quantity - existing.quantity),
+        });
+      }
       if (quantity <= 0) {
         setItems((prev) => prev.filter((i) => i.cartKey !== cartKey));
         return;
@@ -319,10 +335,12 @@ function CartStateProvider({
         ),
       );
     },
-    [],
+    [items],
   );
 
   const clearCart = useCallback(() => {
+    // This is also invoked after a completed order. It must not manufacture
+    // cart removals for an already purchased basket.
     setItems([]);
   }, []);
 

@@ -38,7 +38,7 @@ export default function PrivacyPage() {
           Politique de confidentialité
         </h1>
         <p className="text-[14px] text-[#6B6B6B]">
-          Dernière mise à jour : 6 mars 2026
+          Dernière mise à jour : 12 octobre 2026
         </p>
       </div>
 
@@ -83,8 +83,9 @@ export default function PrivacyPage() {
             et ne transitent jamais par nos serveurs.
           </Item>
           <Item>
-            <strong className="text-[#F5F5F5]">Données de navigation</strong> — pages visitées,
-            durée de session, type d&apos;appareil, via Google Analytics (anonymisées).
+            <strong className="text-[#F5F5F5]">Données de navigation optionnelles</strong> —
+            pages consultées, étapes de panier et de commande, identifiant de session pseudonyme
+            et, si vous l&apos;acceptez séparément, paramètres de campagne et domaine référent.
           </Item>
         </ul>
       </Section>
@@ -96,7 +97,7 @@ export default function PrivacyPage() {
           <Item>La <strong className="text-[#F5F5F5]">gestion de vos commandes</strong> (préparation, confirmation, retrait).</Item>
           <Item>La <strong className="text-[#F5F5F5]">gestion de votre compte</strong> client et de votre historique.</Item>
           <Item>L&apos;<strong className="text-[#F5F5F5]">amélioration de nos services</strong> et de l&apos;expérience utilisateur.</Item>
-          <Item>Des <strong className="text-[#F5F5F5]">analyses statistiques anonymisées</strong> sur la fréquentation du site et de l&apos;application.</Item>
+          <Item>Des <strong className="text-[#F5F5F5]">mesures d&apos;audience et marketing optionnelles</strong> après votre choix, afin de comprendre les visites et les campagnes.</Item>
         </ul>
       </Section>
 
@@ -108,8 +109,8 @@ export default function PrivacyPage() {
             commandes et gestion du compte (art. 6.1.b RGPD).
           </Item>
           <Item>
-            <strong className="text-[#F5F5F5]">Consentement</strong> — dépôt de cookies
-            analytiques (Google Analytics) (art. 6.1.a RGPD).
+            <strong className="text-[#F5F5F5]">Consentement</strong> — mesure d&apos;audience,
+            traceurs analytiques éventuels et mesure marketing (art. 6.1.a RGPD).
           </Item>
           <Item>
             <strong className="text-[#F5F5F5]">Intérêt légitime</strong> — amélioration de nos
@@ -127,7 +128,7 @@ export default function PrivacyPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ProviderCard name="Google Firebase" role="Hébergement des données (Union Européenne)" />
           <ProviderCard name="Stripe" role="Paiements sécurisés" />
-          <ProviderCard name="Google Analytics" role="Statistiques de fréquentation (données anonymisées)" />
+          <ProviderCard name="Google Analytics" role="Statistiques de fréquentation, uniquement si cette finalité est acceptée et si le service est configuré" />
           <ProviderCard name="Vercel" role="Hébergement du site web" />
         </div>
         <p>
@@ -147,8 +148,10 @@ export default function PrivacyPage() {
             comptable et fiscale).
           </Item>
           <Item>
-            <strong className="text-[#F5F5F5]">Données analytics</strong> — 14 mois (configuration
-            par défaut de Google Analytics).
+            <strong className="text-[#F5F5F5]">Choix de confidentialité</strong> — jusqu&apos;à 6 mois
+            sur votre appareil. Les sessions et événements internes sont conservés pour une durée
+            limitée définie par l&apos;établissement ; les données nécessaires aux commandes suivent
+            leur propre durée légale.
           </Item>
         </ul>
       </Section>
@@ -192,7 +195,7 @@ export default function PrivacyPage() {
 
       {/* ── 8. Cookies et traceurs ── */}
       <Section emoji="🍪" title="Cookies et traceurs">
-        <p>Nous utilisons deux catégories de cookies :</p>
+        <p>Nous distinguons les traceurs techniques indispensables des finalités optionnelles :</p>
         <ul className="flex flex-col gap-2 pl-1">
           <Item>
             <strong className="text-[#F5F5F5]">Cookies techniques indispensables</strong> —
@@ -200,14 +203,23 @@ export default function PrivacyPage() {
             consentement.
           </Item>
           <Item>
-            <strong className="text-[#F5F5F5]">Google Analytics</strong> — mesure d&apos;audience
-            avec anonymisation de l&apos;adresse IP activée. Ces cookies sont déposés avec votre
-            consentement.
+            <strong className="text-[#F5F5F5]">Mesure d&apos;audience</strong> — pages et étapes de
+            navigation, avec un identifiant pseudonyme. Google Analytics, lorsqu&apos;il est configuré,
+            ne se charge qu&apos;après acceptation de cette finalité.
+          </Item>
+          <Item>
+            <strong className="text-[#F5F5F5]">Mesure marketing</strong> — paramètres UTM,
+            liens de campagne et domaine référent, uniquement après acceptation distincte. Elle
+            aide à rapprocher certaines commandes des campagnes sans transmettre les coordonnées
+            de commande aux plateformes publicitaires dans cette version.
           </Item>
         </ul>
         <p>
-          Vous pouvez à tout moment refuser ou retirer votre consentement aux cookies analytiques
-          via les paramètres de votre navigateur.
+          Vous pouvez accepter, refuser ou modifier ces choix à tout moment avec le lien
+          <strong className="text-[#F5F5F5]"> « Gérer mes choix »</strong> présent sur le site.
+          Le retrait arrête les futures collectes optionnelles et demande la suppression du lien de
+          session lorsque le service est disponible. Cette information technique doit faire l&apos;objet
+          d&apos;une revue juridique avant activation publique.
         </p>
       </Section>
 

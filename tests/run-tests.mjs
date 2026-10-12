@@ -22,6 +22,16 @@ function run(name, fn) {
   }
 }
 
+async function runAsync(name, fn) {
+  try {
+    await fn();
+    console.log(`ok - ${name}`);
+  } catch (error) {
+    console.error(`not ok - ${name}`);
+    throw error;
+  }
+}
+
 run("paris date helpers stay on the Paris day boundary", () => {
   const reference = new Date("2026-07-27T22:30:00.000Z");
 
@@ -674,6 +684,187 @@ run("robots and sitemap remain canonical when coming soon is off", () => {
   assert.deepEqual(builtRobots.rules, [{ userAgent: "*", disallow: ["/go", "/api/"] }]);
   assert.equal(builtRobots.sitemap, "https://www.delizza.fr/sitemap.xml");
   assert.ok(builtSitemap.some((entry) => entry.url === "https://www.delizza.fr/menu"));
+});
+
+function marketingTestWindow(url = "https://www.delizza.fr/menu?utm_source=test&utm_campaign=launch&mk_link=link_1") {
+  const values = new Map();
+  const listeners = new Map();
+  return {
+    localStorage: {
+      getItem: (key) => values.has(key) ? values.get(key) : null,
+      setItem: (key, value) => values.set(key, String(value)),
+      removeItem: (key) => values.delete(key),
+    },
+    location: new URL(url),
+    addEventListener: (name, callback) => listeners.set(name, callback),
+    removeEventListener: (name) => listeners.delete(name),
+    dispatchEvent: (event) => listeners.get(event.type)?.(event),
+  };
+}
+
+async function settle() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+await runAsync("marketing client waits for authoritative config, keeps UTM behind marketing consent, and drops limited batches", async () => {
+  const previous = {
+    nodeEnv: process.env.NODE_ENV,
+    source: process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID,
+    test: process.env.NEXT_PUBLIC_MARKETING_TEST_MODE,
+    project: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    window: globalThis.window,
+    document: globalThis.document,
+    customEvent: globalThis.CustomEvent,
+    transport: globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__,
+  };
+  process.env.NODE_ENV = "development";
+  process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = "delizza-web-test";
+  process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = "true";
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "demo-acquisition-marketing";
+  globalThis.window = marketingTestWindow();
+  globalThis.document = { referrer: "https://example.test/ref" };
+  globalThis.CustomEvent = class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } };
+  const calls = [];
+  globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = {
+    async invoke(name, payload) {
+      calls.push({ name, payload });
+      if (name === "marketingPublicConfig") {
+        return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-10-12" } };
+      }
+      if (name === "marketingCollect") {
+        const ids = payload.events?.map((event) => event.id) ?? [];
+        return { data: { acceptedEventIds: ids, duplicateEventIds: [], droppedEventIds: [], collectionState: "accepted", erasureToken: "erase_1" } };
+      }
+      return { data: {} };
+    },
+  };
+  try {
+    const marketing = loadTsModule(path.resolve("src/marketing/marketing-client.ts"));
+    marketing.setMarketingConsent({ analytics: true, marketing: false });
+    await settle();
+    marketing.recordMarketingEvent("page_view", { path: "/menu" });
+    await settle();
+    const audienceCall = calls.find((call) => call.name === "marketingCollect" && call.payload.events.some((event) => event.type === "page_view"));
+    assert.ok(audienceCall);
+    assert.equal(audienceCall.payload.attribution, undefined);
+
+    marketing.setMarketingConsent({ analytics: true, marketing: true });
+    await settle();
+    marketing.recordMarketingEvent("page_view", { path: "/menu" });
+    await settle();
+    const marketingCall = calls.filter((call) => call.name === "marketingCollect").at(-1);
+    assert.equal(marketingCall.payload.attribution.utm_source, "test");
+    assert.equal(marketingCall.payload.attribution.campaignLinkId, "link_1");
+
+    globalThis.window.location = new URL("https://www.delizza.fr/cart?email=not-collected@example.test");
+    marketing.recordMarketingEvent("page_view", { path: "/cart?email=not-collected@example.test" });
+    await settle();
+    const directNavigationCall = calls.findLast((call) => call.name === "marketingCollect" && call.payload.events.some((event) => event.path === "/cart"));
+    assert.equal(directNavigationCall.payload.attribution.utm_source, "test");
+    assert.ok(directNavigationCall.payload.events.every((event) => !event.path?.includes("?")));
+
+    globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__.invoke = async (name, payload) => {
+      calls.push({ name, payload });
+      if (name === "marketingCollect") return { data: { acceptedEventIds: [], duplicateEventIds: [], droppedEventIds: payload.events.map((event) => event.id), collectionState: "limited" } };
+      return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-10-12" } };
+    };
+    marketing.recordMarketingEvent("product_view", { productId: "pizza-1", path: "/menu" });
+    await settle();
+    const countAfterLimited = calls.length;
+    marketing.recordMarketingEvent("product_view", { productId: "pizza-2", path: "/menu" });
+    await settle();
+    assert.equal(calls.length, countAfterLimited);
+  } finally {
+    process.env.NODE_ENV = previous.nodeEnv;
+    process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = previous.source;
+    process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = previous.test;
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = previous.project;
+    globalThis.window = previous.window;
+    globalThis.document = previous.document;
+    globalThis.CustomEvent = previous.customEvent;
+    globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = previous.transport;
+  }
+});
+
+await runAsync("marketing withdrawal wins over an in-flight configuration response", async () => {
+  const previous = { nodeEnv: process.env.NODE_ENV, source: process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID, test: process.env.NEXT_PUBLIC_MARKETING_TEST_MODE, project: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID, window: globalThis.window, document: globalThis.document, customEvent: globalThis.CustomEvent, transport: globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ };
+  process.env.NODE_ENV = "development";
+  process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = "delizza-web-test";
+  process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = "true";
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "demo-acquisition-marketing";
+  globalThis.window = marketingTestWindow();
+  globalThis.document = { referrer: "" };
+  globalThis.CustomEvent = class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } };
+  let resolveConfig;
+  globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = { invoke(name) {
+    if (name === "marketingPublicConfig") return new Promise((resolve) => { resolveConfig = resolve; });
+    return Promise.resolve({ data: {} });
+  } };
+  try {
+    const marketing = loadTsModule(path.resolve("src/marketing/marketing-client.ts"));
+    marketing.setMarketingConsent({ analytics: true, marketing: true });
+    await marketing.revokeMarketingConsent();
+    resolveConfig({ data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "late" } });
+    await settle();
+    assert.equal(marketing.getMarketingState().consent.analytics, false);
+    assert.equal(marketing.getMarketingState().enabled, false);
+  } finally {
+    process.env.NODE_ENV = previous.nodeEnv; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = previous.source; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = previous.test; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = previous.project;
+    globalThis.window = previous.window; globalThis.document = previous.document; globalThis.CustomEvent = previous.customEvent; globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = previous.transport;
+  }
+});
+
+await runAsync("marketing order-link queue retries on a later order without delaying commerce", async () => {
+  const previous = { nodeEnv: process.env.NODE_ENV, source: process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID, test: process.env.NEXT_PUBLIC_MARKETING_TEST_MODE, project: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID, window: globalThis.window, document: globalThis.document, customEvent: globalThis.CustomEvent, transport: globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ };
+  process.env.NODE_ENV = "development"; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = "delizza-web-test"; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = "true"; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "demo-acquisition-marketing";
+  globalThis.window = marketingTestWindow(); globalThis.document = { referrer: "" }; globalThis.CustomEvent = class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } };
+  const linked = [];
+  let failOnce = true;
+  globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = { async invoke(name, payload) {
+    if (name === "marketingPublicConfig") return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-10-12" } };
+    if (name === "marketingCollect") return { data: { acceptedEventIds: payload.events?.map((event) => event.id) ?? [], duplicateEventIds: [], droppedEventIds: [], collectionState: "accepted", attributionToken: "attr_1", erasureToken: "erase_1" } };
+    linked.push(payload.orderId);
+    if (failOnce) { failOnce = false; throw { code: "functions/unavailable" }; }
+    return { data: { linked: true } };
+  } };
+  try {
+    const marketing = loadTsModule(path.resolve("src/marketing/marketing-client.ts"));
+    marketing.setMarketingConsent({ analytics: true, marketing: true });
+    await settle();
+    marketing.recordMarketingEvent("page_view", { path: "/menu" });
+    await settle();
+    marketing.linkOrderMarketing("order_1");
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    marketing.linkOrderMarketing("order_2");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.deepEqual(linked, ["order_1", "order_1"]);
+  } finally {
+    process.env.NODE_ENV = previous.nodeEnv; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = previous.source; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = previous.test; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = previous.project;
+    globalThis.window = previous.window; globalThis.document = previous.document; globalThis.CustomEvent = previous.customEvent; globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = previous.transport;
+  }
+});
+
+await runAsync("offline withdrawal keeps only a revocation capability and retries it online", async () => {
+  const previous = { nodeEnv: process.env.NODE_ENV, source: process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID, test: process.env.NEXT_PUBLIC_MARKETING_TEST_MODE, project: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID, window: globalThis.window, document: globalThis.document, customEvent: globalThis.CustomEvent, transport: globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ };
+  process.env.NODE_ENV = "development"; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = "delizza-web-test"; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = "true"; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "demo-acquisition-marketing";
+  globalThis.window = marketingTestWindow(); globalThis.document = { referrer: "" }; globalThis.CustomEvent = class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } };
+  let online = false; let revokeAttempts = 0;
+  globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = { async invoke(name, payload) {
+    if (name === "marketingPublicConfig") return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-10-12" } };
+    if (payload.action === "revoke") { revokeAttempts += 1; if (!online) throw { code: "functions/unavailable" }; return { data: { revoked: true } }; }
+    return { data: { acceptedEventIds: payload.events?.map((event) => event.id) ?? [], duplicateEventIds: [], droppedEventIds: [], collectionState: "accepted", erasureToken: "erase_offline" } };
+  } };
+  try {
+    const marketing = loadTsModule(path.resolve("src/marketing/marketing-client.ts"));
+    marketing.setMarketingConsent({ analytics: true, marketing: false }); await settle();
+    marketing.recordMarketingEvent("page_view", { path: "/menu" }); await settle();
+    await marketing.revokeMarketingConsent();
+    assert.equal(marketing.getMarketingState().consent.analytics, false);
+    assert.equal(revokeAttempts, 1);
+    online = true; await marketing.retryPendingMarketingRevocation();
+    assert.equal(revokeAttempts, 2);
+  } finally { process.env.NODE_ENV = previous.nodeEnv; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = previous.source; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = previous.test; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = previous.project; globalThis.window = previous.window; globalThis.document = previous.document; globalThis.CustomEvent = previous.customEvent; globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = previous.transport; }
 });
 
 console.log("all tests passed");

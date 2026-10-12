@@ -8,6 +8,7 @@ import { ToastProvider } from "@/contexts/ToastContext";
 import ToastContainer from "@/components/ui/Toast";
 import CartDrawer from "@/components/cart/CartDrawer";
 import CartBadge from "@/components/cart/CartBadge";
+import { MarketingProvider } from "@/marketing/MarketingProvider";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -16,6 +17,7 @@ interface ProvidersProps {
 /** Client-side providers wrapping the site layout */
 export function Providers({ children }: ProvidersProps) {
   return (
+    <MarketingProvider>
     <AuthProvider>
       <OnlineOrderingStatusProvider>
         <CartProvider>
@@ -26,6 +28,7 @@ export function Providers({ children }: ProvidersProps) {
         </CartProvider>
       </OnlineOrderingStatusProvider>
     </AuthProvider>
+    </MarketingProvider>
   );
 }
 

@@ -20,6 +20,18 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 let _db: Firestore | null = null;
 
+const ISOLATED_MARKETING_PROJECT = "demo-acquisition-marketing";
+
+function usesIsolatedMarketingFirestoreEmulator(): boolean {
+  return (
+    process.env.NEXT_PUBLIC_MARKETING_TEST_MODE === "true" &&
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ===
+      ISOLATED_MARKETING_PROJECT &&
+    process.env.FIREBASE_PROJECT_ID === ISOLATED_MARKETING_PROJECT &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:9808"
+  );
+}
+
 /**
  * Parse FIREBASE_PRIVATE_KEY from environment variable.
  *
@@ -60,7 +72,7 @@ function parsePrivateKey(raw: string | undefined): string | undefined {
   if (!key.includes("-----BEGIN")) {
     console.warn(
       "[Firebase] FIREBASE_PRIVATE_KEY does not contain a valid PEM header. " +
-        "Check that the environment variable is set correctly."
+        "Check that the environment variable is set correctly.",
     );
   }
 
@@ -70,23 +82,35 @@ function parsePrivateKey(raw: string | undefined): string | undefined {
 /** Lazily initialize Firebase Admin and return the Firestore client. */
 export function getDb(): Firestore {
   if (_db) return _db;
+  const isolatedEmulator = usesIsolatedMarketingFirestoreEmulator();
+  let initializedHere = false;
   if (getApps().length === 0) {
-    const privateKey = parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
-    if (!privateKey) {
-      throw new Error(
-        "[Firebase] FIREBASE_PRIVATE_KEY is missing or empty. " +
-          "Cannot initialize Firebase Admin SDK."
-      );
+    initializedHere = true;
+    if (isolatedEmulator) {
+      initializeApp({ projectId: ISOLATED_MARKETING_PROJECT });
+    } else {
+      const privateKey = parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
+      if (!privateKey) {
+        throw new Error(
+          "[Firebase] FIREBASE_PRIVATE_KEY is missing or empty. " +
+            "Cannot initialize Firebase Admin SDK.",
+        );
+      }
+      initializeApp({
+        credential: cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey,
+        }),
+      });
     }
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey,
-      }),
-    });
   }
   _db = getFirestore();
+  // Firestore Admin settings are immutable after first use. In Next dev HMR
+  // this module can reload while the Firebase Admin app remains global.
+  if (isolatedEmulator && initializedHere) {
+    _db.settings({ host: "127.0.0.1:9808", ssl: false });
+  }
   return _db;
 }
 

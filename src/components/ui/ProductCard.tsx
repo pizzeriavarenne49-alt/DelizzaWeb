@@ -13,6 +13,7 @@ import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext"
 import { useToast } from "@/contexts/ToastContext";
 import ProductCustomizeModal from "@/components/ui/ProductCustomizeModal";
 import { isProductUnavailable } from "@/lib/product-availability";
+import { recordMarketingEvent } from "@/marketing/marketing-client";
 
 interface ProductCardProps {
   product: Product;
@@ -57,6 +58,9 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   const openDetails = () => {
+    // A product view represents an explicit product-detail consultation. This
+    // is intentionally not tied to initial card visibility before consent.
+    recordMarketingEvent("product_view", { productId: product.id, path: window.location.pathname });
     setModalOpen(true);
   };
 
