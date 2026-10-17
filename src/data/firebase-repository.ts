@@ -12,6 +12,7 @@
  */
 
 import { FieldPath } from "firebase-admin/firestore";
+import { isPublicProductDoc } from "@/lib/catalog-publication";
 import type { Product, Category, HeroSlide, Offer, ProductIngredient } from "@/types";
 import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
 import type { DataRepository } from "@/data/repository";
@@ -134,32 +135,6 @@ function isPublicCategoryDoc(data: FirestoreDoc): boolean {
   if (optBool(data.isArchived) === true) return false;
   if (optBool(data.deleted) === true) return false;
   if (optBool(data.isDeleted) === true) return false;
-
-  return true;
-}
-
-function isPublicProductDoc(data: FirestoreDoc): boolean {
-  const active = bool(data.isActive, true);
-  if (!active) return false;
-
-  if (optBool(data.visible) === false) return false;
-  if (optBool(data.published) === false) return false;
-  if (optBool(data.public) === false) return false;
-  if (optBool(data.isVisible) === false) return false;
-  if (optBool(data.archived) === true) return false;
-  if (optBool(data.isArchived) === true) return false;
-  if (optBool(data.deleted) === true) return false;
-  if (optBool(data.isDeleted) === true) return false;
-
-  const categoryId = str(data.categoryId);
-  if (!categoryId) return false;
-
-  const priceObj = data.price as Record<string, unknown> | undefined;
-  const priceCents =
-    typeof priceObj?.amountCents === "number"
-      ? priceObj.amountCents
-      : num(data.priceCents);
-  if (!(priceCents > 0)) return false;
 
   return true;
 }

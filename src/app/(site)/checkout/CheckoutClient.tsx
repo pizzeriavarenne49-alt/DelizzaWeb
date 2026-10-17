@@ -12,6 +12,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
+import { useCatalogAvailability, useCartStockIssues } from "@/contexts/CatalogAvailabilityContext";
 import { getClientFirestore } from "@/config/firebase-client";
 import {
   assessCartAvailability,
@@ -1185,6 +1186,7 @@ export default function CheckoutClient() {
   const { user } = useAuth();
   const { items, isEmpty, getSubtotalCents, getTaxCents, getTotalCents } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
+  const catalogAvailability = useCatalogAvailability();
   const { consent: marketingConsent, enabled: marketingEnabled } = useMarketing();
   const onlineOrderingBlocked = !onlineOrdering.canStartOrder;
 
@@ -1212,7 +1214,9 @@ export default function CheckoutClient() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [cartAvailabilityLoading, setCartAvailabilityLoading] = useState(false);
-  const [cartAvailabilityIssues, setCartAvailabilityIssues] = useState<CartAvailabilityIssue[]>([]);
+  const [validatedCartAvailabilityIssues, setCartAvailabilityIssues] = useState<CartAvailabilityIssue[]>([]);
+  const stockIssues = useCartStockIssues(items);
+  const cartAvailabilityIssues = [...new Map([...validatedCartAvailabilityIssues, ...stockIssues].map((issue) => [issue.cartKey, issue])).values()];
   const submittingRef = useRef(false);
   const checkoutEntryTrackedRef = useRef(false);
 
@@ -1312,7 +1316,7 @@ export default function CheckoutClient() {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+  }, [items, catalogAvailability]);
 
   useEffect(() => {
     if (!onlineOrderingBlocked) {

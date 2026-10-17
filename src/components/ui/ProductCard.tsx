@@ -14,6 +14,7 @@ import { useToast } from "@/contexts/ToastContext";
 import ProductCustomizeModal from "@/components/ui/ProductCustomizeModal";
 import { isProductUnavailable } from "@/lib/product-availability";
 import { recordMarketingEvent } from "@/marketing/marketing-client";
+import { useLiveProduct } from "@/contexts/CatalogAvailabilityContext";
 
 interface ProductCardProps {
   product: Product;
@@ -28,7 +29,8 @@ function hasProductCustomizations(product: Product): boolean {
   );
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product: initialProduct }: ProductCardProps) {
+  const product = useLiveProduct(initialProduct);
   const { addItem, addItemWithOptions } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
   const { showToast } = useToast();

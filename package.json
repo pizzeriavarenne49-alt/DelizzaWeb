@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/run-tests.mjs"
+    "test": "node tests/run-tests.mjs && node tests/catalog-availability.test.mjs"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^5.6.1",

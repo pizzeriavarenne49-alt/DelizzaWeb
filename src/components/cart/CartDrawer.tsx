@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -11,6 +11,7 @@ import {
   type CartAvailabilityIssue,
 } from "@/lib/cart-availability";
 import { formatPrice, formatTaxRate } from "@/types";
+import { useCatalogAvailability, useCartStockIssues } from "@/contexts/CatalogAvailabilityContext";
 
 interface CartDrawerProps {
   open: boolean;
@@ -21,6 +22,7 @@ const MINIMUM_ORDER_CENTS = 900;
 
 export default function CartDrawer({ open, onClose }: CartDrawerProps) {
   const onlineOrdering = useOnlineOrderingStatus();
+  const catalogAvailability = useCatalogAvailability();
   const {
     items,
     removeItem,
@@ -37,23 +39,21 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
   const taxBreakdown = getTaxBreakdown();
   const remainingMinimumCents = Math.max(0, MINIMUM_ORDER_CENTS - total);
   const orderingBlocked = !onlineOrdering.canStartOrder;
-  const [cartIssues, setCartIssues] = useState<CartAvailabilityIssue[]>([]);
+  const [validatedCartIssues, setCartIssues] = useState<CartAvailabilityIssue[]>([]);
+  const stockIssues = useCartStockIssues(items);
+  const cartIssues = [...new Map([...validatedCartIssues, ...stockIssues].map((issue) => [issue.cartKey, issue])).values()];
   const [cartCheckLoading, setCartCheckLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    if (items.length === 0) {
-      setCartIssues([]);
-      setCartCheckLoading(false);
-      return;
-    }
-
     let cancelled = false;
-    setCartCheckLoading(true);
-
-    assessCartAvailability(items)
+    Promise.resolve().then(() => {
+      if (cancelled) return null;
+      setCartCheckLoading(items.length > 0);
+      return assessCartAvailability(items);
+    })
       .then((result) => {
-        if (!cancelled) {
+        if (!cancelled && result) {
           setCartIssues(result.issues);
         }
       })
@@ -72,12 +72,9 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
     return () => {
       cancelled = true;
     };
-  }, [items, open]);
+  }, [items, open, catalogAvailability]);
 
-  const issuesByCartKey = useMemo(
-    () => new Map(cartIssues.map((issue) => [issue.cartKey, issue])),
-    [cartIssues],
-  );
+  const issuesByCartKey = new Map(cartIssues.map((issue) => [issue.cartKey, issue]));
   const checkoutBlocked =
     remainingMinimumCents > 0 ||
     orderingBlocked ||

@@ -40,14 +40,14 @@ function resolveRelative(fromFile, specifier) {
   return candidate;
 }
 
-export function loadTsModule(filePath) {
+export function loadTsModule(filePath, mocks = {}) {
   const source = fs.readFileSync(filePath, "utf8");
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
       target: ts.ScriptTarget.ES2020,
       module: ts.ModuleKind.CommonJS,
       esModuleInterop: true,
-      jsx: ts.JsxEmit.Preserve,
+      jsx: ts.JsxEmit.ReactJSX,
     },
     fileName: filePath,
     reportDiagnostics: false,
@@ -56,15 +56,16 @@ export function loadTsModule(filePath) {
   const cjsModule = { exports: {} };
 
   const localRequire = (specifier) => {
+    if (Object.hasOwn(mocks, specifier)) return mocks[specifier];
     const aliasPath = resolveAlias(specifier);
     if (aliasPath) {
-      return loadTsModule(aliasPath);
+      return loadTsModule(aliasPath, mocks);
     }
 
     if (specifier.startsWith(".") || specifier.startsWith("..")) {
       const relativePath = resolveRelative(filePath, specifier);
       if (relativePath.endsWith(".ts") || relativePath.endsWith(".tsx") || relativePath.endsWith(".js") || relativePath.endsWith(".jsx") || relativePath.endsWith(".mjs") || relativePath.endsWith(".cjs")) {
-        return loadTsModule(relativePath);
+        return loadTsModule(relativePath, mocks);
       }
       return baseRequire(relativePath);
     }

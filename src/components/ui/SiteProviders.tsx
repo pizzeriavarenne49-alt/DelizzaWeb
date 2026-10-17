@@ -9,6 +9,7 @@ import ToastContainer from "@/components/ui/Toast";
 import CartDrawer from "@/components/cart/CartDrawer";
 import CartBadge from "@/components/cart/CartBadge";
 import { MarketingProvider } from "@/marketing/MarketingProvider";
+import { CatalogAvailabilityProvider } from "@/contexts/CatalogAvailabilityContext";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -20,12 +21,14 @@ export function Providers({ children }: ProvidersProps) {
     <MarketingProvider>
     <AuthProvider>
       <OnlineOrderingStatusProvider>
+        <CatalogAvailabilityProvider>
         <CartProvider>
           <ToastProvider>
             {children}
             <ToastContainer />
           </ToastProvider>
         </CartProvider>
+        </CatalogAvailabilityProvider>
       </OnlineOrderingStatusProvider>
     </AuthProvider>
     </MarketingProvider>
