@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ConsentSettingsButton from "@/marketing/ConsentSettingsButton";
 
 const links = [
   { href: "/notre-savoir-faire", label: "Notre savoir-faire" },
@@ -31,6 +32,9 @@ export default function SeoFooter() {
           </Link>
         ))}
       </nav>
+      <div className="mt-3 border-t border-white/5 pt-1">
+        <ConsentSettingsButton />
+      </div>
       <p className="mt-2 text-[10px] text-[#2A2A2A]">
         © {new Date().getFullYear()} Pizza Deli&apos;Zza — Pizzeria à La Varenne, Orée d&apos;Anjou
       </p>

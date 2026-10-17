@@ -86,13 +86,6 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
           setPreferencesOpen(false);
         }}
       />
-      <button
-        type="button"
-        onClick={() => setPreferencesOpen(true)}
-        className="fixed bottom-3 left-3 z-[9998] rounded-full border border-[#4A4A4A] bg-[#161616] px-3 py-2 text-xs text-[#D4A053] shadow-lg hover:bg-[#252525] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#D4A053]"
-      >
-        Gérer mes choix
-      </button>
     </MarketingContext.Provider>
   );
 }
