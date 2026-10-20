@@ -98,6 +98,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
           />
 
           <motion.aside
+            data-seasonal-suspend=""
             key="drawer"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}

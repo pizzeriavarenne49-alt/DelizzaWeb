@@ -33,7 +33,7 @@ export default function HomeClient({ featuredProducts }: HomeClientProps) {
     <div className="flex flex-col gap-6 px-4 pt-4">
       {/* Header */}
       <header className="flex items-center justify-between">
-        <div>
+        <div data-seasonal-welcome="">
           <h1 className="text-[22px] font-bold text-[#F5F5F5]">Deli&apos;Zza</h1>
           <p className="text-[13px] text-[#A0A0A0]">{greeting}</p>
         </div>
@@ -47,7 +47,7 @@ export default function HomeClient({ featuredProducts }: HomeClientProps) {
       </header>
 
       {/* Hero carousel */}
-      <section aria-label="Offres à la une">
+      <section data-seasonal-hero="" aria-label="Offres à la une">
         <Carousel products={featuredProducts} />
       </section>
 

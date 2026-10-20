@@ -102,6 +102,7 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
   return (
     <>
       <motion.div
+        data-seasonal-product=""
         whileTap={{ scale: 0.97 }}
         role="button"
         tabIndex={0}
@@ -111,7 +112,7 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
         className="rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col cursor-pointer transition-colors hover:bg-[#202020] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]"
       >
         {/* Image */}
-        <div className="relative aspect-[4/3] bg-[#252525]">
+        <div data-seasonal-product-image="" className="relative aspect-[4/3] bg-[#252525]">
           <Image
             src={product.image}
             alt={product.name}

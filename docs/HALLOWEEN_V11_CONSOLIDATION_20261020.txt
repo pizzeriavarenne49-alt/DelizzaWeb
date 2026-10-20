@@ -1,0 +1,39 @@
+HALLOWEEN V11 - CONSOLIDATION LOCALE DU 20 OCTOBRE 2026
+
+Branche : consolidate/halloween-v11-20261020
+Aucune livraison, modification distante, activation Halloween, compilation ou test.
+La relecture est statique et ne prouve pas le fonctionnement de cette base consolidee.
+
+Base Delizza : d7d0c5f41dce052198ef58526fbcc2bcca515821
+Source Halloween : snapshot 84066aa3. La base main recente du catalogue, stock,
+comptes, fidelite, marketing, paiements et SEO reste conservee.
+
+INTEGRATION
+Composants saisonniers et moteur V11, quatre interrupteurs, abonnement Firestore
+sans cache de reactivation, tenant/projet strictement identiques serveur/navigateur,
+nettoyage des effets et sous-systemes independants. Mismatches, absence de
+configuration valide, indisponibilite ou erreur de lecture laissent Halloween OFF.
+Marqueur de suspension du panier, garde des dialogues/formulaires et routes
+sensibles, reduction des mouvements, restriction audio et screamer par navigateur.
+Toiles, araignees suspendues/interactives et sur les cartes, yeux, fantome, feuilles,
+citrouille lumineuse, message d'accueil, brume, orage et medias externalises.
+Les medias et fichiers du moteur sont identiques au snapshot approuve.
+
+SEPARATION DES ESSAIS
+Les modifications de demonstration de firebase.ts, firebase-client.ts, next.config.ts,
+tsconfig.json et .gitignore ne sont pas reportees : ces fichiers de production
+restent sur origin/main. Aucun adaptateur Halloween local ni fixture n'est inclus.
+Le mode marketing local preexistant dans main est conserve sans modification.
+.env.example documente l'accord exige entre WL_APP_ID et NEXT_PUBLIC_WL_APP_ID,
+ainsi que FIREBASE_PROJECT_ID et NEXT_PUBLIC_FIREBASE_PROJECT_ID. Ce fichier ne
+contient pas de credentials de production et n'en configure aucun a distance.
+
+CONFLITS ET LIMITES
+Aucun conflit Git non resolu. Les fichiers partages ne changent que pour le
+raccordement des composants et les attributs de decoration/suspension.
+Pas de build, analyseur, test automatise ou validation fonctionnelle sur ce worktree.
+La compatibilite du rendu compile, de l'hydratation, des effets, de la reconnexion
+et des parcours mobiles devra etre verifiee dans une phase ulterieure autorisee.
+Aucune publication ni activation. Les identifiants de deploiement precedents,
+variables reelles d'hebergement et etat OFF initial devront etre releves avant
+une livraison distinctement autorisee.

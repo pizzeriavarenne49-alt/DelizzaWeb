@@ -1,0 +1,12 @@
+Halloween V11 assets
+
+screamer.webp: extracted from the image embedded in the HTML prototype supplied for this integration, then resized and encoded as WebP.
+web.svg: decoration extracted from that same prototype.
+
+scream.mp3: Nick121087 - Demonic Woman Scream (cc0) (freesound).
+Author: nick121087. License: CC0 1.0 Universal.
+Source: https://freesound.org/people/nick121087/sounds/333832/
+Distribution and license: https://commons.wikimedia.org/wiki/File:Nick121087_-_Demonic_Woman_Scream_(cc0)_(freesound).mp3
+License: https://creativecommons.org/publicdomain/zero/1.0/
+
+Thunder and electrical sounds are synthesized locally using Web Audio, from the supplied V11 code. No external audio service is called at runtime.

@@ -1,5 +1,6 @@
 "use client";
 
+import SeasonalAppearance from "@/components/seasonal/SeasonalAppearance";
 import { useState, type ReactNode } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
@@ -13,10 +14,12 @@ import { CatalogAvailabilityProvider } from "@/contexts/CatalogAvailabilityConte
 
 interface ProvidersProps {
   children: ReactNode;
+  websiteAppId: string;
+  websiteProjectId: string;
 }
 
 /** Client-side providers wrapping the site layout */
-export function Providers({ children }: ProvidersProps) {
+export function Providers({ children, websiteAppId, websiteProjectId }: ProvidersProps) {
   return (
     <MarketingProvider>
     <AuthProvider>
@@ -25,6 +28,7 @@ export function Providers({ children }: ProvidersProps) {
         <CartProvider>
           <ToastProvider>
             {children}
+            <SeasonalAppearance serverAppId={websiteAppId} serverProjectId={websiteProjectId} />
             <ToastContainer />
           </ToastProvider>
         </CartProvider>

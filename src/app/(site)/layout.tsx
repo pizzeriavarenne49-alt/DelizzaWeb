@@ -1,3 +1,4 @@
+import { WL_APP_ID } from "@/config/firebase";
 import BottomNav from "@/components/ui/BottomNav";
 import DesktopNav from "@/components/ui/DesktopNav";
 import AppBanner from "@/components/ui/AppBanner";
@@ -10,7 +11,7 @@ export default function SiteLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Providers>
+    <Providers websiteAppId={WL_APP_ID} websiteProjectId={process.env.FIREBASE_PROJECT_ID ?? ""}>
       <AppBanner />
       <div className="mx-auto max-w-md md:max-w-6xl md:flex">
         <DesktopNav />
