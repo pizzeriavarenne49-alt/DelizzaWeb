@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
@@ -115,6 +115,7 @@ export default function ProductCustomizeModal({
   onConfirm,
 }: ProductCustomizeModalProps) {
   const onlineOrdering = useOnlineOrderingStatus();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
   const [addedSupplements, setAddedSupplements] = useState<string[]>([]);
@@ -208,6 +209,29 @@ export default function ProductCustomizeModal({
   };
 
   useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')).filter(element => element.getClientRects().length > 0);
+    const first = focusable()[0];
+    first?.focus({ preventScroll: true });
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      const firstElement = elements[0];
+      const lastElement = elements.at(-1);
+      if (!firstElement || !lastElement) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === firstElement || !dialog.contains(document.activeElement))) {
+        event.preventDefault(); lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault(); firstElement.focus();
+      }
+    };
+    dialog.addEventListener("keydown", trap);
+    return () => { dialog.removeEventListener("keydown", trap); if (previous?.isConnected) previous.focus({ preventScroll: true }); };
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
@@ -235,6 +259,7 @@ export default function ProductCustomizeModal({
         <div className="fixed inset-0 z-[9991] flex items-end justify-center px-0 md:items-center md:px-4 pointer-events-none">
         <motion.div
           key="modal-sheet"
+          ref={dialogRef}
           initial={{ opacity: 0, y: 32, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 32, scale: 0.98 }}
@@ -360,6 +385,7 @@ export default function ProductCustomizeModal({
                         <button
                           key={choice.id}
                           type="button"
+                          aria-pressed={isSelected}
                           disabled={orderingBlocked}
                           onClick={() =>
                             isSingleChoice
@@ -465,6 +491,7 @@ export default function ProductCustomizeModal({
                         type="button"
                         disabled={orderingBlocked}
                         onClick={() => toggleSupplement(ingredient.id)}
+                        aria-pressed={isAdded}
                         className={`flex items-center justify-between rounded-[14px] border px-4 py-3 transition-colors ${
                           isAdded
                             ? "border-[#D4A053]/50 bg-[#D4A053]/15"

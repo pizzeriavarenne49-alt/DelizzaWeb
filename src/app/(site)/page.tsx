@@ -1,6 +1,6 @@
 import { repo, withFallback, mockRepo } from "@/data/repository";
 import { DIRECTUS_URL } from "@/config/cms";
-import HomeClient from "./HomeClient";
+import HomeLanding from "@/components/home/HomeLanding";
 import type { Metadata } from "next";
 import { SITE_URL, OG_IMAGE } from "@/lib/seo";
 
@@ -71,5 +71,5 @@ async function loadFeaturedProducts() {
 export default async function HomePage() {
   const featuredProducts = await loadFeaturedProducts();
 
-  return <HomeClient featuredProducts={featuredProducts} />;
+  return <HomeLanding products={featuredProducts} />;
 }

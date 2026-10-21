@@ -40,10 +40,10 @@ export const BUSINESS = {
     "Pizza Deli'Zza à La Varenne, Orée d'Anjou : découvrez la carte et commandez vos pizzas à emporter en click & collect.",
   openingHours: [
     // Wednesday-Sunday evenings only
-    { dayOfWeek: ["Wednesday", "Thursday"], opens: "18:30", closes: "21:30" },
-    { dayOfWeek: ["Friday", "Saturday", "Sunday"], opens: "18:30", closes: "22:00" },
+    { dayOfWeek: ["Wednesday", "Thursday"], opens: "18:00", closes: "21:00" },
+    { dayOfWeek: ["Friday", "Saturday", "Sunday"], opens: "18:00", closes: "21:30" },
   ],
-  openingHoursText: "Mer-Jeu : 18h30-21h30 / Ven-Dim : 18h30-22h00",
+  openingHoursText: "Mercredi et jeudi : 18 h 00–21 h 00 · Vendredi, samedi et dimanche : 18 h 00–21 h 30",
 } as const;
 
 export const LEGAL_ENTITY = {

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { BUSINESS } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Commande en ligne temporairement indisponible | Pizza Deli'Zza",
@@ -59,13 +60,8 @@ export default function MaintenancePage() {
                   Horaires
                 </p>
                 <div className="mt-2 flex flex-col gap-2 text-lg font-semibold text-[#F5F5F5]">
-                  <span>Lundi : fermé</span>
-                  <span>Mardi : fermé</span>
-                  <span>Mercredi : 18h30-21h30</span>
-                  <span>Jeudi : 18h30-21h30</span>
-                  <span>Vendredi : 18h30-22h00</span>
-                  <span>Samedi : 18h30-22h00</span>
-                  <span>Dimanche : 18h30-22h00</span>
+                  <span>{BUSINESS.openingHoursText}</span>
+                  <span>Lundi et mardi : fermés</span>
                 </div>
               </div>
             </div>

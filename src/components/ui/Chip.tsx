@@ -17,7 +17,7 @@ export default function Chip({ label, icon, active, onClick }: ChipProps) {
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-200",
+        "flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-200",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#D4A053]",
         active
           ? "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)]"

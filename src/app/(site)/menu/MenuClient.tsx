@@ -149,7 +149,11 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
 
   return (
     <div className="flex flex-col gap-5 px-4 pt-4">
-      <h1 className="text-[22px] font-bold text-[#F5F5F5]">Menu</h1>
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#D4A053]">La carte Deli&apos;Zza</p>
+        <h1 className="mt-2 text-[28px] font-bold text-[#F5F5F5]">Nos pizzas à emporter</h1>
+        <p className="mt-2 text-sm leading-relaxed text-[#B8B1A7]">Choisissez votre recette et personnalisez-la. Retrait au 98 Place du Jardin Public, à La Varenne. Sans livraison.</p>
+      </header>
 
       {!onlineOrdering.canStartOrder && (
         <div className="rounded-[14px] border border-[#D4A053]/30 bg-[#D4A053]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
@@ -165,7 +169,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
 
       <div
         className="no-scrollbar flex gap-2 overflow-x-auto -mx-4 px-4"
-        role="tablist"
+        role="group"
         aria-label="Catégories"
       >
         <Chip

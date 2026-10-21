@@ -38,7 +38,7 @@ export default function SearchBar({
         aria-label={placeholder}
         className={cn(
           "w-full rounded-[18px] bg-[#252525]/80 backdrop-blur-sm pl-11 pr-4 py-3",
-          "text-[15px] text-[#F5F5F5] placeholder:text-[#6B6B6B]",
+          "text-base text-[#F5F5F5] placeholder:text-[#A0A0A0]",
           "border border-white/5 transition-all duration-200",
           "focus:border-[#D4A053]/50 focus:shadow-[0_0_0_3px_rgba(212,160,83,0.15)] focus:outline-none",
         )}

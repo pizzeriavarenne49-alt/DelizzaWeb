@@ -79,7 +79,7 @@ export default function DesktopNav() {
                 "flex items-center gap-3 rounded-xl px-3 py-3 transition-colors",
                 active
                   ? "bg-[#D4A053]/10 text-[#D4A053]"
-                  : "text-[#6B6B6B] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]",
+                  : "text-[#A0A0A0] hover:bg-[#1A1A1A] hover:text-[#F5F5F5]",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#D4A053] focus-visible:rounded-xl",
               )}
             >
@@ -92,7 +92,7 @@ export default function DesktopNav() {
 
       {/* Cart */}
       <div className="mt-auto pt-4 border-t border-white/5">
-        <CartButton className="flex items-center gap-3 rounded-xl px-3 py-3 text-[#6B6B6B] hover:bg-[#1A1A1A] hover:text-[#F5F5F5] transition-colors w-full">
+        <CartButton className="flex items-center gap-3 rounded-xl px-3 py-3 text-[#A0A0A0] hover:bg-[#1A1A1A] hover:text-[#F5F5F5] transition-colors w-full">
           <span className="relative flex-shrink-0">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />

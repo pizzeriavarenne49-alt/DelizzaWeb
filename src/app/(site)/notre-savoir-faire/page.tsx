@@ -9,7 +9,7 @@ import JsonLd from "@/components/seo/JsonLd";
 /* ------------------------------------------------------------------ */
 
 export const metadata: Metadata = {
-  title: "Notre savoir-faire | Pizza Deli'Zza",
+  title: "Notre savoir-faire",
   description:
     "Découvrez le savoir-faire de Pizza Deli'Zza : pâte avec maturation d'environ 24h, ingrédients sélectionnés avec soin et cuisson maîtrisée à La Varenne.",
   alternates: { canonical: "/notre-savoir-faire" },

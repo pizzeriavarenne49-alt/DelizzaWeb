@@ -81,7 +81,7 @@ export default function BottomNav() {
                 whileTap={{ scale: 0.85 }}
                 className={cn(
                   "flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors",
-                  active ? "text-[#D4A053]" : "text-[#6B6B6B]",
+                  active ? "text-[#D4A053]" : "text-[#A0A0A0]",
                 )}
               >
                 {item.icon}
@@ -93,7 +93,7 @@ export default function BottomNav() {
 
         {/* Cart */}
         <motion.div whileTap={{ scale: 0.85 }}>
-          <CartButton className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-[#6B6B6B]">
+          <CartButton className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-[#A0A0A0]">
             <span className="relative">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
                 <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
