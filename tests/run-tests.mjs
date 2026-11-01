@@ -558,6 +558,7 @@ run("checkout source uses stable idempotency and submission lock", () => {
   assert.equal(orderServiceSource.includes("Date.now()"), false);
   assert.equal(orderServiceSource.includes("randomUUID().slice"), false);
   assert.equal(checkoutSource.includes("submittingRef.current"), true);
+  assert.equal(checkoutSource.indexOf("rememberCheckoutAttemptOrder(fingerprint, orderResult.orderId)") < checkoutSource.indexOf("const intentResult = await createPaymentIntent"), true);
   assert.equal(checkoutSource.includes("getOrCreateCheckoutAttempt"), true);
   assert.equal(checkoutSource.includes("clearCheckoutAttempt"), false);
   assert.equal(checkoutSource.includes("card_with_loyalty_reward"), true);
@@ -566,6 +567,23 @@ run("checkout source uses stable idempotency and submission lock", () => {
   assert.equal(stripeCheckoutSource.includes("ONLINE_ORDERING_CLOSED"), true);
   assert.equal(confirmationSource.includes("clearCheckoutAttemptForOrder"), true);
   assert.equal(confirmationSource.includes("paymentStatus"), true);
+});
+
+run("saved payment retry is explicit and does not exempt the current cart", () => {
+  const checkoutSource = readFileSync(path.resolve("src/app/(site)/checkout/CheckoutClient.tsx"), "utf8");
+  const resumeStart = checkoutSource.indexOf("const handleResumePendingPayment");
+  const resumeEnd = checkoutSource.indexOf("const handlePaymentSuccess", resumeStart);
+  const resumeSource = checkoutSource.slice(resumeStart, resumeEnd);
+
+  assert.ok(resumeStart >= 0 && resumeEnd > resumeStart);
+  assert.equal(checkoutSource.includes("Reprendre le paiement de la commande réservée"), true);
+  assert.equal(checkoutSource.includes("hasPendingCheckoutAttempt"), false);
+  assert.equal(checkoutSource.includes("if (!attempt.orderId)"), false);
+  assert.equal(resumeSource.includes("getStoredCheckoutAttemptOrderId"), true);
+  assert.equal(resumeSource.includes("createPaymentIntent"), true);
+  assert.equal(resumeSource.includes("createOrder"), false);
+  assert.equal(resumeSource.includes("assessCartAvailability"), false);
+  assert.equal(resumeSource.includes("previewScheduledPickupOptions"), false);
 });
 
 run("payment error mapping keeps closed online ordering out of card declines", () => {

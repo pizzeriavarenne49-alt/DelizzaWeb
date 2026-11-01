@@ -40,6 +40,7 @@ import {
 import { createOrder, createPaymentIntent, type CreateOrderItem } from "@/services/order-service";
 import {
   buildCheckoutAttemptFingerprint,
+  getStoredCheckoutAttemptOrderId,
   getOrCreateCheckoutAttempt,
   rememberCheckoutAttemptOrder,
 } from "@/services/checkout-attempt";
@@ -921,6 +922,8 @@ interface Step2Props {
   onUseRewardChange: (enabled: boolean) => void;
   onBack: () => void;
   onNext: () => void;
+  pendingOrderId: string | null;
+  onResumePendingPayment: () => void;
   loading: boolean;
   error: string | null;
   customerProfile: CustomerProfile | null;
@@ -944,6 +947,8 @@ function Step2Summary({
   onUseRewardChange,
   onBack,
   onNext,
+  pendingOrderId,
+  onResumePendingPayment,
   loading,
   error,
   customerProfile,
@@ -1142,6 +1147,25 @@ function Step2Summary({
         </div>
       )}
 
+      {pendingOrderId && (
+        <div className="rounded-[18px] border border-[#D4A053]/30 bg-[#D4A053]/10 p-5">
+          <p className="text-[14px] font-semibold text-[#F5F5F5]">
+            Une commande réservée attend encore son paiement.
+          </p>
+          <p className="mt-1 text-[13px] leading-relaxed text-[#A0A0A0]">
+            Reprenez son paiement sans modifier votre panier actuel.
+          </p>
+          <button
+            type="button"
+            onClick={onResumePendingPayment}
+            disabled={loading}
+            className="mt-4 w-full rounded-[14px] border border-[#D4A053]/60 py-3 text-[14px] font-semibold text-[#E8C078] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Reprendre le paiement de la commande réservée
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <button
           type="button"
@@ -1216,6 +1240,9 @@ export default function CheckoutClient() {
   const [cartAvailabilityLoading, setCartAvailabilityLoading] = useState(false);
   const [validatedCartAvailabilityIssues, setCartAvailabilityIssues] = useState<CartAvailabilityIssue[]>([]);
   const stockIssues = useCartStockIssues(items);
+  // A stored order is resumed only by the explicit action below. It must not
+  // suppress availability checks for the basket currently being edited.
+  const pendingOrderId = orderId ?? getStoredCheckoutAttemptOrderId();
   const cartAvailabilityIssues = [...new Map([...validatedCartAvailabilityIssues, ...stockIssues].map((issue) => [issue.cartKey, issue])).values()];
   const submittingRef = useRef(false);
   const checkoutEntryTrackedRef = useRef(false);
@@ -1377,15 +1404,6 @@ export default function CheckoutClient() {
         setError("Verification des articles en cours...");
         return;
       }
-      const cartValidation = await assessCartAvailability(items);
-      if (!cartValidation.ok) {
-        const firstIssue = cartValidation.issues[0];
-        console.error("[checkout] Refusing before createOrder:", cartValidation);
-        setCartAvailabilityIssues(cartValidation.issues);
-        setError(firstIssue?.message ?? "Un produit de votre panier n'est plus disponible.");
-        return;
-      }
-
       await ensureDelizzaCustomerSession(true);
 
       let fulfillmentData: FulfillmentData;
@@ -1454,6 +1472,14 @@ export default function CheckoutClient() {
         ...(rewardItemIndex !== undefined ? { rewardItemIndex } : {}),
       });
       const attempt = getOrCreateCheckoutAttempt(fingerprint);
+      const cartValidation = await assessCartAvailability(items);
+      if (!cartValidation.ok) {
+        const firstIssue = cartValidation.issues[0];
+        console.error("[checkout] Refusing before createOrder:", cartValidation);
+        setCartAvailabilityIssues(cartValidation.issues);
+        setError(firstIssue?.message ?? "Un produit de votre panier n'est plus disponible.");
+        return;
+      }
 
       const orderResult = await createOrder({
         appId: WL_APP_ID,
@@ -1482,6 +1508,9 @@ export default function CheckoutClient() {
         ...(rewardItemIndex !== undefined ? { rewardItemIndex } : {}),
       });
       rememberCheckoutAttemptOrder(fingerprint, orderResult.orderId);
+      // Persist UI ownership before payment setup: a timeout here must retry
+      // the same idempotent order, never mint a second reservation.
+      setOrderId(orderResult.orderId);
       // This is deliberately decoupled from order creation and payment. A failed
       // marketing call only leaves this order unattributed; it never blocks commerce.
       linkOrderMarketing(orderResult.orderId);
@@ -1498,7 +1527,6 @@ export default function CheckoutClient() {
         orderId: orderResult.orderId,
       });
 
-      setOrderId(orderResult.orderId);
       setClientSecret(intentResult.clientSecret);
       setPaymentAmountCents(intentResult.amountCents);
       setStep(3);
@@ -1577,6 +1605,34 @@ export default function CheckoutClient() {
     profileLoading,
   ]);
 
+  const handleResumePendingPayment = useCallback(async () => {
+    const resumableOrderId = orderId ?? getStoredCheckoutAttemptOrderId();
+    if (!resumableOrderId || submittingRef.current) return;
+
+    submittingRef.current = true;
+    setLoading(true);
+    setError(null);
+    try {
+      // This intentionally does not validate the current cart, stock or slot:
+      // it resumes an already-created order. The callable verifies ownership
+      // and that the order is still payable before it returns a client secret.
+      const intentResult = await createPaymentIntent({
+        appId: WL_APP_ID,
+        orderId: resumableOrderId,
+      });
+      setOrderId(resumableOrderId);
+      setClientSecret(intentResult.clientSecret);
+      setPaymentAmountCents(intentResult.amountCents);
+      setStep(3);
+    } catch (err: unknown) {
+      console.error("[checkout] Unable to resume payment intent:", err);
+      setError(getClientErrorMessage(err, "payment"));
+    } finally {
+      setLoading(false);
+      submittingRef.current = false;
+    }
+  }, [orderId]);
+
   const handlePaymentSuccess = useCallback(() => {
     router.push(
       `/order-confirmation${orderId ? `?orderId=${orderId}` : ""}`,
@@ -1643,6 +1699,8 @@ export default function CheckoutClient() {
               onUseRewardChange={setUseReward}
               onBack={() => setStep(1)}
               onNext={handleProceedToPayment}
+              pendingOrderId={pendingOrderId}
+              onResumePendingPayment={handleResumePendingPayment}
               loading={loading}
               error={error}
               customerProfile={profile}

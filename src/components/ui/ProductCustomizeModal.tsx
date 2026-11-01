@@ -9,6 +9,7 @@ import type { CartItemCustomizations, SelectedOption } from "@/types/cart";
 import type { ProductOption } from "@/types/product-options";
 import { formatPrice } from "@/types";
 import { isProductUnavailable } from "@/lib/product-availability";
+import { useCart } from "@/contexts/CartContext";
 
 interface ProductCustomizeModalProps {
   product: Product;
@@ -116,6 +117,7 @@ export default function ProductCustomizeModal({
 }: ProductCustomizeModalProps) {
   const onlineOrdering = useOnlineOrderingStatus();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const { canAddProductQuantity } = useCart();
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
   const [addedSupplements, setAddedSupplements] = useState<string[]>([]);
@@ -161,7 +163,8 @@ export default function ProductCustomizeModal({
     supplementDeltasCents;
   const unitPriceCents = product.price_cents + deltasCents;
   const totalTtcCents = unitPriceCents * quantity;
-  const canAdd = areRequiredOptionsFilled(sortedOptions, selections) && !isProductUnavailable(product);
+  const canAdd = areRequiredOptionsFilled(sortedOptions, selections) &&
+    !isProductUnavailable(product) && canAddProductQuantity(product.id, quantity, product);
   const orderingBlocked = !onlineOrdering.canStartOrder;
   const hasOptions = sortedOptions.length > 0;
   const hasIngredients = product.ingredients.length > 0;
@@ -530,7 +533,7 @@ export default function ProductCustomizeModal({
                 </span>
                 <button
                   type="button"
-                  disabled={orderingBlocked}
+                  disabled={orderingBlocked || !canAddProductQuantity(product.id, quantity + 1, product)}
                   onClick={() => setQuantity((q) => q + 1)}
                   aria-label="Augmenter la quantité"
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D] text-[18px] font-bold leading-none"

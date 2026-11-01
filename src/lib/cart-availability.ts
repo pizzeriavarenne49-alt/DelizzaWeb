@@ -1,8 +1,9 @@
 "use client";
 
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDocFromServer } from "firebase/firestore";
 import { getClientFirestore } from "@/config/firebase-client";
 import type { CartItem, SelectedOption } from "@/types/cart";
+import { stockDemandByProduct } from "@/lib/product-availability";
 
 const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 
@@ -33,6 +34,8 @@ type LiveProduct = {
   published: boolean | null;
   archived: boolean | null;
   deleted: boolean | null;
+  isArchived: boolean | null;
+  isDeleted: boolean | null;
   stockQty: number | null;
   stockManaged: boolean;
   manualOutOfStock: boolean;
@@ -42,6 +45,8 @@ type LiveProduct = {
   availableSupplementIds: string[];
   allowIngredientRemoval: boolean;
 };
+
+type LiveFormula = { appId: string; name: string; isActive: boolean; visible: boolean | null; published: boolean | null; archived: boolean | null; deleted: boolean | null; isArchived: boolean | null; isDeleted: boolean | null };
 
 export type CartAvailabilityIssueKind =
   | "product_not_found"
@@ -156,7 +161,7 @@ async function loadLiveOptions(data: Record<string, unknown>): Promise<LiveOptio
   const db = getClientFirestore();
   const templateDocs = await Promise.all(
     templateIds.map(async (templateId) => {
-      const snap = await getDoc(doc(db, "wl_option_templates", templateId));
+      const snap = await getDocFromServer(doc(db, "wl_option_templates", templateId));
       if (!snap.exists()) return null;
       const templateData = snap.data();
       if (templateData.appId !== WL_APP_ID) return null;
@@ -172,7 +177,7 @@ async function loadLiveOptions(data: Record<string, unknown>): Promise<LiveOptio
 
 async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | null> {
   const db = getClientFirestore();
-  const snap = await getDoc(doc(db, "wl_catalog_items", catalogItemId));
+  const snap = await getDocFromServer(doc(db, "wl_catalog_items", catalogItemId));
   if (!snap.exists()) return null;
 
   const data = snap.data();
@@ -187,6 +192,8 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
     published: boolOrNull(data.published),
     archived: boolOrNull(data.archived),
     deleted: boolOrNull(data.deleted),
+    isArchived: boolOrNull(data.isArchived),
+    isDeleted: boolOrNull(data.isDeleted),
     stockQty: numberOrNull(data.stockQty),
     stockManaged: typeof data.stockManaged === "boolean" ? data.stockManaged : false,
     manualOutOfStock: typeof data.manualOutOfStock === "boolean" ? data.manualOutOfStock : false,
@@ -198,9 +205,29 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
   };
 }
 
+async function loadLiveFormula(formulaId: string): Promise<LiveFormula | null> {
+  const db = getClientFirestore();
+  const snap = await getDocFromServer(doc(db, "wl_menu_formulas", formulaId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  if (data.appId !== WL_APP_ID) return null;
+  return {
+    appId: stringOrEmpty(data.appId), name: stringOrEmpty(data.name),
+    isActive: typeof data.isActive === "boolean" ? data.isActive : true,
+    visible: boolOrNull(data.visible), published: boolOrNull(data.published),
+    archived: boolOrNull(data.archived), deleted: boolOrNull(data.deleted),
+    isArchived: boolOrNull(data.isArchived), isDeleted: boolOrNull(data.isDeleted),
+  };
+}
+
+function isCommerciallyUnavailable(item: Pick<LiveProduct, "isActive" | "visible" | "published" | "archived" | "deleted" | "isArchived" | "isDeleted">): boolean {
+  return item.isActive !== true || item.visible === false || item.published === false ||
+    item.archived === true || item.deleted === true || item.isArchived === true || item.isDeleted === true;
+}
+
 async function loadLiveIngredient(ingredientId: string): Promise<LiveIngredient | null> {
   const db = getClientFirestore();
-  const snap = await getDoc(doc(db, "wl_ingredient_library", ingredientId));
+  const snap = await getDocFromServer(doc(db, "wl_ingredient_library", ingredientId));
   if (!snap.exists()) return null;
 
   const data = snap.data();
@@ -360,12 +387,23 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
     return { ok: true, issues: [] };
   }
 
+  const malformedItems = items.filter((item) => !Number.isSafeInteger(item.quantity) || item.quantity <= 0);
+  if (malformedItems.length > 0) {
+    return { ok: false, issues: malformedItems.map((item) => buildProductIssue(
+      item, item.nameSnapshot || "Cet article", "product_unavailable",
+      "La quantité de cet article est invalide. Merci de modifier le panier.", "quantité invalide",
+    )) };
+  }
+  const stockDemand = stockDemandByProduct(items);
+  const formulaIds = [...new Set(items.map((item) => item.formulaId).filter((id): id is string => typeof id === "string" && id.length > 0))];
   const productCache = new Map<string, LiveProduct | null>();
+  const formulaCache = new Map<string, LiveFormula | null>();
   await Promise.all(
-    [...new Set(items.map((item) => item.catalogItemId))].map(async (catalogItemId) => {
+    [...new Set([...items.filter((item) => !item.formulaId).map((item) => item.catalogItemId), ...stockDemand.keys()])].map(async (catalogItemId) => {
       productCache.set(catalogItemId, await loadLiveProduct(catalogItemId));
     }),
   );
+  await Promise.all(formulaIds.map(async (formulaId) => formulaCache.set(formulaId, await loadLiveFormula(formulaId))));
 
   const ingredientIds = new Set<string>();
   for (const item of items) {
@@ -387,6 +425,36 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
   const issues: CartAvailabilityIssue[] = [];
 
   for (const item of items) {
+    const formulaComponents = item.formulaId && item.formulaStepChoices
+      ? [...new Set(Object.values(item.formulaStepChoices).flat().filter((id): id is string => typeof id === "string" && id.length > 0))]
+      : [];
+    if (item.formulaId) {
+      const formula = formulaCache.get(item.formulaId!);
+      const formulaName = formula?.name || item.nameSnapshot || "Cette formule";
+      if (!formula || isCommerciallyUnavailable(formula)) {
+        issues.push(buildProductIssue(item, formulaName, "product_unavailable", `${formulaName} n'est plus disponible.`, "indisponible"));
+        continue;
+      }
+      if (formulaComponents.length === 0) {
+        issues.push(buildProductIssue(item, formulaName, "product_unavailable", `${formulaName} doit être recomposée avant la commande.`, "à recomposer"));
+        continue;
+      }
+      for (const componentId of formulaComponents) {
+        const component = productCache.get(componentId);
+        const componentName = component?.name || "Un produit de la formule";
+        if (!component || isCommerciallyUnavailable(component)) {
+          issues.push(buildProductIssue(item, componentName, "product_unavailable", `${componentName} n'est plus disponible.`, "indisponible"));
+          break;
+        }
+        if (component.manualOutOfStock === true ||
+            component.stockManaged === true && (component.stockQty === null || component.stockQty <= 0 ||
+              (stockDemand.get(componentId) ?? 0) > component.stockQty)) {
+          issues.push(buildProductIssue(item, componentName, "product_out_of_stock", `${componentName} est en rupture.`, "en rupture"));
+          break;
+        }
+      }
+      continue;
+    }
     const product = productCache.get(item.catalogItemId);
     const productName = displayName(item, product?.name);
 
@@ -403,15 +471,7 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
       continue;
     }
 
-    if (
-      product.isActive !== true ||
-      product.visible === false ||
-      product.published === false ||
-      product.archived === true ||
-      product.deleted === true ||
-      !product.categoryId ||
-      product.priceCents <= 0
-    ) {
+    if (isCommerciallyUnavailable(product) || !product.categoryId || product.priceCents <= 0) {
       issues.push(
         buildProductIssue(
           item,
@@ -437,7 +497,8 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
       continue;
     }
 
-    if (product.stockManaged === true && (product.stockQty === null || product.stockQty <= 0)) {
+    if (product.stockManaged === true && (product.stockQty === null || product.stockQty <= 0 ||
+        (stockDemand.get(item.catalogItemId) ?? 0) > product.stockQty)) {
       issues.push(
         buildProductIssue(
           item,

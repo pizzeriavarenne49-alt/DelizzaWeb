@@ -32,13 +32,14 @@ function hasProductCustomizations(product: Product): boolean {
 
 export default function ProductCard({ product: initialProduct }: ProductCardProps) {
   const product = useLiveProduct(initialProduct);
-  const { addItem, addItemWithOptions } = useCart();
+  const { addItem, addItemWithOptions, canAddProductQuantity } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
   const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const isUnavailable = isProductUnavailable(product);
   const orderingDisabled = !onlineOrdering.canStartOrder;
-  const cannotOrder = isUnavailable || orderingDisabled;
+  const stockLimitReached = !canAddProductQuantity(product.id, 1, product);
+  const cannotOrder = isUnavailable || orderingDisabled || stockLimitReached;
   const hasCustomizations = hasProductCustomizations(product);
 
   const handleAdd = () => {
@@ -46,7 +47,7 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
       showToast(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
       return;
     }
-    if (isUnavailable) {
+    if (isUnavailable || !canAddProductQuantity(product.id, 1, product)) {
       showToast(`${product.name} est indisponible`);
       return;
     }
@@ -82,7 +83,7 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
       setModalOpen(false);
       return;
     }
-    if (isUnavailable) {
+    if (isUnavailable || !canAddProductQuantity(product.id, quantity, product)) {
       showToast(`${product.name} est indisponible`);
       setModalOpen(false);
       return;
@@ -154,6 +155,8 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
                     ? `${product.name} indisponible`
                     : orderingDisabled
                       ? "Commandes en ligne indisponibles"
+                      : stockLimitReached
+                        ? `${product.name} : quantité maximale disponible atteinte`
                       : `Ajouter ${product.name} au panier`
                 }
                 className={cn(

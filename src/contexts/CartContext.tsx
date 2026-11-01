@@ -13,6 +13,8 @@ import type { CartItem, CartItemCustomizations, SelectedOption } from "@/types/c
 import type { Product } from "@/types";
 import { computeTaxFromTtcCents } from "@/types";
 import { isProductUnavailable } from "@/lib/product-availability";
+import { isAdditionalProductQuantityAvailable, canApplyCartQuantity, type StockAvailabilityProduct } from "@/lib/product-availability";
+import { useCatalogAvailability } from "@/contexts/CatalogAvailabilityContext";
 import { recordMarketingEvent } from "@/marketing/marketing-client";
 
 const LEGACY_STORAGE_KEYS = ["delizza_cart", "cart", "basket", "panier"];
@@ -38,6 +40,7 @@ interface CartContextValue {
   ) => void;
   removeItem: (cartKey: string) => void;
   updateQuantity: (cartKey: string, quantity: number) => void;
+  canAddProductQuantity: (productId: string, quantity?: number, product?: StockAvailabilityProduct) => boolean;
   clearCart: () => void;
   getSubtotalCents: () => number;
   getTaxCents: () => number;
@@ -57,6 +60,7 @@ const EMPTY_CART_CONTEXT: CartContextValue = {
   addItemWithOptions: noop,
   removeItem: noop,
   updateQuantity: noop,
+  canAddProductQuantity: () => false,
   clearCart: noop,
   getSubtotalCents: () => 0,
   getTaxCents: () => 0,
@@ -194,6 +198,12 @@ function CartStateProvider({
   storageKey: string;
 }) {
   const [items, setItems] = useState<CartItem[]>(() => readInitialCartItems(storageKey));
+  const catalogAvailability = useCatalogAvailability();
+  const canAddProductQuantity = useCallback(
+    (productId: string, quantity = 1, product?: StockAvailabilityProduct) =>
+      isAdditionalProductQuantityAvailable(items, productId, quantity, catalogAvailability, product),
+    [items, catalogAvailability],
+  );
 
   // Persist to localStorage whenever items change
   useEffect(() => {
@@ -201,7 +211,7 @@ function CartStateProvider({
   }, [items, storageKey]);
 
   const addItem = useCallback((product: Product) => {
-    if (isProductUnavailable(product)) return;
+    if (isProductUnavailable(product) || !canAddProductQuantity(product.id, 1, product)) return;
 
     recordMarketingEvent("add_to_cart", { productId: product.id, quantity: 1 });
 
@@ -211,6 +221,7 @@ function CartStateProvider({
       removedIngredients: [],
     });
     setItems((prev) => {
+      if (!isAdditionalProductQuantityAvailable(prev, product.id, 1, catalogAvailability, product)) return prev;
       const existing = prev.find((i) => i.cartKey === cartKey);
       if (existing) {
         return prev.map((i) =>
@@ -237,7 +248,7 @@ function CartStateProvider({
         },
       ];
     });
-  }, []);
+  }, [canAddProductQuantity, catalogAvailability]);
 
   const addItemWithOptions = useCallback(
     (
@@ -246,7 +257,7 @@ function CartStateProvider({
       quantity: number,
       selectedOptions: SelectedOption[] = [],
     ) => {
-      if (isProductUnavailable(product)) return;
+      if (isProductUnavailable(product) || !canAddProductQuantity(product.id, quantity, product)) return;
       if (!Number.isInteger(quantity) || quantity <= 0) return;
 
       recordMarketingEvent("add_to_cart", { productId: product.id, quantity });
@@ -259,6 +270,7 @@ function CartStateProvider({
       const unitPriceCents = product.price_cents + deltasCents;
 
       setItems((prev) => {
+        if (!isAdditionalProductQuantityAvailable(prev, product.id, quantity, catalogAvailability, product)) return prev;
         const existing = prev.find((i) => i.cartKey === cartKey);
         if (existing) {
           const newQty = existing.quantity + quantity;
@@ -289,7 +301,7 @@ function CartStateProvider({
         ];
       });
     },
-    [],
+    [canAddProductQuantity, catalogAvailability],
   );
 
   const removeItem = useCallback((cartKey: string) => {
@@ -327,15 +339,16 @@ function CartStateProvider({
         setItems((prev) => prev.filter((i) => i.cartKey !== cartKey));
         return;
       }
-      setItems((prev) =>
-        prev.map((i) =>
-          i.cartKey === cartKey
-            ? { ...i, quantity, totalCents: i.unitPriceCents * quantity }
-            : i,
-        ),
-      );
+      setItems((prev) => {
+        const current = prev.find((item) => item.cartKey === cartKey);
+        if (!current) return prev;
+        if (!canApplyCartQuantity(prev, cartKey, quantity, catalogAvailability)) return prev;
+        return prev.map((i) => i.cartKey === cartKey
+          ? { ...i, quantity, totalCents: i.unitPriceCents * quantity }
+          : i);
+      });
     },
-    [items],
+    [items, catalogAvailability],
   );
 
   const clearCart = useCallback(() => {
@@ -387,6 +400,7 @@ function CartStateProvider({
         addItemWithOptions,
         removeItem,
         updateQuantity,
+        canAddProductQuantity,
         clearCart,
         getSubtotalCents,
         getTaxCents,
