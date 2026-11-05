@@ -931,7 +931,8 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     if (name === "marketingPublicConfig") {
       return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-11-05", metaPixelId: "1234567890" } };
     }
-    if (payload.action === "revoke" || name === "marketingLinkOrder") return { data: { success: true } };
+    if (payload.action === "revoke") return { data: { success: true } };
+    if (name === "marketingLinkOrder") return { data: { success: true, metaPurchaseEventId: payload.context?.metaPurchaseEventId } };
     return { data: { collectionState: "accepted", erasureToken: "erase_meta", attributionToken: "attr_meta" } };
   } };
   try {
@@ -965,7 +966,8 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     marketing.recordMarketingEvent("checkout_start", { path: "/checkout" });
     marketing.linkOrderMarketing("order_abcdef");
     await settle();
-    assert.ok(firebaseCalls.some(({ name, payload }) => name === "marketingLinkOrder" && payload.orderId === "order_abcdef"));
+    const linkedOrder = firebaseCalls.find(({ name, payload }) => name === "marketingLinkOrder" && payload.orderId === "order_abcdef");
+    assert.match(linkedOrder.payload.context.metaPurchaseEventId, /^meta-[0-9a-f-]{36}$/i);
     const paidOrder = {
       source: "web", paymentStatus: "paid", status: "accepted", paidTotalCents: 1490,
       totalCents: 1490, remainingTotalCents: 0, primaryPaymentProvider: "stripe", paidAt: { toMillis: () => Date.now() },
@@ -983,7 +985,7 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
     assert.deepEqual(pixelCalls.filter((call) => call[2] === "Purchase"), [
-      ["trackSingle", "1234567890", "Purchase", { value: 14.9, currency: "EUR" }, { eventID: "purchase:d_lizza:order_abcdef" }],
+      ["trackSingle", "1234567890", "Purchase", { value: 14.9, currency: "EUR" }, { eventID: linkedOrder.payload.context.metaPurchaseEventId }],
     ]);
 
     marketing.setMarketingConsent({ analytics: true, marketing: false });

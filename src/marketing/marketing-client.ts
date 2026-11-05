@@ -4,6 +4,7 @@ import { httpsCallable } from "firebase/functions";
 import { getClientFunctions, CLIENT_WL_APP_ID } from "@/config/firebase-client";
 import {
   configureMetaPixel,
+  createMetaPurchaseEventId,
   metaAdvertisingAvailable,
   readMetaLandingClick,
   readMetaMatchContext,
@@ -473,13 +474,21 @@ export function linkOrderMarketing(orderId: string): void {
   if (!state.enabled || !state.sourceId || !(state.consent?.marketing || state.consent?.metaAdvertising) || !orderId) return;
   const session = getOrCreateSession();
   if (!session) return;
-  if (state.consent.metaAdvertising) rememberMetaCheckout(orderId);
   const links = orderLinks();
-  if (!links.some((entry) => entry.orderId === orderId)) {
+  const existing = links.find((entry) => entry.orderId === orderId);
+  const metaPurchaseEventId = state.consent.metaAdvertising
+    ? existing?.context.metaPurchaseEventId ?? createMetaPurchaseEventId()
+    : undefined;
+  if (!existing) {
     const token = storedAttributionToken(session.id);
     links.push({
       orderId,
-      context: { sessionId: session.id, sourceId: state.sourceId, ...(token ? { attributionToken: token } : {}) },
+      context: {
+        sessionId: session.id,
+        sourceId: state.sourceId,
+        ...(token ? { attributionToken: token } : {}),
+        ...(metaPurchaseEventId ? { metaPurchaseEventId } : {}),
+      },
       attempts: 0,
       expiresAt: Date.now() + SESSION_MAX_AGE_MS,
     });
@@ -510,8 +519,15 @@ async function drainOrderLinks(): Promise<void> {
     const attributionToken = storedAttributionToken(context.sessionId) ?? context.attributionToken;
     if (!attributionToken) continue;
     try {
-      await invokeMarketingCallable("marketingLinkOrder", { appId: CLIENT_WL_APP_ID, orderId: entry.orderId, context: { ...context, attributionToken } });
+      const result = await invokeMarketingCallable("marketingLinkOrder", { appId: CLIENT_WL_APP_ID, orderId: entry.orderId, context: { ...context, attributionToken } });
       if (generation !== consentGeneration) return;
+      const canonicalMetaPurchaseEventId = (result.data as { metaPurchaseEventId?: unknown } | undefined)?.metaPurchaseEventId;
+      if (context.metaPurchaseEventId && typeof canonicalMetaPurchaseEventId === "string") {
+        // Arm the browser Purchase only after the backend has accepted the
+        // canonical opaque event ID. A cross-tab or replay can therefore not
+        // replace an ID already persisted for the CAPI event.
+        rememberMetaCheckout(entry.orderId, canonicalMetaPurchaseEventId);
+      }
       saveOrderLinks(orderLinks().filter((pending) => pending.orderId !== entry.orderId));
     } catch (error) {
       if (generation !== consentGeneration) return;

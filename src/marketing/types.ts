@@ -44,4 +44,6 @@ export interface MarketingOrderContext {
   sessionId: string;
   sourceId: string;
   attributionToken?: string;
+  /** Opaque browser/server Meta Purchase deduplication key. */
+  metaPurchaseEventId?: string;
 }

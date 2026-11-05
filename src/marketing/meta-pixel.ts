@@ -149,9 +149,19 @@ export function readMetaMatchContext(landingClick?: string): { fbp?: string; fbc
   return fbp || fbc ? { ...(fbp ? { fbp } : {}), ...(fbc ? { fbc } : {}) } : undefined;
 }
 
-export function rememberMetaCheckout(orderId: string): void {
+export function createMetaPurchaseEventId(): string | undefined {
+  if (typeof crypto === "undefined" || typeof crypto.randomUUID !== "function") return undefined;
+  return `meta-${crypto.randomUUID()}`;
+}
+
+function validMetaPurchaseEventId(value: unknown): value is string {
+  return typeof value === "string" && /^meta-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+export function rememberMetaCheckout(orderId: string, eventId: string): void {
   if (!pixelId) return;
-  try { window.sessionStorage.setItem(PURCHASE_KEY, JSON.stringify({ orderId, at: Date.now() })); } catch { /* optional storage */ }
+  if (!validMetaPurchaseEventId(eventId)) return;
+  try { window.sessionStorage.setItem(PURCHASE_KEY, JSON.stringify({ orderId, eventId, at: Date.now() })); } catch { /* optional storage */ }
 }
 
 export function trackMetaPaidOrder(appId: string, orderId: string, order: Record<string, unknown>): void {
@@ -165,9 +175,9 @@ export function trackMetaPaidOrder(appId: string, orderId: string, order: Record
     (refundedTotalCents != null && refundedTotalCents !== 0) || !currency || !/^[A-Z]{3}$/.test(currency) ||
     typeof paidAtMs !== "number" || !Number.isFinite(paidAtMs)) return;
   try {
-    const marker = JSON.parse(window.sessionStorage.getItem(PURCHASE_KEY) ?? "null") as { orderId: string; at: number } | null;
-    if (!marker || marker.orderId !== orderId || !Number.isFinite(marker.at) || marker.at > Date.now() || Date.now() - marker.at >= PURCHASE_TTL_MS || paidAtMs < marker.at - 5_000) return;
-    if (trackMetaPixel({ name: "Purchase", data: { value: paidTotalCents / 100, currency }, eventId: `purchase:${appId}:${orderId}` })) {
+    const marker = JSON.parse(window.sessionStorage.getItem(PURCHASE_KEY) ?? "null") as { orderId: string; eventId: unknown; at: number } | null;
+    if (!marker || marker.orderId !== orderId || !validMetaPurchaseEventId(marker.eventId) || !Number.isFinite(marker.at) || marker.at > Date.now() || Date.now() - marker.at >= PURCHASE_TTL_MS || paidAtMs < marker.at - 5_000) return;
+    if (trackMetaPixel({ name: "Purchase", data: { value: paidTotalCents / 100, currency }, eventId: marker.eventId })) {
       window.sessionStorage.removeItem(PURCHASE_KEY);
     }
   } catch { /* optional storage */ }
