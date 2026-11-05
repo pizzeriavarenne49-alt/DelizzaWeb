@@ -52,7 +52,7 @@ GA4 sont envoyées avec origin/pathname uniquement, sans query/hash ni référen
   session: { id, visitorId, startedAt },
   consent: { analytics, marketing, revision, updatedAt },
   events: [{ id, type, occurredAt, path?, productId?, quantity?, errorCode? }],
-  attribution?: { utm_source?, utm_medium?, utm_campaign?, utm_content?, utm_term?, referrerDomain?, landingPath?, campaignLinkId? }
+  attribution?: { utm_id?, utm_source?, utm_medium?, utm_campaign?, utm_content?, utm_term?, referrerDomain?, landingPath?, campaignLinkId? }
 }
 ```
 
@@ -73,9 +73,31 @@ Après `createOrder`, le navigateur lance sans attendre `marketingLinkOrder` :
 ```
 
 Cet appel est séparé de la création de commande et du paiement. Son échec ne bloque jamais le
-commerce ; il laisse seulement la commande sans attribution jusqu'à une reprise. Le backend doit
+commerce. La file reprend après reconnexion, au chargement et depuis la confirmation de commande.
+Le backend doit
 vérifier que l'utilisateur authentifié possède la commande et que le contexte appartient au même
 tenant. L'attribution est une mesure déclarative, non une mesure d'incrémentalité.
+
+## Mesure publicitaire Meta
+
+La mesure nécessite une configuration Meta autorisée sur le serveur pour la même source et le même domaine, puis ces valeurs sur le site.
+
+```text
+NEXT_PUBLIC_MARKETING_SOURCE_ID=delizza-web-production
+NEXT_PUBLIC_MARKETING_ENABLED=true
+NEXT_PUBLIC_MARKETING_CONSENT_REVISION=2026-11-05
+NEXT_PUBLIC_META_ADVERTISING_ENABLED=true
+```
+
+Le serveur doit retourner `metaPixelId` dans la configuration vérifiée. Ce numéro est public. Le jeton Conversions API reste côté serveur. La révision demande un nouveau choix explicite. La mesure Meta est séparée de l'attribution interne des UTM dans les préférences et nécessite la mesure d'audience pour pouvoir lier et révoquer la session.
+
+Dans Meta Ads Manager, renseigner les paramètres de l'URL publicitaire avec `utm_source=meta&utm_medium=paid_social&utm_id={{campaign.id}}`. L'identifiant stable `utm_id` permet de rapprocher les commandes mesurables et les dépenses importées, y compris après renommage de la campagne. Une commande issue d'un visiteur qui refuse la mesure marketing interne reste sans attribution UTM dans WLHORIZON.
+
+Avec consentement Meta, le navigateur initialise le Pixel sans configuration automatique. Il émet `PageView`, `ViewContent`, `AddToCart` et `InitiateCheckout` à partir des événements réels du site. Le collecteur peut recevoir `_fbp` et `_fbc` au sein de cette session. Une redirection Stripe contenant des paramètres privés est exclue des appels Pixel. Le serveur peut transmettre l'achat confirmé par la Conversions API pour les commandes couvertes par le consentement et la liaison.
+
+Le navigateur émet `Purchase` seulement pour une commande web du compte connecté, confirmée par un document Firestore issu du serveur avec paiement complet, montant et devise validés. Il utilise un marqueur temporaire créé dans l'onglet au passage de la commande. L'identifiant `purchase:<appId>:<orderId>` est partagé avec l'événement serveur pour le rapprochement et la déduplication dans Meta. Le retrait du consentement arrête les envois, efface les traceurs Meta disponibles et révoque les sessions précédentes côté serveur. La révocation peut être rejouée après reconnexion.
+
+Pour la recette sur un jeu de données de test, contrôler dans Meta Events Manager que les événements de navigation et la valeur d'achat correspondent, que l'achat navigateur et l'achat serveur portent le même identifiant, et qu'un refus ou retrait empêche tout nouvel envoi. Contrôler aussi un retour Stripe qui exige une redirection et un achat échoué.
 
 ## Tests manuels isolés
 

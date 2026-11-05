@@ -26,6 +26,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   const legal = LEGAL_ENTITY;
+  const metaAdvertisingAvailable = process.env.NEXT_PUBLIC_META_ADVERTISING_ENABLED === "true";
 
   return (
     <article className="flex flex-col gap-8 px-4 pt-6 pb-10">
@@ -210,9 +211,11 @@ export default function PrivacyPage() {
           <Item>
             <strong className="text-[#F5F5F5]">Mesure marketing</strong> — paramètres UTM,
             liens de campagne et domaine référent, uniquement après acceptation distincte. Elle
-            aide à rapprocher certaines commandes des campagnes sans transmettre les coordonnées
-            de commande aux plateformes publicitaires dans cette version.
+              aide à rapprocher certaines commandes des campagnes dans nos outils internes.
           </Item>
+            {metaAdvertisingAvailable && <Item>
+              <strong className="text-[#F5F5F5]">Mesure publicitaire Meta</strong> — avec votre accord, Meta (Facebook et Instagram) reçoit des événements de navigation et d&apos;achat pour mesurer nos publicités. La mesure peut inclure les identifiants de navigateur ou de clic (_fbp et _fbc), le montant et la devise d&apos;un achat confirmé, ainsi que des données techniques du navigateur. Les informations sont traitées selon la <a href="https://www.facebook.com/privacy/policy/" className="underline" rel="noreferrer">politique de confidentialité de Meta</a>.
+            </Item>}
         </ul>
         <p>
           Vous pouvez accepter, refuser ou modifier ces choix à tout moment avec le lien

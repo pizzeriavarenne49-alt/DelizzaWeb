@@ -704,8 +704,9 @@ run("robots and sitemap remain canonical when coming soon is off", () => {
   assert.ok(builtSitemap.some((entry) => entry.url === "https://www.delizza.fr/menu"));
 });
 
-function marketingTestWindow(url = "https://www.delizza.fr/menu?utm_source=test&utm_campaign=launch&mk_link=link_1") {
+function marketingTestWindow(url = "https://www.delizza.fr/menu?utm_source=test&utm_campaign=launch&utm_id=123456789&mk_link=link_1") {
   const values = new Map();
+  const sessionValues = new Map();
   const listeners = new Map();
   return {
     localStorage: {
@@ -713,6 +714,12 @@ function marketingTestWindow(url = "https://www.delizza.fr/menu?utm_source=test&
       setItem: (key, value) => values.set(key, String(value)),
       removeItem: (key) => values.delete(key),
     },
+    sessionStorage: {
+      getItem: (key) => sessionValues.get(key) ?? null,
+      setItem: (key, value) => sessionValues.set(key, String(value)),
+      removeItem: (key) => sessionValues.delete(key),
+    },
+    setTimeout,
     location: new URL(url),
     addEventListener: (name, callback) => listeners.set(name, callback),
     removeEventListener: (name) => listeners.delete(name),
@@ -774,6 +781,7 @@ await runAsync("marketing client waits for authoritative config, keeps UTM behin
     const marketingCall = calls.filter((call) => call.name === "marketingCollect").at(-1);
     assert.equal(marketingCall.payload.attribution.utm_source, "test");
     assert.equal(marketingCall.payload.attribution.campaignLinkId, "link_1");
+    assert.equal(marketingCall.payload.attribution.utm_id, "123456789");
 
     globalThis.window.location = new URL("https://www.delizza.fr/cart?email=not-collected@example.test");
     marketing.recordMarketingEvent("page_view", { path: "/cart?email=not-collected@example.test" });
@@ -833,7 +841,7 @@ await runAsync("marketing withdrawal wins over an in-flight configuration respon
   }
 });
 
-await runAsync("marketing order-link queue retries on a later order without delaying commerce", async () => {
+await runAsync("marketing order-link queue retries after reconnect without waiting for another order", async () => {
   const previous = { nodeEnv: process.env.NODE_ENV, source: process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID, test: process.env.NEXT_PUBLIC_MARKETING_TEST_MODE, project: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID, window: globalThis.window, document: globalThis.document, customEvent: globalThis.CustomEvent, transport: globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ };
   process.env.NODE_ENV = "development"; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = "delizza-web-test"; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = "true"; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "demo-acquisition-marketing";
   globalThis.window = marketingTestWindow(); globalThis.document = { referrer: "" }; globalThis.CustomEvent = class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } };
@@ -853,10 +861,13 @@ await runAsync("marketing order-link queue retries on a later order without dela
     marketing.recordMarketingEvent("page_view", { path: "/menu" });
     await settle();
     marketing.linkOrderMarketing("order_1");
-    await new Promise((resolve) => setTimeout(resolve, 15));
-    marketing.linkOrderMarketing("order_2");
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
+    assert.deepEqual(linked, ["order_1"]);
+    await marketing.retryMarketingOrderLinks();
     assert.deepEqual(linked, ["order_1", "order_1"]);
+    marketing.linkOrderMarketing("order_2");
+    await settle();
+    assert.deepEqual(linked, ["order_1", "order_1", "order_2"]);
   } finally {
     process.env.NODE_ENV = previous.nodeEnv; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = previous.source; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = previous.test; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = previous.project;
     globalThis.window = previous.window; globalThis.document = previous.document; globalThis.CustomEvent = previous.customEvent; globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = previous.transport;
@@ -883,6 +894,113 @@ await runAsync("offline withdrawal keeps only a revocation capability and retrie
     online = true; await marketing.retryPendingMarketingRevocation();
     assert.equal(revokeAttempts, 2);
   } finally { process.env.NODE_ENV = previous.nodeEnv; process.env.NEXT_PUBLIC_MARKETING_SOURCE_ID = previous.source; process.env.NEXT_PUBLIC_MARKETING_TEST_MODE = previous.test; process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = previous.project; globalThis.window = previous.window; globalThis.document = previous.document; globalThis.CustomEvent = previous.customEvent; globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = previous.transport; }
+});
+
+await runAsync("Meta measures only explicit consent and sends one confirmed Purchase with the shared event ID", async () => {
+  const previousEnvironment = new Map();
+  for (const [name, value] of Object.entries({
+    NODE_ENV: "development",
+    NEXT_PUBLIC_MARKETING_TEST_MODE: "true",
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-acquisition-marketing",
+    NEXT_PUBLIC_MARKETING_SOURCE_ID: "delizza-web-test",
+    NEXT_PUBLIC_META_ADVERTISING_ENABLED: "true",
+    NEXT_PUBLIC_MARKETING_CONSENT_REVISION: "2026-11-05",
+  })) {
+    previousEnvironment.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const previousTransport = globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const browser = marketingTestWindow("https://www.delizza.fr/menu?utm_id=123456789&fbclid=click_abc");
+  const scripts = [];
+  const pixelCalls = [];
+  const firebaseCalls = [];
+  globalThis.window = browser;
+  globalThis.document = {
+    referrer: "",
+    cookie: "_fbp=fb.1.1710000000000.1234567",
+    createElement: () => ({ remove() {} }),
+    head: { appendChild(script) { scripts.push(script); } },
+  };
+  globalThis.CustomEvent = class { constructor(type) { this.type = type; } };
+  globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = { async invoke(name, payload) {
+    firebaseCalls.push({ name, payload });
+    if (name === "marketingPublicConfig") {
+      return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-11-05", metaPixelId: "1234567890" } };
+    }
+    if (payload.action === "revoke" || name === "marketingLinkOrder") return { data: { success: true } };
+    return { data: { collectionState: "accepted", erasureToken: "erase_meta", attributionToken: "attr_meta" } };
+  } };
+  try {
+    const pixel = loadTsModule(path.resolve("src/marketing/meta-pixel.ts"));
+    const marketing = loadTsModule(path.resolve("src/marketing/marketing-client.ts"), { "@/marketing/meta-pixel": pixel });
+    marketing.recordMarketingEvent("page_view", { path: "/menu" });
+    assert.equal(firebaseCalls.length, 0);
+    assert.equal(scripts.length, 0);
+    marketing.setMarketingConsent({ analytics: true, marketing: true });
+    await settle();
+    marketing.recordMarketingEvent("page_view", { path: "/menu" });
+    await settle();
+    assert.equal(scripts.length, 0);
+    assert.ok(firebaseCalls.every(({ payload }) => !payload.meta && !payload.consent?.metaAdvertising));
+
+    marketing.setMarketingConsent({ analytics: true, marketing: false, metaAdvertising: true });
+    await settle();
+    marketing.recordMarketingEvent("page_view", { path: "/menu" });
+    await settle();
+    assert.equal(scripts.length, 1);
+    assert.equal(scripts[0].src, "https://connect.facebook.net/en_US/fbevents.js");
+    browser.fbq.callMethod = (...args) => pixelCalls.push(args);
+    scripts[0].onload();
+    const accepted = firebaseCalls.find(({ payload }) => payload.consent?.metaAdvertising && payload.meta);
+    assert.equal(accepted.payload.attribution, undefined);
+    assert.equal(accepted.payload.meta.fbp, "fb.1.1710000000000.1234567");
+    assert.match(accepted.payload.meta.fbc, /^fb\.1\.\d{13}\.click_abc$/);
+    assert.ok(pixelCalls.some((call) => call[2] === "PageView"));
+
+    browser.location = new URL("https://www.delizza.fr/checkout");
+    marketing.recordMarketingEvent("checkout_start", { path: "/checkout" });
+    marketing.linkOrderMarketing("order_abcdef");
+    await settle();
+    assert.ok(firebaseCalls.some(({ name, payload }) => name === "marketingLinkOrder" && payload.orderId === "order_abcdef"));
+    const paidOrder = {
+      source: "web", paymentStatus: "paid", status: "accepted", paidTotalCents: 1490,
+      totalCents: 1490, remainingTotalCents: 0, primaryPaymentProvider: "stripe", paidAt: { toMillis: () => Date.now() },
+    };
+    browser.location = new URL("https://www.delizza.fr/order-confirmation?orderId=order_abcdef");
+    assert.equal(pixel.trackMetaPixel({ name: "PageView" }), false);
+    pixel.trackMetaPaidOrder("d_lizza", "order_other", paidOrder);
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", { ...paidOrder, paymentStatus: "unpaid" });
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", { ...paidOrder, status: "cancelled" });
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", { ...paidOrder, refundedTotalCents: 100 });
+    browser.location = new URL("https://www.delizza.fr/order-confirmation?orderId=order_abcdef&payment_intent_client_secret=private");
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
+    assert.equal(pixelCalls.filter((call) => call[2] === "Purchase").length, 0);
+    browser.location = new URL("https://www.delizza.fr/order-confirmation?orderId=order_abcdef");
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
+    assert.deepEqual(pixelCalls.filter((call) => call[2] === "Purchase"), [
+      ["trackSingle", "1234567890", "Purchase", { value: 14.9, currency: "EUR" }, { eventID: "purchase:d_lizza:order_abcdef" }],
+    ]);
+
+    marketing.setMarketingConsent({ analytics: true, marketing: false });
+    await marketing.retryPendingMarketingRevocation();
+    assert.ok(firebaseCalls.some(({ payload }) => payload.action === "revoke"));
+    assert.ok(pixelCalls.some((call) => call[0] === "consent" && call[1] === "revoke"));
+    assert.equal(browser.localStorage.getItem("delizza_meta_click_v1"), null);
+    assert.equal(pixel.trackMetaPixel({ name: "PageView" }), false);
+  } finally {
+    for (const [name, value] of previousEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+    globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = previousTransport;
+    globalThis.CustomEvent = previousCustomEvent;
+  }
 });
 
 console.log("all tests passed");

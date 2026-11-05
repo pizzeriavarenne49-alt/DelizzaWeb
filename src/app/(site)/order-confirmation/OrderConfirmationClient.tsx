@@ -14,6 +14,9 @@ import {
 import { clearCheckoutAttemptForOrder } from "@/services/checkout-attempt";
 import { DELIZZA_CUSTOMER_APP_ID } from "@/services/customer-session";
 import { formatPrice } from "@/types";
+import { retryMarketingOrderLinks } from "@/marketing/marketing-client";
+import { useMarketing } from "@/marketing/MarketingProvider";
+import { trackMetaPaidOrder } from "@/marketing/meta-pixel";
 
 const PENDING_PROLONGED_DELAY_MS = 45000;
 const LEGACY_ORDER_REFERENCE_LABEL = "Référence indisponible";
@@ -37,6 +40,7 @@ interface OrderLoadState {
   key: string;
   order: OrderView | null;
   error: string | null;
+  serverOrder?: Record<string, unknown>;
 }
 
 function dateFromFirestore(value: unknown): Date | null {
@@ -126,6 +130,7 @@ function OrderConfirmationContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get("orderId");
   const { user, loading: authLoading } = useAuth();
+  const { consent: marketingConsent, enabled: marketingEnabled } = useMarketing();
   const { clearCart } = useCart();
   const [loadState, setLoadState] = useState<OrderLoadState | null>(null);
   const [prolongedPendingKey, setProlongedPendingKey] = useState<string | null>(null);
@@ -162,6 +167,7 @@ function OrderConfirmationContent() {
     const db = getClientFirestore();
     const unsubscribe = onSnapshot(
       doc(db, "orders", orderId),
+      { includeMetadataChanges: true },
       (snapshot) => {
         if (!snapshot.exists()) {
           setLoadState({
@@ -178,7 +184,8 @@ function OrderConfirmationContent() {
               error: "Commande introuvable ou inaccessible avec ce compte.",
             });
           } else {
-            setLoadState({ key: listenKey, order: mapped, error: null });
+            const serverOrder = !snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites ? snapshot.data() : undefined;
+            setLoadState({ key: listenKey, order: mapped, error: null, serverOrder });
           }
         }
       },
@@ -193,9 +200,16 @@ function OrderConfirmationContent() {
         });
       },
     );
+    void retryMarketingOrderLinks();
 
     return unsubscribe;
   }, [listenKey, orderId]);
+
+  useEffect(() => {
+    if (order && loadState?.serverOrder && marketingEnabled && marketingConsent?.metaAdvertising) {
+      trackMetaPaidOrder(order.appId, order.id, loadState.serverOrder);
+    }
+  }, [order, loadState?.serverOrder, marketingEnabled, marketingConsent?.metaAdvertising]);
 
   useEffect(() => {
     if (!pendingKey) return;

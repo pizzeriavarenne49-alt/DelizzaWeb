@@ -1,13 +1,16 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  captureInitialAttributionIfAllowed,
+  MARKETING_CONSENT_KEY,
+  canOfferMetaConsent,
   getMarketingState,
   loadMarketingPublicConfigAfterConsent,
   recordMarketingEvent,
+  refreshMarketingConsentFromStorage,
+  retryMarketingOrderLinks,
   retryPendingMarketingRevocation,
   revokeMarketingConsent,
   setMarketingConsent,
@@ -33,6 +36,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [consent, setConsent] = useState<MarketingConsent | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const lastPageTracked = useRef<string | null>(null);
 
   useEffect(() => {
     const refresh = () => {
@@ -41,28 +45,35 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       setEnabled(state.enabled);
     };
     refresh();
-    void retryPendingMarketingRevocation();
-    if (getMarketingState().consent?.analytics) void loadMarketingPublicConfigAfterConsent();
+    const reconnect = () => {
+      void retryPendingMarketingRevocation();
+      void loadMarketingPublicConfigAfterConsent().then(retryMarketingOrderLinks);
+    };
+    const refreshAcrossTabs = (event: StorageEvent) => {
+      if (event.key !== MARKETING_CONSENT_KEY && event.key !== null) return;
+      refreshMarketingConsentFromStorage();
+      refresh();
+    };
+    reconnect();
     window.addEventListener("delizza-marketing-consent", refresh);
     window.addEventListener("delizza-marketing-config", refresh);
-    window.addEventListener("online", retryPendingMarketingRevocation);
+    window.addEventListener("online", reconnect);
+    window.addEventListener("storage", refreshAcrossTabs);
     return () => {
       window.removeEventListener("delizza-marketing-consent", refresh);
       window.removeEventListener("delizza-marketing-config", refresh);
-      window.removeEventListener("online", retryPendingMarketingRevocation);
+      window.removeEventListener("online", reconnect);
+      window.removeEventListener("storage", refreshAcrossTabs);
     };
   }, []);
 
   useEffect(() => {
-    if (!consent?.analytics) return;
-    const trackPage = () => {
-      captureInitialAttributionIfAllowed();
-      recordMarketingEvent("page_view", { path: pathname || "/" });
-    };
-    trackPage();
-    window.addEventListener("delizza-marketing-config", trackPage);
-    return () => window.removeEventListener("delizza-marketing-config", trackPage);
-  }, [consent?.analytics, pathname]);
+    if (!consent?.analytics || !enabled) return;
+    const key = `${consent.updatedAt}:${pathname}`;
+    if (lastPageTracked.current === key) return;
+    lastPageTracked.current = key;
+    recordMarketingEvent("page_view", { path: pathname || "/" });
+  }, [consent, enabled, pathname]);
 
   const track = useCallback((type: MarketingEventType, data: { productId?: string; quantity?: number; errorCode?: string } = {}) => {
     recordMarketingEvent(type, { path: typeof window === "undefined" ? undefined : window.location.pathname, ...data });
@@ -77,8 +88,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
         key={`${consent?.updatedAt ?? "none"}-${preferencesOpen}`}
         consent={consent}
         onClose={() => setPreferencesOpen(false)}
-        onSave={(analytics, marketing) => {
-          setMarketingConsent({ analytics, marketing });
+        onSave={(analytics, marketing, metaAdvertising) => {
+          setMarketingConsent({ analytics, marketing, metaAdvertising });
           setPreferencesOpen(false);
         }}
         onWithdraw={async () => {
@@ -93,13 +104,15 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
 export function useMarketing(): MarketingContextValue { return useContext(MarketingContext); }
 
 function ConsentBanner({ onOpenPreferences }: { onOpenPreferences: () => void }) {
+  const metaAvailable = canOfferMetaConsent();
   return (
     <section role="dialog" aria-label="Choix de confidentialité" className="fixed inset-x-3 bottom-14 z-[9999] mx-auto max-w-2xl rounded-[20px] border border-[#4A4A4A] bg-[#171717] p-5 shadow-2xl">
       <h2 className="text-lg font-semibold text-[#F5F5F5]">Vos choix de confidentialité</h2>
       <p className="mt-2 text-sm leading-relaxed text-[#C7C7C7]">Avec votre accord, nous mesurons la fréquentation et, séparément, l&apos;origine de certaines visites. Ces choix n&apos;empêchent jamais de consulter le site ni de commander.</p>
+      {metaAvailable && <p className="mt-2 text-sm leading-relaxed text-[#C7C7C7]">Vous pouvez aussi autoriser Meta (Facebook et Instagram) à mesurer les visites et achats liés à nos publicités.</p>}
       <Link href="/privacy" className="mt-2 inline-block text-sm text-[#D4A053] underline">Lire la politique de confidentialité</Link>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-        <button type="button" onClick={() => setMarketingConsent({ analytics: true, marketing: true })} className="min-h-11 flex-1 rounded-xl bg-[#D4A053] px-4 font-semibold text-[#0D0D0D]">Tout accepter</button>
+        <button type="button" onClick={() => setMarketingConsent({ analytics: true, marketing: true, metaAdvertising: metaAvailable })} className="min-h-11 flex-1 rounded-xl bg-[#D4A053] px-4 font-semibold text-[#0D0D0D]">Tout accepter</button>
         <button type="button" onClick={() => setMarketingConsent({ analytics: false, marketing: false })} className="min-h-11 flex-1 rounded-xl border border-[#D4A053] px-4 font-semibold text-[#F5F5F5]">Tout refuser</button>
         <button type="button" onClick={onOpenPreferences} className="min-h-11 flex-1 rounded-xl border border-[#4A4A4A] px-4 text-[#F5F5F5]">Personnaliser</button>
       </div>
@@ -108,10 +121,11 @@ function ConsentBanner({ onOpenPreferences }: { onOpenPreferences: () => void })
 }
 
 function ConsentPreferences({ open, consent, onClose, onSave, onWithdraw }: {
-  open: boolean; consent: MarketingConsent | null; onClose: () => void; onSave: (analytics: boolean, marketing: boolean) => void; onWithdraw: () => Promise<void>;
+  open: boolean; consent: MarketingConsent | null; onClose: () => void; onSave: (analytics: boolean, marketing: boolean, metaAdvertising: boolean) => void; onWithdraw: () => Promise<void>;
 }) {
   const [analytics, setAnalytics] = useState(consent?.analytics ?? false);
   const [marketing, setMarketing] = useState(consent?.marketing ?? false);
+  const [metaAdvertising, setMetaAdvertising] = useState(consent?.metaAdvertising ?? false);
   if (!open) return null;
   return (
     <section role="dialog" aria-modal="true" aria-label="Préférences de confidentialité" className="fixed inset-0 z-[10000] flex items-end bg-black/70 p-3 sm:items-center sm:justify-center">
@@ -120,7 +134,8 @@ function ConsentPreferences({ open, consent, onClose, onSave, onWithdraw }: {
         <Link href="/privacy" className="mt-3 inline-block text-sm text-[#D4A053] underline">Lire la politique de confidentialité</Link>
         <label className="mt-6 flex gap-3 rounded-xl border border-[#353535] p-4 text-[#E5E5E5]"><input type="checkbox" checked={analytics} onChange={(event) => setAnalytics(event.target.checked)} className="mt-1 h-4 w-4" /><span><strong>Mesure d&apos;audience</strong><br /><span className="text-sm text-[#A0A0A0]">Mesure les pages et étapes de navigation avec un identifiant pseudonyme.</span></span></label>
         <label className="mt-3 flex gap-3 rounded-xl border border-[#353535] p-4 text-[#E5E5E5]"><input type="checkbox" checked={marketing} disabled={!analytics} onChange={(event) => setMarketing(event.target.checked)} className="mt-1 h-4 w-4" /><span><strong>Mesure marketing</strong><br /><span className="text-sm text-[#A0A0A0]">Conserve les paramètres de campagne et le référent pour attribuer les commandes couvertes.</span></span></label>
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => onSave(analytics, analytics && marketing)} className="min-h-11 flex-1 rounded-xl bg-[#D4A053] px-4 font-semibold text-[#0D0D0D]">Enregistrer mes choix</button>{consent && <button type="button" onClick={() => void onWithdraw()} className="min-h-11 flex-1 rounded-xl border border-[#D4A053] px-4 text-[#F5F5F5]">Retirer mon consentement</button>}</div>
+        {canOfferMetaConsent() && <label className="mt-3 flex gap-3 rounded-xl border border-[#353535] p-4 text-[#E5E5E5]"><input type="checkbox" checked={analytics && metaAdvertising} disabled={!analytics} onChange={(event) => setMetaAdvertising(event.target.checked)} className="mt-1 h-4 w-4" /><span><strong>Mesure publicitaire Meta</strong><br /><span className="text-sm text-[#A0A0A0]">Partage avec Meta certaines étapes de navigation, ainsi que le montant et la devise des achats confirmés, pour mesurer les publicités Facebook et Instagram.</span></span></label>}
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => onSave(analytics, analytics && marketing, analytics && metaAdvertising)} className="min-h-11 flex-1 rounded-xl bg-[#D4A053] px-4 font-semibold text-[#0D0D0D]">Enregistrer mes choix</button>{consent && <button type="button" onClick={() => void onWithdraw()} className="min-h-11 flex-1 rounded-xl border border-[#D4A053] px-4 text-[#F5F5F5]">Retirer mon consentement</button>}</div>
       </div>
     </section>
   );

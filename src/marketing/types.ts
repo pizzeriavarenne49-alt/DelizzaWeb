@@ -13,6 +13,7 @@ export type MarketingEventType =
 export interface MarketingConsent {
   analytics: boolean;
   marketing: boolean;
+  metaAdvertising?: boolean;
   revision: string;
   updatedAt: string;
 }
@@ -28,6 +29,7 @@ export interface MarketingEvent {
 }
 
 export interface MarketingAttribution {
+  utm_id?: string;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;

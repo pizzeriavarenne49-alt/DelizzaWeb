@@ -3,6 +3,15 @@
 import { httpsCallable } from "firebase/functions";
 import { getClientFunctions, CLIENT_WL_APP_ID } from "@/config/firebase-client";
 import {
+  configureMetaPixel,
+  metaAdvertisingAvailable,
+  readMetaLandingClick,
+  readMetaMatchContext,
+  rememberMetaCheckout,
+  trackMetaPixel,
+  type MetaEventName,
+} from "@/marketing/meta-pixel";
+import {
   MARKETING_SCHEMA_VERSION,
   type MarketingAttribution,
   type MarketingConsent,
@@ -11,35 +20,46 @@ import {
   type MarketingOrderContext,
 } from "@/marketing/types";
 
-const CONSENT_KEY = "delizza_marketing_consent_v1";
+export const MARKETING_CONSENT_KEY = "delizza_marketing_consent_v1";
 const SESSION_KEY = "delizza_marketing_session_v1";
 const VISITOR_KEY = "delizza_marketing_visitor_v1";
 const QUEUE_KEY = "delizza_marketing_queue_v1";
 const ATTRIBUTION_KEY = "delizza_marketing_attribution_v1";
 const ATTRIBUTION_TOKEN_KEY = "delizza_marketing_attribution_token_v1";
 const ERASURE_KEY = "delizza_marketing_erasure_v1";
+const ERASURE_CAPABILITIES_KEY = "delizza_marketing_erasure_capabilities_v1";
 const ORDER_LINK_QUEUE_KEY = "delizza_marketing_order_links_v1";
 const PUBLIC_CONFIG_KEY = "delizza_marketing_public_config_v1";
 const COLLECTION_PAUSE_KEY = "delizza_marketing_collection_pause_v1";
 const PENDING_REVOCATION_KEY = "delizza_marketing_pending_revocation_v1";
 const CONSENT_MAX_AGE_MS = 183 * 24 * 60 * 60 * 1000;
-const CONSENT_NOTICE_REVISION = process.env.NEXT_PUBLIC_MARKETING_CONSENT_REVISION?.trim() || "2026-10-12";
+const META_CONSENT_REVISION = "2026-11-05";
+const CONSENT_NOTICE_REVISION = process.env.NEXT_PUBLIC_MARKETING_CONSENT_REVISION?.trim() ||
+  (metaAdvertisingAvailable() ? META_CONSENT_REVISION : "2026-10-12");
 const SESSION_MAX_AGE_MS = 30 * 60 * 1000;
 const MAX_QUEUE_EVENTS = 100;
 const MAX_BATCH_EVENTS = 20;
 const MAX_RETRIES = 3;
+const META_FUNNEL_EVENTS: Partial<Record<MarketingEventType, MetaEventName>> = {
+  page_view: "PageView", product_view: "ViewContent", add_to_cart: "AddToCart", checkout_start: "InitiateCheckout",
+};
 let publicConfigVerifiedThisPage = false;
 let consentGeneration = 0;
+let pendingLanding: MarketingAttribution | undefined;
+let pendingMetaClick: string | undefined;
+let collectionRequest: Promise<void> | null = null;
+let linkRequest: Promise<void> | null = null;
+let revocationRequest: Promise<void> | null = null;
 
 type StoredSession = { id: string; startedAt: string; lastSeenAt: string; startedEventQueued?: boolean };
 type StoredVisitor = { id: string; createdAt: string };
 type StoredAttribution = { value: MarketingAttribution; capturedAt: string };
 type QueuedEvent = MarketingEvent & { attempts: number };
-type QueuedOrderLink = { orderId: string; context: MarketingOrderContext; attempts: number };
-type MarketingPublicConfig = { enabled: boolean; windowDays: number; retentionDays: number; revision: string; fetchedAt: string };
+type QueuedOrderLink = { orderId: string; context: MarketingOrderContext; attempts: number; expiresAt?: number };
+type MarketingPublicConfig = { enabled: boolean; windowDays: number; retentionDays: number; revision: string; fetchedAt: string; metaPixelId?: string };
 type MarketingCallableName = "marketingCollect" | "marketingPublicConfig" | "marketingLinkOrder";
 type MarketingTestTransport = { invoke: (name: MarketingCallableName, payload: unknown) => Promise<{ data: unknown }> };
-type PendingRevocation = { sessionId: string; erasureToken: string; createdAt: string; expiresAt: string };
+type RevocationCapability = { sessionId: string; erasureToken: string; expiresAt: string };
 
 export interface MarketingState {
   enabled: boolean;
@@ -117,8 +137,22 @@ function validConsent(value: MarketingConsent | null): value is MarketingConsent
 }
 
 export function getMarketingState(): MarketingState {
-  const consent = getItem<MarketingConsent>(CONSENT_KEY);
+  const consent = getItem<MarketingConsent>(MARKETING_CONSENT_KEY);
   return { enabled: isCollectionEnabled(), sourceId: sourceId(), consent: validConsent(consent) ? consent : null };
+}
+
+export function canOfferMetaConsent(): boolean {
+  return hasMarketingBuildConfiguration() && metaAdvertisingAvailable() && CONSENT_NOTICE_REVISION === META_CONSENT_REVISION;
+}
+
+function scopeReduced(previous: MarketingConsent | null, next: MarketingConsent | null): boolean {
+  return Boolean((previous?.analytics && !next?.analytics) || (previous?.marketing && !next?.marketing) ||
+    (previous?.metaAdvertising && !next?.metaAdvertising));
+}
+
+function terminalFailure(error: unknown): string | undefined {
+  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code).split("/").pop() : undefined;
+  return code && ["invalid-argument", "failed-precondition", "permission-denied"].includes(code) ? code : undefined;
 }
 
 function getOrCreateSession(): StoredSession | null {
@@ -152,11 +186,13 @@ function getOrCreateVisitor(): StoredVisitor {
   return created;
 }
 
-function captureAttribution(): MarketingAttribution | undefined {
+function readLandingAttribution(): MarketingAttribution | undefined {
   if (typeof window === "undefined") return undefined;
   const previousAttribution = currentAttribution();
   const params = new URLSearchParams(window.location.search);
+  const campaignId = params.get("utm_id");
   const value: MarketingAttribution = {
+    ...(campaignId && /^\d{1,30}$/.test(campaignId) ? { utm_id: campaignId } : {}),
     utm_source: cleanText(params.get("utm_source")),
     utm_medium: cleanText(params.get("utm_medium")),
     utm_campaign: cleanText(params.get("utm_campaign")),
@@ -174,10 +210,17 @@ function captureAttribution(): MarketingAttribution | undefined {
   // A direct internal navigation must not replace the previous non-direct
   // campaign touchpoint merely because it has a new landing path.
   const hasAcquisitionSignal = Boolean(
-    value.utm_source || value.utm_medium || value.utm_campaign || value.utm_content ||
+    value.utm_id || value.utm_source || value.utm_medium || value.utm_campaign || value.utm_content ||
     value.utm_term || value.campaignLinkId || value.referrerDomain,
   );
-  if (!hasAcquisitionSignal) return undefined;
+  return hasAcquisitionSignal ? value : undefined;
+}
+
+function captureAttribution(): MarketingAttribution | undefined {
+  const value = readLandingAttribution() ?? pendingLanding;
+  pendingLanding = undefined;
+  if (!value) return undefined;
+  if (JSON.stringify(value) === JSON.stringify(currentAttribution())) return undefined;
   setItem(ATTRIBUTION_KEY, { value, capturedAt: isoNow() } satisfies StoredAttribution);
   return value;
 }
@@ -218,7 +261,18 @@ function orderLinks(): QueuedOrderLink[] {
 
 function saveOrderLinks(links: QueuedOrderLink[]): void { setItem(ORDER_LINK_QUEUE_KEY, links.slice(-20)); }
 
-async function flush(): Promise<{ attributionToken?: string; erasureToken?: string } | undefined> {
+function storedAttributionToken(sessionId: string): string | undefined {
+  const stored = getItem<{ sessionId: string; token: string }>(ATTRIBUTION_TOKEN_KEY);
+  return stored?.sessionId === sessionId && typeof stored.token === "string" ? stored.token : undefined;
+}
+
+function flush(): Promise<void> {
+  if (collectionRequest) return collectionRequest;
+  collectionRequest = flushBatch().finally(() => { collectionRequest = null; });
+  return collectionRequest;
+}
+
+async function flushBatch(): Promise<void> {
   const state = getMarketingState();
   if (!state.enabled || !state.sourceId || !state.consent?.analytics) return undefined;
   const session = getOrCreateSession();
@@ -226,21 +280,27 @@ async function flush(): Promise<{ attributionToken?: string; erasureToken?: stri
   const all = queue();
   if (all.length === 0) return undefined;
   const batch = all.slice(0, MAX_BATCH_EVENTS);
+  const batchIds = new Set(batch.map((event) => event.id));
   const attribution = state.consent.marketing ? currentAttribution() : undefined;
   const operationGeneration = consentGeneration;
+  const consent = { ...state.consent };
+  if (!publicConfig()?.metaPixelId || !canOfferMetaConsent()) delete consent.metaAdvertising;
+  const meta = consent.metaAdvertising ? readMetaMatchContext(pendingMetaClick) : undefined;
+  if (meta?.fbc) pendingMetaClick = undefined;
   try {
     const result = await invokeMarketingCallable("marketingCollect", {
       schemaVersion: MARKETING_SCHEMA_VERSION,
       appId: CLIENT_WL_APP_ID,
       sourceId: state.sourceId,
       session: { id: session.id, visitorId: getOrCreateVisitor().id, startedAt: session.startedAt },
-      consent: state.consent,
+      consent,
       events: batch.map((queuedEvent) => {
         const event = { ...queuedEvent } as MarketingEvent & { attempts?: number };
         delete event.attempts;
         return event;
       }),
       ...(attribution ? { attribution } : {}),
+      ...(meta ? { meta } : {}),
     });
     const data = result.data as {
       attributionToken?: unknown; erasureToken?: unknown; acceptedEventIds?: unknown;
@@ -248,63 +308,81 @@ async function flush(): Promise<{ attributionToken?: string; erasureToken?: stri
     };
     // A withdrawal/change may happen while the callable is in flight. Never
     // restore its old queue or opaque tokens after that local decision.
-    if (operationGeneration !== consentGeneration) return undefined;
+    if (operationGeneration !== consentGeneration) {
+      if (typeof data.erasureToken === "string" && scopeReduced(state.consent, getMarketingState().consent)) {
+        queueRevocation(session.id, data.erasureToken);
+        void retryPendingMarketingRevocation();
+      }
+      return;
+    }
     const collectionState = typeof data.collectionState === "string" ? data.collectionState : "accepted";
     const terminalStates = new Set(["limited", "consent_denied", "revoked", "disabled"]);
     const terminalIds = [data.acceptedEventIds, data.duplicateEventIds, data.droppedEventIds]
       .flatMap((value) => Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
-    const terminalIdSet = new Set(terminalIds);
+    const terminalIdSet = new Set(terminalIds.length ? terminalIds : batchIds);
     if (terminalStates.has(collectionState)) {
-      saveQueue(all.slice(batch.length));
+      saveQueue(queue().filter((event) => !batchIds.has(event.id)));
       if (collectionState === "limited") setItem(COLLECTION_PAUSE_KEY, Date.now() + 15 * 60 * 1000);
       if (collectionState === "disabled" || collectionState === "revoked" || collectionState === "consent_denied") {
         removeItem(PUBLIC_CONFIG_KEY); removeItem(COLLECTION_PAUSE_KEY);
         publicConfigVerifiedThisPage = false;
+        configureMetaPixel(null);
       }
-    } else if (terminalIdSet.size > 0) {
-      saveQueue(all.filter((event) => !terminalIdSet.has(event.id)));
     } else {
-      // Backward-compatible successful responses are terminal for their batch.
-      saveQueue(all.slice(batch.length));
+      saveQueue(queue().filter((event) => !terminalIdSet.has(event.id)));
     }
-    if (typeof data.attributionToken === "string") setItem(ATTRIBUTION_TOKEN_KEY, data.attributionToken);
-    if (typeof data.erasureToken === "string") setItem(ERASURE_KEY, data.erasureToken);
-    return {
-      attributionToken: typeof data.attributionToken === "string" ? data.attributionToken : undefined,
-      erasureToken: typeof data.erasureToken === "string" ? data.erasureToken : undefined,
-    };
+    if (typeof data.attributionToken === "string") {
+      setItem(ATTRIBUTION_TOKEN_KEY, { sessionId: session.id, token: data.attributionToken });
+      if (!linkRequest && orderLinks().length) window.setTimeout(() => void retryMarketingOrderLinks(), 0);
+    }
+    if (typeof data.erasureToken === "string") saveErasureCapability(session.id, data.erasureToken);
+    if (queue().some((event) => !batchIds.has(event.id))) window.setTimeout(() => void flush(), 0);
   } catch (error) {
-    if (operationGeneration !== consentGeneration) return undefined;
-    const code = typeof error === "object" && error !== null && "code" in error
-      ? String((error as { code?: unknown }).code ?? "") : "";
-    if (["functions/invalid-argument", "functions/failed-precondition", "functions/permission-denied", "invalid-argument", "failed-precondition", "permission-denied"].includes(code)) {
-      saveQueue(all.slice(batch.length));
-      if (code.endsWith("permission-denied")) {
+    if (operationGeneration !== consentGeneration) return;
+    const code = terminalFailure(error);
+    if (code) {
+      saveQueue(queue().filter((event) => !batchIds.has(event.id)));
+      if (code === "permission-denied") {
         removeItem(PUBLIC_CONFIG_KEY); removeItem(COLLECTION_PAUSE_KEY);
         publicConfigVerifiedThisPage = false;
+        configureMetaPixel(null);
       }
-      return undefined;
+      return;
     }
-    const failedIds = new Set(batch.map((event) => event.id));
-    saveQueue(all.map((event) => failedIds.has(event.id) ? { ...event, attempts: event.attempts + 1 } : event)
+    saveQueue(queue().map((event) => batchIds.has(event.id) ? { ...event, attempts: event.attempts + 1 } : event)
       .filter((event) => event.attempts <= MAX_RETRIES));
-    return undefined;
   }
 }
 
-export function setMarketingConsent(next: Pick<MarketingConsent, "analytics" | "marketing">): MarketingConsent {
+export function setMarketingConsent(next: Pick<MarketingConsent, "analytics" | "marketing" | "metaAdvertising">): MarketingConsent {
   const previous = getMarketingState().consent;
-  const normalized = { analytics: Boolean(next.analytics), marketing: Boolean(next.analytics && next.marketing) };
+  const normalized = {
+    analytics: Boolean(next.analytics), marketing: Boolean(next.analytics && next.marketing),
+    ...(next.analytics && next.metaAdvertising && canOfferMetaConsent() ? { metaAdvertising: true } : {}),
+  };
   consentGeneration += 1;
   const consent: MarketingConsent = { ...normalized, revision: CONSENT_NOTICE_REVISION, updatedAt: isoNow() };
-  const purposeChanged = Boolean(previous && (previous.analytics !== consent.analytics || previous.marketing !== consent.marketing));
+  const withdrawn = scopeReduced(previous, consent) || (!consent.analytics && !previous);
+  const purposeChanged = withdrawn || scopeReduced(consent, previous);
+  if (withdrawn) {
+    const session = getItem<StoredSession>(SESSION_KEY);
+    const legacyToken = getItem<string>(ERASURE_KEY);
+    if (session?.id && typeof legacyToken === "string") queueRevocation(session.id, legacyToken);
+    for (const capability of capabilities(ERASURE_CAPABILITIES_KEY)) queueRevocation(capability.sessionId, capability.erasureToken);
+    removeItem(ERASURE_CAPABILITIES_KEY);
+    removeItem(ERASURE_KEY);
+  }
   if (purposeChanged) {
     // Do not let a later order inherit a session or attribution created under
     // a broader purpose. The new choice starts with a fresh anonymous scope.
     removeItem(QUEUE_KEY); removeItem(ORDER_LINK_QUEUE_KEY); removeItem(SESSION_KEY); removeItem(VISITOR_KEY);
-    removeItem(ATTRIBUTION_KEY); removeItem(ATTRIBUTION_TOKEN_KEY); removeItem(ERASURE_KEY); removeItem(COLLECTION_PAUSE_KEY);
+    removeItem(ATTRIBUTION_KEY); removeItem(ATTRIBUTION_TOKEN_KEY); removeItem(COLLECTION_PAUSE_KEY);
+    pendingLanding = undefined;
+    pendingMetaClick = undefined;
   }
-  setItem(CONSENT_KEY, consent);
+  setItem(MARKETING_CONSENT_KEY, consent);
+  if (!consent.metaAdvertising) configureMetaPixel(null, { withdraw: Boolean(previous?.metaAdvertising) });
+  if (withdrawn) void retryPendingMarketingRevocation();
   window.dispatchEvent(new CustomEvent("delizza-marketing-consent", { detail: consent }));
   if (consent.analytics && hasMarketingBuildConfiguration()) {
     void loadMarketingPublicConfigAfterConsent();
@@ -323,22 +401,28 @@ export async function loadMarketingPublicConfigAfterConsent(): Promise<void> {
   const storedConsent = getMarketingState().consent;
   const configuredSource = sourceId();
   if (!storedConsent?.analytics || !configuredSource || !hasMarketingBuildConfiguration()) return;
+  if (storedConsent.marketing) pendingLanding = readLandingAttribution() ?? pendingLanding;
+  if (storedConsent.metaAdvertising && canOfferMetaConsent()) pendingMetaClick = readMetaLandingClick() ?? pendingMetaClick;
   const operationGeneration = consentGeneration;
   try {
     const result = await invokeMarketingCallable("marketingPublicConfig", { appId: CLIENT_WL_APP_ID, sourceId: configuredSource });
     if (operationGeneration !== consentGeneration || !getMarketingState().consent?.analytics) return;
-    const data = result.data as { enabled?: unknown; sourceId?: unknown; attributionWindowDays?: unknown; sessionRetentionDays?: unknown; consentRevision?: unknown };
+    const data = result.data as { enabled?: unknown; sourceId?: unknown; attributionWindowDays?: unknown; sessionRetentionDays?: unknown; consentRevision?: unknown; metaPixelId?: unknown };
     if (data.enabled !== true || data.sourceId !== configuredSource || !Number.isInteger(data.attributionWindowDays) || !Number.isInteger(data.sessionRetentionDays) || data.consentRevision !== CONSENT_NOTICE_REVISION || data.consentRevision !== storedConsent.revision) throw new Error("invalid public marketing config");
-    setItem(PUBLIC_CONFIG_KEY, { enabled: true, windowDays: data.attributionWindowDays as number, retentionDays: data.sessionRetentionDays as number, revision: data.consentRevision, fetchedAt: isoNow() } satisfies MarketingPublicConfig);
+    const metaPixelId = typeof data.metaPixelId === "string" && /^\d{5,30}$/.test(data.metaPixelId) ? data.metaPixelId : undefined;
+    setItem(PUBLIC_CONFIG_KEY, { enabled: true, windowDays: data.attributionWindowDays as number, retentionDays: data.sessionRetentionDays as number, revision: data.consentRevision, fetchedAt: isoNow(), metaPixelId } satisfies MarketingPublicConfig);
     publicConfigVerifiedThisPage = true;
+    configureMetaPixel(storedConsent.metaAdvertising && canOfferMetaConsent() ? metaPixelId ?? null : null);
     ensureSessionStartQueued();
     void flush();
     window.dispatchEvent(new CustomEvent("delizza-marketing-config"));
   } catch {
+    if (operationGeneration !== consentGeneration) return;
     // The backend is authoritative: an unavailable or rejected configuration disables collection.
     removeItem(PUBLIC_CONFIG_KEY); removeItem(COLLECTION_PAUSE_KEY);
     removeItem(QUEUE_KEY);
     publicConfigVerifiedThisPage = false;
+    configureMetaPixel(null);
   }
 }
 
@@ -361,90 +445,133 @@ export function recordMarketingEvent(
   };
   const events = queue();
   events.push(event);
-  saveQueue(events);
   if (state.consent.marketing && type === "page_view") {
     const attribution = captureAttribution();
     if (attribution) {
-      events.push({ id: uuid(), type: "campaign_visit", occurredAt: isoNow(), path: detail.path ? cleanPath(detail.path) : undefined, attempts: 0 });
-      saveQueue(events);
+      events.push({ id: uuid(), type: "campaign_visit", occurredAt: isoNow(), path: attribution.landingPath, attempts: 0 });
+    }
+  }
+  saveQueue(events);
+  if (state.consent.metaAdvertising) {
+    const name = META_FUNNEL_EVENTS[type];
+    if (name) {
+      trackMetaPixel({ name, data: { ...(event.productId ? { content_ids: [event.productId], content_type: "product" } : {}), ...(event.quantity ? { num_items: event.quantity } : {}) } });
     }
   }
   void flush();
 }
 
-export async function getOrderMarketingContext(timeoutMs = 650): Promise<MarketingOrderContext | undefined> {
-  const state = getMarketingState();
-  if (!state.enabled || !state.sourceId || !state.consent?.analytics) return undefined;
-  const session = getOrCreateSession();
-  if (!session) return undefined;
-  const result = await Promise.race([
-    flush(),
-    new Promise<undefined>((resolve) => window.setTimeout(() => resolve(undefined), timeoutMs)),
-  ]);
-  const token = result?.attributionToken ?? getItem<string>(ATTRIBUTION_TOKEN_KEY) ?? undefined;
-  return { sessionId: session.id, sourceId: state.sourceId, ...(token ? { attributionToken: token } : {}) };
-}
-
-/** Links an already-created order to a consented marketing session. Never delays order creation or payment. */
+/** Queues an existing order without delaying order creation or payment. */
 export function linkOrderMarketing(orderId: string): void {
-  void (async () => {
-    // The bounded wait happens after createOrder and is intentionally detached
-    // from both order creation and payment.
-    const context = await getOrderMarketingContext(750);
-    if (!context || !orderId) return;
-    const pending = orderLinks().filter((entry) => entry.orderId !== orderId);
-    pending.push({ orderId, context, attempts: 0 });
-    saveOrderLinks(pending);
-    const first = pending[0];
-    if (!first) return;
-    try {
-      await invokeMarketingCallable("marketingLinkOrder", { appId: CLIENT_WL_APP_ID, orderId: first.orderId, context: first.context });
-      saveOrderLinks(orderLinks().filter((entry) => entry.orderId !== first.orderId));
-    } catch (error) {
-      const code = typeof error === "object" && error !== null && "code" in error
-        ? String((error as { code?: unknown }).code ?? "") : "";
-      if (["functions/invalid-argument", "functions/failed-precondition", "functions/permission-denied", "invalid-argument", "failed-precondition", "permission-denied"].includes(code)) {
-        saveOrderLinks(orderLinks().filter((entry) => entry.orderId !== first.orderId));
-        return;
-      }
-      saveOrderLinks(orderLinks().map((entry) => entry.orderId === first.orderId ? { ...entry, attempts: entry.attempts + 1 } : entry)
-        .filter((entry) => entry.attempts <= MAX_RETRIES));
+  const state = getMarketingState();
+  if (!state.enabled || !state.sourceId || !(state.consent?.marketing || state.consent?.metaAdvertising) || !orderId) return;
+  const session = getOrCreateSession();
+  if (!session) return;
+  if (state.consent.metaAdvertising) rememberMetaCheckout(orderId);
+  const links = orderLinks();
+  if (!links.some((entry) => entry.orderId === orderId)) {
+    const token = storedAttributionToken(session.id);
+    links.push({
+      orderId,
+      context: { sessionId: session.id, sourceId: state.sourceId, ...(token ? { attributionToken: token } : {}) },
+      attempts: 0,
+      expiresAt: Date.now() + SESSION_MAX_AGE_MS,
+    });
+    saveOrderLinks(links);
+  }
+  void retryMarketingOrderLinks();
+}
+
+export function retryMarketingOrderLinks(): Promise<void> {
+  if (linkRequest) return linkRequest;
+  linkRequest = drainOrderLinks().finally(() => { linkRequest = null; });
+  return linkRequest;
+}
+
+async function drainOrderLinks(): Promise<void> {
+  const state = getMarketingState();
+  if (!state.enabled || !state.sourceId || !(state.consent?.marketing || state.consent?.metaAdvertising) || !orderLinks().length) return;
+  const generation = consentGeneration;
+  await flush();
+  if (queue().length) await flush();
+  for (const entry of orderLinks()) {
+    if (generation !== consentGeneration) return;
+    const context = entry.context;
+    if (context.sourceId !== state.sourceId || (entry.expiresAt !== undefined && entry.expiresAt <= Date.now())) {
+      saveOrderLinks(orderLinks().filter((pending) => pending.orderId !== entry.orderId));
+      continue;
     }
-  })();
+    const attributionToken = storedAttributionToken(context.sessionId) ?? context.attributionToken;
+    if (!attributionToken) continue;
+    try {
+      await invokeMarketingCallable("marketingLinkOrder", { appId: CLIENT_WL_APP_ID, orderId: entry.orderId, context: { ...context, attributionToken } });
+      if (generation !== consentGeneration) return;
+      saveOrderLinks(orderLinks().filter((pending) => pending.orderId !== entry.orderId));
+    } catch (error) {
+      if (generation !== consentGeneration) return;
+      const terminal = terminalFailure(error);
+      saveOrderLinks(orderLinks().flatMap((pending) => {
+        if (pending.orderId !== entry.orderId) return [pending];
+        return terminal || pending.attempts >= MAX_RETRIES ? [] : [{ ...pending, attempts: pending.attempts + 1 }];
+      }));
+    }
+  }
 }
 
-export async function revokeMarketingConsent(): Promise<void> {
-  const state = getMarketingState();
-  const session = getItem<StoredSession>(SESSION_KEY);
-  const erasureToken = getItem<string>(ERASURE_KEY);
-  // Apply the browser-side withdrawal before awaiting the network. It prevents
-  // an in-flight collector response from resurrecting data locally.
-  if (state.sourceId && session?.id && erasureToken) {
-    setItem(PENDING_REVOCATION_KEY, { sessionId: session.id, erasureToken, createdAt: isoNow(), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() } satisfies PendingRevocation);
-  }
+function capabilities(key: string): RevocationCapability[] {
+  const stored = getItem<RevocationCapability[] | RevocationCapability>(key);
+  return (Array.isArray(stored) ? stored : stored ? [stored] : []).filter(
+    (entry) => typeof entry?.sessionId === "string" && typeof entry.erasureToken === "string" && Date.parse(entry.expiresAt) > Date.now(),
+  );
+}
+
+function upsertCapability(key: string, capability: RevocationCapability): void {
+  const current = capabilities(key).filter((entry) => entry.sessionId !== capability.sessionId);
+  setItem(key, [...current, capability].slice(-256));
+}
+
+function saveErasureCapability(sessionId: string, erasureToken: string): void {
+  const expiresAt = new Date(Date.now() + (publicConfig()?.retentionDays ?? 1) * 86400000).toISOString();
+  upsertCapability(ERASURE_CAPABILITIES_KEY, { sessionId, erasureToken, expiresAt });
+}
+
+function queueRevocation(sessionId: string, erasureToken: string): void {
+  const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+  upsertCapability(PENDING_REVOCATION_KEY, { sessionId, erasureToken, expiresAt });
+}
+
+export function revokeMarketingConsent(): Promise<void> {
   setMarketingConsent({ analytics: false, marketing: false });
-  await retryPendingMarketingRevocation();
+  return retryPendingMarketingRevocation();
 }
 
-/** Retries only the minimal server-erasure capability; it never resumes collection. */
-export async function retryPendingMarketingRevocation(): Promise<void> {
-  const pending = getItem<PendingRevocation>(PENDING_REVOCATION_KEY);
+/** Retries only the minimal server-erasure capability. */
+export function retryPendingMarketingRevocation(): Promise<void> {
+  if (revocationRequest) return revocationRequest;
+  revocationRequest = drainRevocations().finally(() => { revocationRequest = null; });
+  return revocationRequest;
+}
+
+async function drainRevocations(): Promise<void> {
   const configuredSource = sourceId();
-  if (!pending || !configuredSource) return;
-  if (!pending.sessionId || !pending.erasureToken || Date.parse(pending.expiresAt) <= Date.now()) {
-    removeItem(PENDING_REVOCATION_KEY);
-    return;
-  }
-  try {
-    await invokeMarketingCallable("marketingCollect", { schemaVersion: MARKETING_SCHEMA_VERSION, appId: CLIENT_WL_APP_ID, sourceId: configuredSource, action: "revoke", session: { id: pending.sessionId }, erasureToken: pending.erasureToken });
-    removeItem(PENDING_REVOCATION_KEY);
-  } catch (error) {
-    const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
-    if (["functions/invalid-argument", "functions/failed-precondition", "functions/permission-denied", "invalid-argument", "failed-precondition", "permission-denied"].includes(code)) removeItem(PENDING_REVOCATION_KEY);
+  if (!configuredSource) return;
+  const pending = capabilities(PENDING_REVOCATION_KEY);
+  for (const entry of pending) {
+    try {
+      await invokeMarketingCallable("marketingCollect", { schemaVersion: MARKETING_SCHEMA_VERSION, appId: CLIENT_WL_APP_ID, sourceId: configuredSource, action: "revoke", session: { id: entry.sessionId }, erasureToken: entry.erasureToken });
+    } catch (error) {
+      if (!terminalFailure(error)) continue;
+    }
+    setItem(PENDING_REVOCATION_KEY, capabilities(PENDING_REVOCATION_KEY).filter((other) => other.sessionId !== entry.sessionId));
   }
 }
 
-export function captureInitialAttributionIfAllowed(): void {
-  const state = getMarketingState();
-  if (state.enabled && state.consent?.analytics && state.consent.marketing) captureAttribution();
+export function refreshMarketingConsentFromStorage(): void {
+  consentGeneration += 1;
+  publicConfigVerifiedThisPage = false;
+  pendingLanding = undefined;
+  pendingMetaClick = undefined;
+  const { consent } = getMarketingState();
+  configureMetaPixel(null, { withdraw: !consent?.metaAdvertising });
+  if (consent?.analytics) void loadMarketingPublicConfigAfterConsent();
 }
