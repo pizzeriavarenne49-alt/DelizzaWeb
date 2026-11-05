@@ -39,7 +39,7 @@ export default function PrivacyPage() {
           Politique de confidentialité
         </h1>
         <p className="text-[14px] text-[#6B6B6B]">
-          Dernière mise à jour : 12 octobre 2026
+          Dernière mise à jour : 5 novembre 2026
         </p>
       </div>
 
@@ -209,22 +209,65 @@ export default function PrivacyPage() {
             ne se charge qu&apos;après acceptation de cette finalité.
           </Item>
           <Item>
-            <strong className="text-[#F5F5F5]">Mesure marketing</strong> — paramètres UTM,
-            liens de campagne et domaine référent, uniquement après acceptation distincte. Elle
-              aide à rapprocher certaines commandes des campagnes dans nos outils internes.
+            <strong className="text-[#F5F5F5]">Mesure marketing interne</strong> — paramètres UTM,
+            liens de campagne et domaine référent, uniquement avec votre accord. Elle aide à
+            rapprocher certaines commandes des campagnes dans nos outils internes.
           </Item>
-            {metaAdvertisingAvailable && <Item>
-              <strong className="text-[#F5F5F5]">Mesure publicitaire Meta</strong> — avec votre accord, Meta (Facebook et Instagram) reçoit des événements de navigation et d&apos;achat pour mesurer nos publicités. La mesure peut inclure les identifiants de navigateur ou de clic (_fbp et _fbc), le montant et la devise d&apos;un achat confirmé, ainsi que des données techniques du navigateur. Les informations sont traitées selon la <a href="https://www.facebook.com/privacy/policy/" className="underline" rel="noreferrer">politique de confidentialité de Meta</a>.
-            </Item>}
+          {metaAdvertisingAvailable && (
+            <Item>
+              <strong className="text-[#F5F5F5]">Mesure publicitaire Meta</strong> — choix distinct
+              de la mesure d&apos;audience et de la mesure marketing interne.
+            </Item>
+          )}
         </ul>
         <p>
-          Vous pouvez accepter, refuser ou modifier ces choix à tout moment avec le lien
-          <strong className="text-[#F5F5F5]"> « Gérer mes choix »</strong> présent sur le site.
-          Le retrait arrête les futures collectes optionnelles et demande la suppression du lien de
-          session lorsque le service est disponible. Cette information technique doit faire l&apos;objet
-          d&apos;une revue juridique avant activation publique.
+          Vous pouvez tout refuser depuis le bandeau. Vous pouvez modifier ou retirer votre accord
+          à tout moment avec <strong className="text-[#F5F5F5]">« Gérer mes choix »</strong> en bas
+          de page. Vos choix facultatifs sont sans effet sur l&apos;accès au site et la commande.
         </p>
       </Section>
+
+      {metaAdvertisingAvailable && (
+        <Section emoji="📊" title="Mesure des publicités Facebook et Instagram">
+          <p>
+            Lorsqu&apos;elle est proposée, cette mesure repose sur votre consentement. Elle permet
+            à DELIZZA d&apos;évaluer ses publicités et de rapprocher un clic publicitaire d&apos;une
+            visite ou d&apos;un achat confirmé. Vous pouvez l&apos;accepter séparément.
+          </p>
+          <p>
+            Après votre accord, le Pixel Meta peut transmettre à Meta des événements de consultation,
+            d&apos;ajout au panier, de début de commande et d&apos;achat confirmé. La transmission
+            peut inclure la date et l&apos;heure, la page ou l&apos;origine de la visite, les
+            identifiants de navigateur et de clic (_fbp et _fbc), des données techniques comme
+            l&apos;adresse IP et le navigateur, ainsi que les données d&apos;interaction et le
+            montant et la devise d&apos;un achat. Notre serveur peut aussi transmettre un achat
+            confirmé via l&apos;API Conversions, avec l&apos;heure, la valeur et la devise,
+            l&apos;identifiant aléatoire de l&apos;événement, l&apos;identifiant de navigateur ou
+            de clic et, s&apos;il est disponible, le type de navigateur. Ce même identifiant
+            d&apos;événement sert à compter l&apos;achat une seule fois.
+          </p>
+          <p>
+            Les envois applicatifs à Meta excluent le nom, l&apos;e-mail, le téléphone,
+            l&apos;adresse de livraison, les références de paiement et les coordonnées bancaires.
+            Consultez la <a href="https://www.facebook.com/privacy/policy/?locale=fr_FR" className="underline" rel="noreferrer">politique de confidentialité de Meta</a>{" "}
+            pour les traitements de Meta, leurs durées et les transferts éventuels hors de
+            l&apos;Espace économique européen.
+          </p>
+          <p>
+            DelizzaWeb mémorise votre choix pendant 183 jours et utilise sa copie locale de
+            l&apos;identifiant de clic pendant 90 jours au maximum. Le marqueur de confirmation
+            d&apos;achat est utilisable pendant une heure. Les sessions de mesure sont conservées
+            30 jours et les liens d&apos;attribution 90 jours. Les cookies du Pixel et la
+            conservation par Meta suivent des durées distinctes.
+          </p>
+          <p>
+            Le retrait arrête les futurs envois de notre site et demande la suppression du
+            rapprochement côté DELIZZA. Pour toute demande concernant vos droits et les données
+            déjà transmises, écrivez à <a className="underline" href={`mailto:${legal.email}`}>{legal.email}</a>.
+            Vous pouvez également <a className="underline" href="https://www.cnil.fr/fr/adresser-une-plainte">adresser une réclamation à la CNIL</a>.
+          </p>
+        </Section>
+      )}
 
       {/* ── 9. Sécurité ── */}
       <Section emoji="🛡️" title="Sécurité des données">
