@@ -92,8 +92,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
           setMarketingConsent({ analytics, marketing, metaAdvertising });
           setPreferencesOpen(false);
         }}
-        onWithdraw={async () => {
-          await revokeMarketingConsent();
+        onWithdraw={() => {
+          void revokeMarketingConsent();
           setPreferencesOpen(false);
         }}
       />
@@ -105,15 +105,16 @@ export function useMarketing(): MarketingContextValue { return useContext(Market
 
 function ConsentBanner({ onOpenPreferences }: { onOpenPreferences: () => void }) {
   const metaAvailable = canOfferMetaConsent();
+  const choiceButton = "min-h-11 flex-1 rounded-xl border border-[#D4A053] px-4 font-semibold text-[#F5F5F5]";
   return (
     <section role="dialog" aria-label="Choix de confidentialité" className="fixed inset-x-3 bottom-14 z-[9999] mx-auto max-w-2xl rounded-[20px] border border-[#4A4A4A] bg-[#171717] p-5 shadow-2xl">
       <h2 className="text-lg font-semibold text-[#F5F5F5]">Vos choix de confidentialité</h2>
-      <p className="mt-2 text-sm leading-relaxed text-[#C7C7C7]">Vous choisissez séparément la mesure d&apos;audience, l&apos;attribution des campagnes et la mesure publicitaire Meta. Ces choix n&apos;empêchent jamais de consulter le site ni de commander.</p>
-      {metaAvailable && <p className="mt-2 text-sm leading-relaxed text-[#C7C7C7]">Vous pouvez aussi autoriser Meta (Facebook et Instagram) à mesurer les visites et achats liés à nos publicités.</p>}
+      <p className="mt-2 text-sm leading-relaxed text-[#C7C7C7]">Vous choisissez séparément la mesure d&apos;audience et l&apos;attribution des campagnes. Vous pouvez consulter le site et commander quels que soient vos choix.</p>
+      {metaAvailable && <p className="mt-2 text-sm leading-relaxed text-[#C7C7C7]">Vous pouvez aussi autoriser séparément Meta (Facebook et Instagram) à mesurer les visites et achats liés à nos publicités.</p>}
       <Link href="/privacy" className="mt-2 inline-block text-sm text-[#D4A053] underline">Lire la politique de confidentialité</Link>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-        <button type="button" onClick={() => setMarketingConsent({ analytics: true, marketing: true, metaAdvertising: metaAvailable })} className="min-h-11 flex-1 rounded-xl bg-[#D4A053] px-4 font-semibold text-[#0D0D0D]">Tout accepter</button>
-        <button type="button" onClick={() => setMarketingConsent({ analytics: false, marketing: false })} className="min-h-11 flex-1 rounded-xl border border-[#D4A053] px-4 font-semibold text-[#F5F5F5]">Tout refuser</button>
+        <button type="button" onClick={() => setMarketingConsent({ analytics: true, marketing: true, metaAdvertising: metaAvailable })} className={choiceButton}>Tout accepter</button>
+        <button type="button" onClick={() => setMarketingConsent({ analytics: false, marketing: false })} className={choiceButton}>Tout refuser</button>
         <button type="button" onClick={onOpenPreferences} className="min-h-11 flex-1 rounded-xl border border-[#4A4A4A] px-4 text-[#F5F5F5]">Personnaliser</button>
       </div>
     </section>
@@ -121,7 +122,7 @@ function ConsentBanner({ onOpenPreferences }: { onOpenPreferences: () => void })
 }
 
 function ConsentPreferences({ open, consent, onClose, onSave, onWithdraw }: {
-  open: boolean; consent: MarketingConsent | null; onClose: () => void; onSave: (analytics: boolean, marketing: boolean, metaAdvertising: boolean) => void; onWithdraw: () => Promise<void>;
+  open: boolean; consent: MarketingConsent | null; onClose: () => void; onSave: (analytics: boolean, marketing: boolean, metaAdvertising: boolean) => void; onWithdraw: () => void;
 }) {
   const [analytics, setAnalytics] = useState(consent?.analytics ?? false);
   const [marketing, setMarketing] = useState(consent?.marketing ?? false);
@@ -135,7 +136,7 @@ function ConsentPreferences({ open, consent, onClose, onSave, onWithdraw }: {
         <label className="mt-6 flex gap-3 rounded-xl border border-[#353535] p-4 text-[#E5E5E5]"><input type="checkbox" checked={analytics} onChange={(event) => setAnalytics(event.target.checked)} className="mt-1 h-4 w-4" /><span><strong>Mesure d&apos;audience</strong><br /><span className="text-sm text-[#A0A0A0]">Mesure les pages et étapes de navigation avec un identifiant pseudonyme.</span></span></label>
         <label className="mt-3 flex gap-3 rounded-xl border border-[#353535] p-4 text-[#E5E5E5]"><input type="checkbox" checked={marketing} onChange={(event) => setMarketing(event.target.checked)} className="mt-1 h-4 w-4" /><span><strong>Mesure marketing</strong><br /><span className="text-sm text-[#A0A0A0]">Conserve les paramètres de campagne et le référent pour attribuer les commandes couvertes.</span></span></label>
         {canOfferMetaConsent() && <label className="mt-3 flex gap-3 rounded-xl border border-[#353535] p-4 text-[#E5E5E5]"><input type="checkbox" checked={metaAdvertising} onChange={(event) => setMetaAdvertising(event.target.checked)} className="mt-1 h-4 w-4" /><span><strong>Mesure publicitaire Meta</strong><br /><span className="text-sm text-[#A0A0A0]">Partage avec Meta certaines étapes de navigation, ainsi que le montant et la devise des achats confirmés, pour mesurer les publicités Facebook et Instagram.</span></span></label>}
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => onSave(analytics, marketing, metaAdvertising)} className="min-h-11 flex-1 rounded-xl bg-[#D4A053] px-4 font-semibold text-[#0D0D0D]">Enregistrer mes choix</button>{consent && <button type="button" onClick={() => void onWithdraw()} className="min-h-11 flex-1 rounded-xl border border-[#D4A053] px-4 text-[#F5F5F5]">Retirer mon consentement</button>}</div>
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => onSave(analytics, marketing, metaAdvertising)} className="min-h-11 flex-1 rounded-xl bg-[#D4A053] px-4 font-semibold text-[#0D0D0D]">Enregistrer mes choix</button>{(consent?.analytics || consent?.marketing || consent?.metaAdvertising) && <button type="button" onClick={onWithdraw} className="min-h-11 flex-1 rounded-xl border border-[#D4A053] px-4 text-[#F5F5F5]">Retirer mon consentement</button>}</div>
       </div>
     </section>
   );
