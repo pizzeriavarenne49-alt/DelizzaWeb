@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -16,10 +16,37 @@ import { DELIZZA_CUSTOMER_APP_ID } from "@/services/customer-session";
 import { formatPrice } from "@/types";
 import { getMarketingState, retryMarketingOrderLinks } from "@/marketing/marketing-client";
 import { useMarketing } from "@/marketing/MarketingProvider";
-import { trackMetaPaidOrder } from "@/marketing/meta-pixel";
+import { META_PURCHASE_ARMED_EVENT, trackMetaPaidOrder } from "@/marketing/meta-pixel";
 
 const PENDING_PROLONGED_DELAY_MS = 45000;
 const LEGACY_ORDER_REFERENCE_LABEL = "Référence indisponible";
+const CONFIRMATION_ORDER_KEY = "delizza_order_confirmation_v1";
+const CONFIRMATION_ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function isValidOrderId(value: string | null): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{6,120}$/.test(value);
+}
+
+function storedConfirmationOrderId(): string | null {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(CONFIRMATION_ORDER_KEY) ?? "null") as { orderId?: unknown; savedAt?: unknown } | null;
+    const orderId = typeof stored?.orderId === "string" ? stored.orderId : null;
+    if (!isValidOrderId(orderId) || typeof stored?.savedAt !== "number" || stored.savedAt > Date.now() || Date.now() - stored.savedAt > CONFIRMATION_ORDER_MAX_AGE_MS) return null;
+    return orderId;
+  } catch { return null; }
+}
+
+function rememberConfirmationOrderId(orderId: string): boolean {
+  try {
+    window.sessionStorage.setItem(CONFIRMATION_ORDER_KEY, JSON.stringify({ orderId, savedAt: Date.now() }));
+    return true;
+  } catch { return false; }
+}
+
+function subscribeToConfirmationStorage(onChange: () => void): () => void {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
 
 interface OrderView {
   id: string;
@@ -128,13 +155,16 @@ function statusMessage(
 
 function OrderConfirmationContent() {
   const searchParams = useSearchParams();
-  const orderId = searchParams.get("orderId");
+  const queryOrderId = searchParams.get("orderId");
+  const storedOrderId = useSyncExternalStore(subscribeToConfirmationStorage, storedConfirmationOrderId, () => null);
+  const orderId = queryOrderId ?? storedOrderId;
   const { user, loading: authLoading } = useAuth();
   const { consent: marketingConsent, enabled: marketingEnabled } = useMarketing();
   const { clearCart } = useCart();
   const [loadState, setLoadState] = useState<OrderLoadState | null>(null);
   const [prolongedPendingKey, setProlongedPendingKey] = useState<string | null>(null);
-  const validOrderId = !!orderId && /^[A-Za-z0-9_-]{6,120}$/.test(orderId);
+  const [metaPurchaseArmed, setMetaPurchaseArmed] = useState(0);
+  const validOrderId = isValidOrderId(orderId);
   const listenKey = user && validOrderId ? `${user.uid}:${orderId}` : null;
   const order = loadState?.key === listenKey ? loadState.order : null;
   const loadError = loadState?.key === listenKey ? loadState.error : null;
@@ -160,6 +190,20 @@ function OrderConfirmationContent() {
     ? `${order.id}:${order.paymentStatus}:${order.status}`
     : null;
   const prolongedPending = !!pendingKey && prolongedPendingKey === pendingKey;
+
+  useEffect(() => {
+    if (!isValidOrderId(queryOrderId) || !marketingEnabled || !marketingConsent?.metaAdvertising ||
+        !rememberConfirmationOrderId(queryOrderId)) return;
+    // Clean the payment return URL only after saving its reference for refresh.
+    // The Pixel rejects the original URL if the browser cannot replace it.
+    try { window.history.replaceState(window.history.state, "", window.location.pathname); } catch { /* optional URL cleanup */ }
+  }, [queryOrderId, marketingEnabled, marketingConsent?.metaAdvertising]);
+
+  useEffect(() => {
+    const onMetaPurchaseArmed = () => setMetaPurchaseArmed((value) => value + 1);
+    window.addEventListener(META_PURCHASE_ARMED_EVENT, onMetaPurchaseArmed);
+    return () => window.removeEventListener(META_PURCHASE_ARMED_EVENT, onMetaPurchaseArmed);
+  }, []);
 
   useEffect(() => {
     if (!listenKey || !orderId) return;
@@ -209,7 +253,7 @@ function OrderConfirmationContent() {
     if (order && loadState?.serverOrder && marketingEnabled && marketingConsent?.metaAdvertising && getMarketingState().consent?.metaAdvertising) {
       trackMetaPaidOrder(order.appId, order.id, loadState.serverOrder);
     }
-  }, [order, loadState?.serverOrder, marketingEnabled, marketingConsent?.metaAdvertising]);
+  }, [order, loadState?.serverOrder, marketingEnabled, marketingConsent?.metaAdvertising, metaPurchaseArmed]);
 
   useEffect(() => {
     if (!pendingKey) return;

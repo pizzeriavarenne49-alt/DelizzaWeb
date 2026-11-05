@@ -3,6 +3,7 @@
 import { httpsCallable } from "firebase/functions";
 import { getClientFunctions, CLIENT_WL_APP_ID } from "@/config/firebase-client";
 import {
+  META_PURCHASE_ARMED_EVENT,
   configureMetaPixel,
   createMetaPurchaseEventId,
   metaAdvertisingAvailable,
@@ -522,11 +523,12 @@ async function drainOrderLinks(): Promise<void> {
       const result = await invokeMarketingCallable("marketingLinkOrder", { appId: CLIENT_WL_APP_ID, orderId: entry.orderId, context: { ...context, attributionToken } });
       if (generation !== consentGeneration) return;
       const canonicalMetaPurchaseEventId = (result.data as { metaPurchaseEventId?: unknown } | undefined)?.metaPurchaseEventId;
-      if (context.metaPurchaseEventId && typeof canonicalMetaPurchaseEventId === "string") {
+      if (context.metaPurchaseEventId && typeof canonicalMetaPurchaseEventId === "string" && typeof entry.expiresAt === "number") {
         // Arm the browser Purchase only after the backend has accepted the
         // canonical opaque event ID. A cross-tab or replay can therefore not
         // replace an ID already persisted for the CAPI event.
-        rememberMetaCheckout(entry.orderId, canonicalMetaPurchaseEventId);
+        rememberMetaCheckout(entry.orderId, canonicalMetaPurchaseEventId, entry.expiresAt - SESSION_MAX_AGE_MS);
+        window.dispatchEvent(new Event(META_PURCHASE_ARMED_EVENT));
       }
       saveOrderLinks(orderLinks().filter((pending) => pending.orderId !== entry.orderId));
     } catch (error) {

@@ -12,6 +12,7 @@ type MetaPixel = ((...args: unknown[]) => void) & {
 type PixelWindow = Window & { fbq?: MetaPixel; _fbq?: MetaPixel };
 
 const PURCHASE_KEY = "delizza_meta_checkout_v1";
+export const META_PURCHASE_ARMED_EVENT = "delizza-meta-purchase-armed";
 const CLICK_KEY = "delizza_meta_click_v1";
 const PURCHASE_TTL_MS = 60 * 60 * 1000;
 const CLICK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
@@ -31,21 +32,27 @@ export function metaAdvertisingAvailable(): boolean {
 }
 
 function canSendFrom(url: URL, purchase = false): boolean {
-  if (url.protocol !== "https:" || url.hash || /^\/(?:auth|profile|account|mon-compte|reset-password|login)(?:\/|$)/.test(url.pathname)) return false;
+  if (url.protocol !== "https:" || url.username || url.password || url.hash ||
+    /^\/(?:auth|profile|account|mon-compte|reset-password|login)(?:\/|$)/.test(url.pathname)) return false;
+  if (purchase && url.search) return false;
   if (!purchase && /^\/order-confirmation\/?$/.test(url.pathname)) return false;
   for (const [key, value] of url.searchParams) {
-    if (purchase && key === "orderId" && url.pathname === "/order-confirmation" && /^[A-Za-z0-9_-]{6,120}$/.test(value)) continue;
     if (!SAFE_PARAMETERS.has(key) || !/^[A-Za-z0-9_.~+ -]{1,250}$/.test(value)) return false;
   }
   return true;
 }
 
 function canSendHere(purchase = false): boolean {
-  if (typeof window === "undefined" || !canSendFrom(new URL(window.location.href), purchase)) return false;
+  if (typeof window === "undefined") return false;
+  const current = new URL(window.location.href);
+  if (!canSendFrom(current, purchase)) return false;
   // The Pixel may automatically read the page and referrer URLs. Do not load
   // it on URLs carrying Stripe redirect details, account data or unknown parameters.
   if (!document.referrer) return true;
-  try { return canSendFrom(new URL(document.referrer)); } catch { return false; }
+  try {
+    const referrer = new URL(document.referrer);
+    return canSendFrom(referrer) && (referrer.origin === current.origin || referrer.href === `${referrer.origin}/`);
+  } catch { return false; }
 }
 
 function removeTrackingStorage(): void {
@@ -158,10 +165,14 @@ function validMetaPurchaseEventId(value: unknown): value is string {
   return typeof value === "string" && /^meta-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-export function rememberMetaCheckout(orderId: string, eventId: string): void {
+export function rememberMetaCheckout(orderId: string, eventId: string, checkoutAt: number): void {
   if (!pixelId) return;
-  if (!validMetaPurchaseEventId(eventId)) return;
-  try { window.sessionStorage.setItem(PURCHASE_KEY, JSON.stringify({ orderId, eventId, at: Date.now() })); } catch { /* optional storage */ }
+  if (!validMetaPurchaseEventId(eventId) || !Number.isFinite(checkoutAt)) return;
+  try {
+    const existing = JSON.parse(window.sessionStorage.getItem(PURCHASE_KEY) ?? "null") as { orderId?: unknown; eventId?: unknown } | null;
+    if (existing?.orderId === orderId && existing.eventId === eventId) return;
+    window.sessionStorage.setItem(PURCHASE_KEY, JSON.stringify({ orderId, eventId, at: checkoutAt }));
+  } catch { /* optional storage */ }
 }
 
 export function trackMetaPaidOrder(appId: string, orderId: string, order: Record<string, unknown>): void {
@@ -169,16 +180,17 @@ export function trackMetaPaidOrder(appId: string, orderId: string, order: Record
   // Stripe creates EUR intents when the canonical web order has no currency field.
   const currency = typeof order.currency === "string" ? order.currency.toUpperCase() : order.primaryPaymentProvider === "stripe" ? "EUR" : null;
   const paidAtMs = paidAt && typeof paidAt === "object" && "toMillis" in paidAt && typeof paidAt.toMillis === "function" ? paidAt.toMillis() : null;
-  if (!pixelId || order.source !== "web" || paymentStatus !== "paid" || remainingTotalCents !== 0 ||
+  if (!pixelId || order.appId !== appId || order.source !== "web" || paymentStatus !== "paid" ||
+    order.primaryPaymentProvider !== "stripe" || order.paymentReconciliationStatus !== "reconciled" || remainingTotalCents !== 0 ||
     (typeof status === "string" && /^(?:cancelled|canceled|expired|void|voided|refunded)$/i.test(status)) ||
     typeof paidTotalCents !== "number" || !Number.isSafeInteger(paidTotalCents) || paidTotalCents <= 0 || totalCents !== paidTotalCents ||
     (refundedTotalCents != null && refundedTotalCents !== 0) || !currency || !/^[A-Z]{3}$/.test(currency) ||
     typeof paidAtMs !== "number" || !Number.isFinite(paidAtMs)) return;
   try {
-    const marker = JSON.parse(window.sessionStorage.getItem(PURCHASE_KEY) ?? "null") as { orderId: string; eventId: unknown; at: number } | null;
-    if (!marker || marker.orderId !== orderId || !validMetaPurchaseEventId(marker.eventId) || !Number.isFinite(marker.at) || marker.at > Date.now() || Date.now() - marker.at >= PURCHASE_TTL_MS || paidAtMs < marker.at - 5_000) return;
+    const marker = JSON.parse(window.sessionStorage.getItem(PURCHASE_KEY) ?? "null") as { orderId: string; eventId: unknown; at: number; sent?: unknown } | null;
+    if (!marker || marker.sent === true || marker.orderId !== orderId || !validMetaPurchaseEventId(marker.eventId) || !Number.isFinite(marker.at) || marker.at > Date.now() || Date.now() - marker.at >= PURCHASE_TTL_MS || paidAtMs < marker.at - 5_000) return;
     if (trackMetaPixel({ name: "Purchase", data: { value: paidTotalCents / 100, currency }, eventId: marker.eventId })) {
-      window.sessionStorage.removeItem(PURCHASE_KEY);
+      window.sessionStorage.setItem(PURCHASE_KEY, JSON.stringify({ ...marker, sent: true }));
     }
   } catch { /* optional storage */ }
 }

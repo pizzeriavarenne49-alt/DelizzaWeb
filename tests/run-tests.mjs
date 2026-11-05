@@ -632,6 +632,9 @@ run("confirmation source reads backend status and does not trust Stripe redirect
   assert.equal(source.includes("paymentStatus"), true);
   assert.equal(source.includes("redirect_status"), false);
   assert.equal(source.includes("payment_intent_client_secret"), false);
+  assert.equal(source.includes("CONFIRMATION_ORDER_KEY"), true);
+  assert.equal(source.includes("window.history.replaceState(window.history.state, \"\", window.location.pathname)"), true);
+  assert.equal(source.includes("META_PURCHASE_ARMED_EVENT"), true);
 });
 
 run("coming soon lock covers public routes and api endpoints", () => {
@@ -964,13 +967,21 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
 
     browser.location = new URL("https://www.delizza.fr/checkout");
     marketing.recordMarketingEvent("checkout_start", { path: "/checkout" });
+    const realNow = Date.now;
+    const checkoutAt = realNow();
     marketing.linkOrderMarketing("order_abcdef");
-    await settle();
+    try {
+      Date.now = () => realNow() + 20_000;
+      await settle();
+    } finally {
+      Date.now = realNow;
+    }
     const linkedOrder = firebaseCalls.find(({ name, payload }) => name === "marketingLinkOrder" && payload.orderId === "order_abcdef");
     assert.match(linkedOrder.payload.context.metaPurchaseEventId, /^meta-[0-9a-f-]{36}$/i);
     const paidOrder = {
-      source: "web", paymentStatus: "paid", status: "accepted", paidTotalCents: 1490,
-      totalCents: 1490, remainingTotalCents: 0, primaryPaymentProvider: "stripe", paidAt: { toMillis: () => Date.now() },
+      appId: "d_lizza", source: "web", paymentStatus: "paid", status: "accepted", paidTotalCents: 1490,
+      totalCents: 1490, remainingTotalCents: 0, primaryPaymentProvider: "stripe",
+      paymentReconciliationStatus: "reconciled", paidAt: { toMillis: () => checkoutAt },
     };
     browser.location = new URL("https://www.delizza.fr/order-confirmation?orderId=order_abcdef");
     assert.equal(pixel.trackMetaPixel({ name: "PageView" }), false);
@@ -978,11 +989,19 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", { ...paidOrder, paymentStatus: "unpaid" });
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", { ...paidOrder, status: "cancelled" });
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", { ...paidOrder, refundedTotalCents: 100 });
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
+    assert.equal(pixelCalls.filter((call) => call[2] === "Purchase").length, 0);
     browser.location = new URL("https://www.delizza.fr/order-confirmation?orderId=order_abcdef&payment_intent_client_secret=private");
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
     assert.equal(pixelCalls.filter((call) => call[2] === "Purchase").length, 0);
-    browser.location = new URL("https://www.delizza.fr/order-confirmation?orderId=order_abcdef");
+    browser.location = new URL("https://www.delizza.fr/order-confirmation");
+    globalThis.document.referrer = "https://stripe.example/redirect/private";
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
+    assert.equal(pixelCalls.filter((call) => call[2] === "Purchase").length, 0);
+    globalThis.document.referrer = "https://stripe.example/";
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
+    pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
+    pixel.rememberMetaCheckout("order_abcdef", linkedOrder.payload.context.metaPurchaseEventId, Date.now());
     pixel.trackMetaPaidOrder("d_lizza", "order_abcdef", paidOrder);
     assert.deepEqual(pixelCalls.filter((call) => call[2] === "Purchase"), [
       ["trackSingle", "1234567890", "Purchase", { value: 14.9, currency: "EUR" }, { eventID: linkedOrder.payload.context.metaPurchaseEventId }],
