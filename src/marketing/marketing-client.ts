@@ -45,6 +45,7 @@ const META_FUNNEL_EVENTS: Partial<Record<MarketingEventType, MetaEventName>> = {
 };
 let publicConfigVerifiedThisPage = false;
 let consentGeneration = 0;
+let lastWithdrawalGeneration = 0;
 let pendingLanding: MarketingAttribution | undefined;
 let pendingMetaClick: string | undefined;
 let collectionRequest: Promise<void> | null = null;
@@ -217,7 +218,7 @@ function readLandingAttribution(): MarketingAttribution | undefined {
 }
 
 function captureAttribution(): MarketingAttribution | undefined {
-  const value = readLandingAttribution() ?? pendingLanding;
+  const value = pendingLanding ?? readLandingAttribution();
   pendingLanding = undefined;
   if (!value) return undefined;
   if (JSON.stringify(value) === JSON.stringify(currentAttribution())) return undefined;
@@ -268,7 +269,11 @@ function storedAttributionToken(sessionId: string): string | undefined {
 
 function flush(): Promise<void> {
   if (collectionRequest) return collectionRequest;
-  collectionRequest = flushBatch().finally(() => { collectionRequest = null; });
+  const generation = consentGeneration;
+  collectionRequest = flushBatch().finally(() => {
+    collectionRequest = null;
+    if (generation !== consentGeneration && queue().length && getMarketingState().enabled) void flush();
+  });
   return collectionRequest;
 }
 
@@ -309,7 +314,7 @@ async function flushBatch(): Promise<void> {
     // A withdrawal/change may happen while the callable is in flight. Never
     // restore its old queue or opaque tokens after that local decision.
     if (operationGeneration !== consentGeneration) {
-      if (typeof data.erasureToken === "string" && scopeReduced(state.consent, getMarketingState().consent)) {
+      if (typeof data.erasureToken === "string" && (operationGeneration < lastWithdrawalGeneration || scopeReduced(state.consent, getMarketingState().consent))) {
         queueRevocation(session.id, data.erasureToken);
         void retryPendingMarketingRevocation();
       }
@@ -365,6 +370,7 @@ export function setMarketingConsent(next: Pick<MarketingConsent, "analytics" | "
   const withdrawn = scopeReduced(previous, consent) || (!consent.analytics && !previous);
   const purposeChanged = withdrawn || scopeReduced(consent, previous);
   if (withdrawn) {
+    lastWithdrawalGeneration = consentGeneration;
     const session = getItem<StoredSession>(SESSION_KEY);
     const legacyToken = getItem<string>(ERASURE_KEY);
     if (session?.id && typeof legacyToken === "string") queueRevocation(session.id, legacyToken);
@@ -555,8 +561,11 @@ export function retryPendingMarketingRevocation(): Promise<void> {
 async function drainRevocations(): Promise<void> {
   const configuredSource = sourceId();
   if (!configuredSource) return;
-  const pending = capabilities(PENDING_REVOCATION_KEY);
-  for (const entry of pending) {
+  const attempted = new Set<string>();
+  for (;;) {
+    const entry = capabilities(PENDING_REVOCATION_KEY).find((candidate) => !attempted.has(candidate.sessionId));
+    if (!entry) return;
+    attempted.add(entry.sessionId);
     try {
       await invokeMarketingCallable("marketingCollect", { schemaVersion: MARKETING_SCHEMA_VERSION, appId: CLIENT_WL_APP_ID, sourceId: configuredSource, action: "revoke", session: { id: entry.sessionId }, erasureToken: entry.erasureToken });
     } catch (error) {
@@ -566,12 +575,16 @@ async function drainRevocations(): Promise<void> {
   }
 }
 
-export function refreshMarketingConsentFromStorage(): void {
+export function refreshMarketingConsentFromStorage(previousValue: string | null): void {
   consentGeneration += 1;
   publicConfigVerifiedThisPage = false;
   pendingLanding = undefined;
   pendingMetaClick = undefined;
   const { consent } = getMarketingState();
+  try {
+    const previous = previousValue ? JSON.parse(previousValue) as MarketingConsent | null : null;
+    if (scopeReduced(previous, consent)) lastWithdrawalGeneration = consentGeneration;
+  } catch { /* a corrupt previous preference carries no consent evidence */ }
   configureMetaPixel(null, { withdraw: !consent?.metaAdvertising });
   if (consent?.analytics) void loadMarketingPublicConfigAfterConsent();
 }

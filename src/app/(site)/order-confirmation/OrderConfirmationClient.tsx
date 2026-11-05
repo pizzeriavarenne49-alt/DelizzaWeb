@@ -14,7 +14,7 @@ import {
 import { clearCheckoutAttemptForOrder } from "@/services/checkout-attempt";
 import { DELIZZA_CUSTOMER_APP_ID } from "@/services/customer-session";
 import { formatPrice } from "@/types";
-import { retryMarketingOrderLinks } from "@/marketing/marketing-client";
+import { getMarketingState, retryMarketingOrderLinks } from "@/marketing/marketing-client";
 import { useMarketing } from "@/marketing/MarketingProvider";
 import { trackMetaPaidOrder } from "@/marketing/meta-pixel";
 
@@ -206,7 +206,7 @@ function OrderConfirmationContent() {
   }, [listenKey, orderId]);
 
   useEffect(() => {
-    if (order && loadState?.serverOrder && marketingEnabled && marketingConsent?.metaAdvertising) {
+    if (order && loadState?.serverOrder && marketingEnabled && marketingConsent?.metaAdvertising && getMarketingState().consent?.metaAdvertising) {
       trackMetaPaidOrder(order.appId, order.id, loadState.serverOrder);
     }
   }, [order, loadState?.serverOrder, marketingEnabled, marketingConsent?.metaAdvertising]);

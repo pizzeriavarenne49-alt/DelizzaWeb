@@ -51,7 +51,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     };
     const refreshAcrossTabs = (event: StorageEvent) => {
       if (event.key !== MARKETING_CONSENT_KEY && event.key !== null) return;
-      refreshMarketingConsentFromStorage();
+      refreshMarketingConsentFromStorage(event.oldValue);
       refresh();
     };
     reconnect();
