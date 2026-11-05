@@ -76,6 +76,10 @@ export function getClientAuth(): Auth {
 }
 
 export function getClientFirestore(): Firestore {
+  // Initialise before obtaining a service instance: public pages can open a
+  // Firestore listener before AuthProvider's effect has had a chance to run.
+  // App Check remains fail-closed in production when its site key is absent.
+  initAppCheck();
   const firestore = getFirestore(getClientApp());
   if (marketingTestMode() && !firestoreEmulatorConnected) {
     assertIsolatedMarketingEmulator();
@@ -86,6 +90,11 @@ export function getClientFirestore(): Firestore {
 }
 
 export function getClientFunctions(): Functions {
+  // A first public Marketing callable can run before AuthProvider's effect.
+  // Initialise App Check at this boundary so that Firebase has its token
+  // provider before the callable client is created; do not relax enforcement
+  // or synthesize an attestation when configuration is missing.
+  initAppCheck();
   const functions = getFunctions(getClientApp(), "europe-west1");
   if (marketingTestMode() && !functionsEmulatorConnected) {
     assertIsolatedMarketingEmulator();
