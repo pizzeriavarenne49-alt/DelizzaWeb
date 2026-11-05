@@ -908,7 +908,7 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-acquisition-marketing",
     NEXT_PUBLIC_MARKETING_SOURCE_ID: "delizza-web-test",
     NEXT_PUBLIC_META_ADVERTISING_ENABLED: "true",
-    NEXT_PUBLIC_MARKETING_CONSENT_REVISION: "2026-11-05",
+    NEXT_PUBLIC_MARKETING_CONSENT_REVISION: "2026-11-05-v2",
   })) {
     previousEnvironment.set(name, process.env[name]);
     process.env[name] = value;
@@ -932,7 +932,7 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
   globalThis.__DELIZZA_MARKETING_TEST_TRANSPORT__ = { async invoke(name, payload) {
     firebaseCalls.push({ name, payload });
     if (name === "marketingPublicConfig") {
-      return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-11-05", metaPixelId: "1234567890" } };
+      return { data: { enabled: true, sourceId: "delizza-web-test", attributionWindowDays: 30, sessionRetentionDays: 90, consentRevision: "2026-11-05-v2", metaPixelId: "1234567890" } };
     }
     if (payload.action === "revoke") return { data: { success: true } };
     if (name === "marketingLinkOrder") return { data: { success: true, metaPurchaseEventId: payload.context?.metaPurchaseEventId } };
@@ -951,7 +951,19 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     assert.equal(scripts.length, 0);
     assert.ok(firebaseCalls.every(({ payload }) => !payload.meta && !payload.consent?.metaAdvertising));
 
-    marketing.setMarketingConsent({ analytics: true, marketing: false, metaAdvertising: true });
+    const callsBeforeCampaignOnly = firebaseCalls.length;
+    marketing.setMarketingConsent({ analytics: false, marketing: true, metaAdvertising: false });
+    await marketing.loadMarketingPublicConfigAfterConsent();
+    marketing.recordMarketingEvent("page_view", { path: "/menu" });
+    await settle();
+    const campaignOnlyCollection = firebaseCalls.slice(callsBeforeCampaignOnly).find(({ name, payload }) => name === "marketingCollect" && payload.consent?.marketing && !payload.consent?.analytics && payload.attribution);
+    assert.deepEqual(campaignOnlyCollection.payload.events, []);
+    assert.equal("visitorId" in campaignOnlyCollection.payload.session, false);
+    assert.equal(campaignOnlyCollection.payload.attribution.utm_id, "123456789");
+
+    const callsBeforeMetaOnly = firebaseCalls.length;
+    marketing.setMarketingConsent({ analytics: false, marketing: false, metaAdvertising: true });
+    await marketing.loadMarketingPublicConfigAfterConsent();
     await settle();
     marketing.recordMarketingEvent("page_view", { path: "/menu" });
     await settle();
@@ -964,6 +976,9 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     assert.equal(accepted.payload.meta.fbp, "fb.1.1710000000000.1234567");
     assert.match(accepted.payload.meta.fbc, /^fb\.1\.\d{13}\.click_abc$/);
     assert.ok(pixelCalls.some((call) => call[2] === "PageView"));
+    const metaOnlyCollection = firebaseCalls.slice(callsBeforeMetaOnly).find(({ name, payload }) => name === "marketingCollect" && payload.consent?.metaAdvertising);
+    assert.deepEqual(metaOnlyCollection.payload.events, []);
+    assert.equal("visitorId" in metaOnlyCollection.payload.session, false);
 
     browser.location = new URL("https://www.delizza.fr/checkout");
     marketing.recordMarketingEvent("checkout_start", { path: "/checkout" });

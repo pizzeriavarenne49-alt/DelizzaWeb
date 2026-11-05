@@ -19,10 +19,11 @@ Il ne peut donc pas appeler un projet Firebase de production.
 
 ## Consentement et vie privée
 
-Le bandeau offre accepter, refuser et personnaliser au même niveau. Les choix sont stockés six mois
-sur l'appareil. Aucun événement interne, identifiant de session/visiteur, UTM ou référent n'est lu
-avant le consentement d'audience. Les paramètres de campagne et le référent exigent en plus le
-consentement marketing. Le retrait efface la file, les identifiants et demande une révocation serveur
+Le bandeau offre accepter, refuser et personnaliser au même niveau. Les trois finalités audience,
+attribution marketing et mesure publicitaire Meta sont indépendantes. Les choix sont stockés six mois
+sur l'appareil. Les événements internes, l'identifiant visiteur et les agrégats exigent le consentement
+d'audience. Les paramètres de campagne et le référent exigent le consentement marketing. Les identifiants
+de rapprochement Meta exigent son consentement dédié. Le retrait efface la file, les identifiants et demande une révocation serveur
 avec le jeton opaque reçu lors de la collecte. Hors réseau, seule la capacité nécessaire à cette
 révocation est conservée sept jours au plus et rejouée à la prochaine connexion. La collecte et
 GA4 sont arrêtés immédiatement ; l’effacement serveur attend le retour du réseau. Cette implémentation requiert une revue juridique avant
@@ -85,11 +86,11 @@ La mesure nécessite une configuration Meta autorisée sur le serveur pour la m�
 ```text
 NEXT_PUBLIC_MARKETING_SOURCE_ID=delizza-web-production
 NEXT_PUBLIC_MARKETING_ENABLED=true
-NEXT_PUBLIC_MARKETING_CONSENT_REVISION=2026-11-05
+NEXT_PUBLIC_MARKETING_CONSENT_REVISION=2026-11-05-v2
 NEXT_PUBLIC_META_ADVERTISING_ENABLED=true
 ```
 
-Le serveur doit retourner `metaPixelId` dans la configuration vérifiée. Ce numéro est public. Le jeton Conversions API reste côté serveur. La révision demande un nouveau choix explicite. La mesure Meta est séparée de l'attribution interne des UTM dans les préférences et nécessite la mesure d'audience pour pouvoir lier et révoquer la session.
+Le serveur doit retourner `metaPixelId` dans la configuration vérifiée. Ce numéro est public. Le jeton Conversions API reste côté serveur. La révision demande un nouveau choix explicite. La mesure Meta est séparée de l'attribution interne des UTM et de la mesure d'audience dans les préférences. Le client transmet seulement un contexte minimal sans compteur, agrégat ni identifiant visiteur lorsque l'audience est refusée.
 
 Dans Meta Ads Manager, renseigner les paramètres de l'URL publicitaire avec `utm_source=meta&utm_medium=paid_social&utm_id={{campaign.id}}`. L'identifiant stable `utm_id` permet de rapprocher les commandes mesurables et les dépenses importées, y compris après renommage de la campagne. Une commande issue d'un visiteur qui refuse la mesure marketing interne reste sans attribution UTM dans WLHORIZON.
 
