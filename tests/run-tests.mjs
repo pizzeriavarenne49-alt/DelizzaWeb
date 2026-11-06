@@ -969,8 +969,14 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     await settle();
     assert.equal(scripts.length, 1);
     assert.equal(scripts[0].src, "https://connect.facebook.net/en_US/fbevents.js");
+    assert.equal(browser.fbq.disablePushState, true);
     browser.fbq.callMethod = (...args) => pixelCalls.push(args);
     scripts[0].onload();
+    assert.deepEqual(pixelCalls.slice(0, 3), [
+      ["set", "autoConfig", false, "1234567890"],
+      ["init", "1234567890"],
+      ["set", "trackSingleOnly", true, "1234567890"],
+    ]);
     const accepted = firebaseCalls.find(({ payload }) => payload.consent?.metaAdvertising && payload.meta);
     assert.equal(accepted.payload.attribution, undefined);
     assert.equal(accepted.payload.meta.fbp, "fb.1.1710000000000.1234567");
@@ -979,6 +985,16 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     const metaOnlyCollection = firebaseCalls.slice(callsBeforeMetaOnly).find(({ name, payload }) => name === "marketingCollect" && payload.consent?.metaAdvertising);
     assert.deepEqual(metaOnlyCollection.payload.events, []);
     assert.equal("visitorId" in metaOnlyCollection.payload.session, false);
+
+    const pixelCallsBeforePrivateUrl = pixelCalls.length;
+    browser.location = new URL("https://www.delizza.fr/menu?utm_campaign=Personne+Fictive");
+    assert.equal(pixel.trackMetaPixel({ name: "PageView" }), false);
+    browser.location = new URL("https://www.delizza.fr/menu?utm_source=meta&utm_medium=paid_social&utm_id=123456789");
+    globalThis.document.referrer = "https://www.delizza.fr/menu?utm_content=Personne+Fictive";
+    assert.equal(pixel.trackMetaPixel({ name: "PageView" }), false);
+    assert.equal(pixelCalls.length, pixelCallsBeforePrivateUrl);
+    globalThis.document.referrer = "";
+    assert.equal(pixel.trackMetaPixel({ name: "PageView" }), true);
 
     browser.location = new URL("https://www.delizza.fr/checkout");
     marketing.recordMarketingEvent("checkout_start", { path: "/checkout" });

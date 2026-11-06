@@ -15,6 +15,7 @@ import {
 } from "@/marketing/meta-pixel";
 import {
   MARKETING_SCHEMA_VERSION,
+  META_CONSENT_REVISION,
   type MarketingAttribution,
   type MarketingConsent,
   type MarketingEvent,
@@ -35,7 +36,6 @@ const PUBLIC_CONFIG_KEY = "delizza_marketing_public_config_v1";
 const COLLECTION_PAUSE_KEY = "delizza_marketing_collection_pause_v1";
 const PENDING_REVOCATION_KEY = "delizza_marketing_pending_revocation_v1";
 const CONSENT_MAX_AGE_MS = 183 * 24 * 60 * 60 * 1000;
-export const META_CONSENT_REVISION = "2026-11-05-v2";
 const CONSENT_NOTICE_REVISION = process.env.NEXT_PUBLIC_MARKETING_CONSENT_REVISION?.trim() ||
   (metaAdvertisingAvailable() ? META_CONSENT_REVISION : "2026-10-12");
 const SESSION_MAX_AGE_MS = 30 * 60 * 1000;

@@ -1,4 +1,5 @@
 export const MARKETING_SCHEMA_VERSION = 1 as const;
+export const META_CONSENT_REVISION = "2026-11-05-v2";
 
 export type MarketingEventType =
   | "page_view"

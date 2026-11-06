@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LEGAL_ENTITY, SITE_URL } from "@/lib/seo";
+import { META_CONSENT_REVISION } from "@/marketing/types";
 
 /* ------------------------------------------------------------------ */
 /*  Metadata                                                           */
@@ -39,7 +40,7 @@ export default function PrivacyPage() {
           Politique de confidentialité
         </h1>
         <p className="text-[14px] text-[#6B6B6B]">
-          Dernière mise à jour : 5 novembre 2026
+          Dernière mise à jour : {metaAdvertisingAvailable ? "6 novembre 2026" : "5 novembre 2026"}
         </p>
       </div>
 
@@ -236,36 +237,56 @@ export default function PrivacyPage() {
           </p>
           <p>
             Après votre accord, le Pixel Meta peut transmettre à Meta des événements de consultation,
-            d&apos;ajout au panier, de début de commande et d&apos;achat confirmé. La transmission
-            peut inclure la date et l&apos;heure, la page ou l&apos;origine de la visite, les
-            identifiants de navigateur et de clic (_fbp et _fbc), des données techniques comme
-            l&apos;adresse IP et le navigateur, ainsi que les données d&apos;interaction et le
-            montant et la devise d&apos;un achat. Notre serveur peut aussi transmettre un achat
-            confirmé via l&apos;API Conversions, avec l&apos;heure, la valeur et la devise,
-            l&apos;identifiant aléatoire de l&apos;événement, l&apos;identifiant de navigateur ou
-            de clic et, s&apos;il est disponible, le type de navigateur. Ce même identifiant
-            d&apos;événement sert à compter l&apos;achat une seule fois.
+            d&apos;ajout au panier, de début de commande et d&apos;achat confirmé. Selon
+            l&apos;événement, Meta peut recevoir la date et l&apos;heure, l&apos;adresse de la
+            page ou sa provenance, des références et quantités de produits, le montant et la
+            devise, des identifiants pseudonymes de navigateur ou de clic (_fbp, _fbc, fbclid),
+            ainsi que des informations techniques de connexion comme l&apos;adresse IP et le navigateur.
           </p>
           <p>
-            Les envois applicatifs à Meta excluent le nom, l&apos;e-mail, le téléphone,
-            l&apos;adresse de livraison, les références de paiement et les coordonnées bancaires.
-            Consultez la <a href="https://www.facebook.com/privacy/policy/?locale=fr_FR" className="underline" rel="noreferrer">politique de confidentialité de Meta</a>{" "}
-            pour les traitements de Meta, leurs durées et les transferts éventuels hors de
-            l&apos;Espace économique européen.
+            Notre serveur peut transmettre un achat via l&apos;API Conversions après confirmation
+            du paiement et contrôle de votre consentement. Il transmet la date et l&apos;heure,
+            le montant et la devise, une adresse de confirmation sans paramètres, un identifiant
+            de navigateur ou de clic et le type de navigateur. Lorsque les deux canaux transmettent
+            le même achat, ils utilisent un identifiant aléatoire commun conçu pour que Meta
+            puisse rapprocher les deux signaux.
+          </p>
+          <p>
+            Notre application exclut le nom, l&apos;e-mail, le téléphone, l&apos;adresse de
+            livraison, les identifiants de commande et de paiement et les coordonnées bancaires.
+            Meta Platforms Ireland Limited reçoit les signaux publicitaires. Pour les opérations
+            de collecte et de transmission relevant d&apos;une responsabilité conjointe, DELIZZA
+            vous informe de la mesure et Meta traite les demandes portant sur les données
+            qu&apos;elle conserve, selon son <a className="underline" href="https://www.facebook.com/legal/controller_addendum" rel="noreferrer">avenant relatif aux responsables du traitement</a>.
+          </p>
+          <p>
+            Meta peut transférer des données hors de l&apos;Espace économique européen. Selon la
+            destination et le service couvert, Meta indique notamment s&apos;appuyer sur des
+            décisions d&apos;adéquation ou des clauses contractuelles types. Vous pouvez nous
+            demander les garanties applicables et la façon d&apos;en obtenir une copie. Les critères
+            de conservation et les modalités d&apos;exercice des droits auprès de Meta sont décrits
+            dans sa <a href="https://www.facebook.com/privacy/policy/?locale=fr_FR" className="underline" rel="noreferrer">politique de confidentialité</a>.
           </p>
           <p>
             DelizzaWeb mémorise votre choix pendant 183 jours et utilise sa copie locale de
             l&apos;identifiant de clic pendant 90 jours au maximum. Le marqueur de confirmation
-            d&apos;achat est utilisable pendant une heure. Les sessions de mesure sont conservées
-            30 jours et les liens d&apos;attribution 90 jours. Les cookies du Pixel et la
-            conservation par Meta suivent des durées distinctes.
+            d&apos;achat est utilisable pendant une heure. Les cookies du Pixel _fbp et _fbc,
+            lorsqu&apos;ils sont déposés, expirent après 90 jours à compter de leur dépôt ou de
+            leur renouvellement. Les sessions de mesure arrivent à échéance après 30 jours,
+            les liens d&apos;attribution après 90 jours et la preuve technique d&apos;envoi
+            d&apos;un achat après 14 jours. Leur suppression intervient ensuite selon le
+            fonctionnement de la base de données. La conservation chez Meta est distincte.
           </p>
           <p>
-            Le retrait arrête les futurs envois de notre site et demande la suppression du
-            rapprochement côté DELIZZA. Pour toute demande concernant vos droits et les données
-            déjà transmises, écrivez à <a className="underline" href={`mailto:${legal.email}`}>{legal.email}</a>.
+            Le refus bloque le Pixel et les envois publicitaires. Le retrait arrête les nouveaux
+            envois du navigateur et efface les identifiants publicitaires que DelizzaWeb maîtrise
+            sur votre appareil. Le retrait bloque aussi les nouveaux envois liés à la session
+            dès réception par notre serveur. Si vous êtes hors ligne, le site peut conserver
+            jusqu&apos;à sept jours un justificatif technique pour réessayer. Pour vos droits et
+            les données déjà transmises, écrivez à <a className="underline" href={`mailto:${legal.email}`}>{legal.email}</a>.
             Vous pouvez également <a className="underline" href="https://www.cnil.fr/fr/adresser-une-plainte">adresser une réclamation à la CNIL</a>.
           </p>
+          <p className="text-[13px]">Version du consentement {META_CONSENT_REVISION}</p>
         </Section>
       )}
 

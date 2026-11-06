@@ -7,6 +7,7 @@ type MetaPixel = ((...args: unknown[]) => void) & {
   push?: (...args: unknown[]) => void;
   loaded?: boolean;
   version?: string;
+  disablePushState?: boolean;
   queue: unknown[][];
 };
 type PixelWindow = Window & { fbq?: MetaPixel; _fbq?: MetaPixel };
@@ -16,8 +17,11 @@ export const META_PURCHASE_ARMED_EVENT = "delizza-meta-purchase-armed";
 const CLICK_KEY = "delizza_meta_click_v1";
 const PURCHASE_TTL_MS = 60 * 60 * 1000;
 const CLICK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
-const SAFE_PARAMETERS = new Set([
-  "utm_id", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "mk_link", "fbclid",
+const SAFE_PARAMETERS = new Map([
+  ["utm_id", /^\d{5,30}$/],
+  ["utm_source", /^(?:meta|facebook|instagram|fb|ig)$/i],
+  ["utm_medium", /^(?:paid_social|cpc)$/i],
+  ["fbclid", /^[A-Za-z0-9_-]{1,250}$/],
 ]);
 
 let pixelId: string | null = null;
@@ -37,7 +41,7 @@ function canSendFrom(url: URL, purchase = false): boolean {
   if (purchase && url.search) return false;
   if (!purchase && /^\/order-confirmation\/?$/.test(url.pathname)) return false;
   for (const [key, value] of url.searchParams) {
-    if (!SAFE_PARAMETERS.has(key) || !/^[A-Za-z0-9_.~+ -]{1,250}$/.test(value)) return false;
+    if (!SAFE_PARAMETERS.get(key)?.test(value)) return false;
   }
   return true;
 }
@@ -82,6 +86,8 @@ function dispatch(event: MetaEvent): void {
   if (initializedPixelId !== pixelId) {
     ownedPixel("set", "autoConfig", false, pixelId);
     ownedPixel("init", pixelId);
+    // Keep the SDK's automatic PageView on cached-page restore from bypassing our URL checks.
+    ownedPixel("set", "trackSingleOnly", true, pixelId);
     initializedPixelId = pixelId;
   }
   ownedPixel("trackSingle", pixelId, event.name, event.data ?? {}, ...(event.eventId ? [{ eventID: event.eventId }] : []));
@@ -96,7 +102,7 @@ export function trackMetaPixel(event: MetaEvent): boolean {
     const queue: MetaPixel = Object.assign((...args: unknown[]) => {
       if (queue.callMethod) queue.callMethod(...args);
       else queue.queue.push(args);
-    }, { loaded: true, version: "2.0", queue: [] as unknown[][] });
+    }, { loaded: true, version: "2.0", disablePushState: true, queue: [] as unknown[][] });
     queue.push = queue;
     browser.fbq = browser._fbq = ownedPixel = queue;
     script = document.createElement("script");
