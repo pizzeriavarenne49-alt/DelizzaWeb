@@ -77,6 +77,7 @@ export function configureMetaPixel(id: string | null, { withdraw = false } = {})
     pending = [];
     if (ownedPixel && loaded) ownedPixel("consent", next ? "grant" : "revoke");
     pixelId = next;
+    if (next) console.info("[Marketing] Meta Pixel: ready after consent");
   }
   if (withdraw && (metaAdvertisingAvailable() || ownedPixel)) removeTrackingStorage();
 }
@@ -98,7 +99,10 @@ export function trackMetaPixel(event: MetaEvent): boolean {
   if (loaded) { dispatch(event); return true; }
   if (!script) {
     const browser = window as PixelWindow;
-    if (browser.fbq && browser.fbq !== ownedPixel) return false;
+    if (browser.fbq && browser.fbq !== ownedPixel) {
+      console.info("[Marketing] Meta Pixel: existing integration detected");
+      return false;
+    }
     const queue: MetaPixel = Object.assign((...args: unknown[]) => {
       if (queue.callMethod) queue.callMethod(...args);
       else queue.queue.push(args);
@@ -110,11 +114,13 @@ export function trackMetaPixel(event: MetaEvent): boolean {
     script.src = "https://connect.facebook.net/en_US/fbevents.js";
     script.onload = () => {
       loaded = true;
+      console.info("[Marketing] Meta Pixel: library loaded");
       const events = pending;
       pending = [];
       for (const queued of events) dispatch(queued);
     };
     script.onerror = () => {
+      console.warn("[Marketing] Meta Pixel: library load failed");
       script?.remove();
       script = null;
       pending = [];
