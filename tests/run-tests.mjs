@@ -963,10 +963,14 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
 
     const callsBeforeMetaOnly = firebaseCalls.length;
     marketing.setMarketingConsent({ analytics: false, marketing: false, metaAdvertising: true });
-    await marketing.loadMarketingPublicConfigAfterConsent();
+    // This models the Provider effect that can run before the asynchronous
+    // public config response. It must not arm Meta prematurely.
+    marketing.recordMarketingPageView("/menu");
     await settle();
-    marketing.recordMarketingEvent("page_view", { path: "/menu" });
-    await settle();
+    // Meta can be added after the first-party configuration is already
+    // enabled. The asynchronous Pixel identity must repair the PageView that
+    // the provider attempted before this response, without waiting for a
+    // second navigation or interaction.
     assert.equal(scripts.length, 1);
     assert.equal(scripts[0].src, "https://connect.facebook.net/en_US/fbevents.js");
     assert.equal(browser.fbq.disablePushState, true);
@@ -982,6 +986,15 @@ await runAsync("Meta measures only explicit consent and sends one confirmed Purc
     assert.equal(accepted.payload.meta.fbp, "fb.1.1710000000000.1234567");
     assert.match(accepted.payload.meta.fbc, /^fb\.1\.\d{13}\.click_abc$/);
     assert.ok(pixelCalls.some((call) => call[2] === "PageView"));
+    assert.equal(pixelCalls.filter((call) => call[2] === "PageView").length, 1);
+    // A Provider effect after config and a repeated config response are both
+    // idempotent for the same consent choice and route.
+    marketing.recordMarketingPageView("/menu");
+    await marketing.loadMarketingPublicConfigAfterConsent();
+    assert.equal(pixelCalls.filter((call) => call[2] === "PageView").length, 1);
+    browser.location = new URL("https://www.delizza.fr/cart");
+    marketing.recordMarketingPageView("/cart");
+    assert.equal(pixelCalls.filter((call) => call[2] === "PageView").length, 2);
     const metaOnlyCollection = firebaseCalls.slice(callsBeforeMetaOnly).find(({ name, payload }) => name === "marketingCollect" && payload.consent?.metaAdvertising);
     assert.deepEqual(metaOnlyCollection.payload.events, []);
     assert.equal("visitorId" in metaOnlyCollection.payload.session, false);

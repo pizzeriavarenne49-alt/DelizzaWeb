@@ -54,6 +54,7 @@ let collectionRequest: Promise<void> | null = null;
 let contextDirty = false;
 let linkRequest: Promise<void> | null = null;
 let revocationRequest: Promise<void> | null = null;
+let lastPageViewKey: string | null = null;
 
 type StoredSession = { id: string; startedAt: string; lastSeenAt: string; startedEventQueued?: boolean };
 type StoredVisitor = { id: string; createdAt: string };
@@ -383,7 +384,12 @@ export function setMarketingConsent(next: Pick<MarketingConsent, "analytics" | "
   consentGeneration += 1;
   const consent: MarketingConsent = { ...normalized, revision: CONSENT_NOTICE_REVISION, updatedAt: isoNow() };
   const withdrawn = scopeReduced(previous, consent) || (!hasAnyMarketingPurpose(consent) && !previous);
-  const purposeChanged = withdrawn || scopeReduced(consent, previous);
+  const purposeChanged = Boolean(
+    !previous ||
+    previous.analytics !== consent.analytics ||
+    previous.marketing !== consent.marketing ||
+    Boolean(previous.metaAdvertising) !== Boolean(consent.metaAdvertising),
+  );
   if (withdrawn) {
     lastWithdrawalGeneration = consentGeneration;
     const session = getItem<StoredSession>(SESSION_KEY);
@@ -400,6 +406,13 @@ export function setMarketingConsent(next: Pick<MarketingConsent, "analytics" | "
     removeItem(ATTRIBUTION_KEY); removeItem(ATTRIBUTION_TOKEN_KEY); removeItem(COLLECTION_PAUSE_KEY);
     pendingLanding = undefined;
     pendingMetaClick = undefined;
+    lastPageViewKey = null;
+    // The old configuration was authorised for a different purpose set. Do
+    // not let a React render use it while the new server-authoritative config
+    // is still in flight.
+    removeItem(PUBLIC_CONFIG_KEY);
+    publicConfigVerifiedThisPage = false;
+    configureMetaPixel(null);
   }
   setItem(MARKETING_CONSENT_KEY, consent);
   if (!consent.metaAdvertising) configureMetaPixel(null, { withdraw: Boolean(previous?.metaAdvertising) });
@@ -437,6 +450,10 @@ export async function loadMarketingPublicConfigAfterConsent(): Promise<void> {
     if (storedConsent.analytics) {
       ensureSessionStartQueued();
     }
+    // The first PageView is emitted only after the current purposes and the
+    // server configuration have both been accepted. The helper deduplicates
+    // the Provider's render following this configuration event.
+    recordMarketingPageView();
     void flush();
     window.dispatchEvent(new CustomEvent("delizza-marketing-config"));
   } catch {
@@ -489,6 +506,17 @@ export function recordMarketingEvent(
     }
   }
   void flush();
+}
+
+/** Records one PageView per consent choice and pathname after verified config. */
+export function recordMarketingPageView(path = typeof window === "undefined" ? "/" : window.location.pathname): void {
+  const state = getMarketingState();
+  if (!state.enabled || !state.consent || !hasAnyMarketingPurpose(state.consent)) return;
+  const cleanedPath = cleanPath(path);
+  const key = `${state.consent.updatedAt}:${cleanedPath}`;
+  if (key === lastPageViewKey) return;
+  lastPageViewKey = key;
+  recordMarketingEvent("page_view", { path: cleanedPath });
 }
 
 /** Queues an existing order without delaying order creation or payment. */
@@ -621,6 +649,7 @@ async function drainRevocations(): Promise<void> {
 export function refreshMarketingConsentFromStorage(previousValue: string | null): void {
   consentGeneration += 1;
   publicConfigVerifiedThisPage = false;
+  lastPageViewKey = null;
   pendingLanding = undefined;
   pendingMetaClick = undefined;
   const { consent } = getMarketingState();

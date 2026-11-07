@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -8,6 +8,7 @@ import {
   canOfferMetaConsent,
   getMarketingState,
   loadMarketingPublicConfigAfterConsent,
+  recordMarketingPageView,
   recordMarketingEvent,
   refreshMarketingConsentFromStorage,
   retryMarketingOrderLinks,
@@ -36,7 +37,6 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [consent, setConsent] = useState<MarketingConsent | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const lastPageTracked = useRef<string | null>(null);
 
   useEffect(() => {
     const refresh = () => {
@@ -69,10 +69,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!(consent?.analytics || consent?.marketing || consent?.metaAdvertising) || !enabled) return;
-    const key = `${consent.updatedAt}:${pathname}`;
-    if (lastPageTracked.current === key) return;
-    lastPageTracked.current = key;
-    recordMarketingEvent("page_view", { path: pathname || "/" });
+    recordMarketingPageView(pathname || "/");
   }, [consent, enabled, pathname]);
 
   const track = useCallback((type: MarketingEventType, data: { productId?: string; quantity?: number; errorCode?: string } = {}) => {
