@@ -32,6 +32,10 @@ const duoCart = [{
 assert.deepEqual(Object.fromEntries(stockDemandByProduct(duoCart)), { 'pizza-a': 2, 'pizza-b': 2 }, 'a Duo consumes each distinct recipe once per physical pizza');
 assert.equal(unavailableStockLines(duoCart, { 'pizza-a': { stockManaged: true, stockQty: 2 }, 'pizza-b': { stockManaged: true, stockQty: 1 } }).length, 1, 'a missing half recipe blocks the whole Duo');
 assert.equal(canApplyCartQuantity(duoCart, 'duo-a-b', 3, { 'pizza-a': { stockManaged: true, stockQty: 3 }, 'pizza-b': { stockManaged: true, stockQty: 2 } }), false, 'Duo quantity changes recheck both recipes');
+const repeatedFormula = [{ catalogItemId: 'menu', formulaId: 'menu', quantity: 2,
+  formulaStepChoices: { first: ['pizza-a'], second: ['pizza-a'] } }];
+assert.equal(stockDemandByProduct(repeatedFormula).get('pizza-a'), 4, 'two full formula choices each consume stock');
+assert.equal(unavailableStockLines(repeatedFormula, { 'pizza-a': { stockManaged: true, stockQty: 3 } }).length, 1);
 const sameRecipeDuo = [{ ...duoCart[0], cartKey: 'duo-a-a', duo: { leftRecipeId: 'pizza-a', rightRecipeId: 'pizza-a' } }];
 assert.deepEqual(Object.fromEntries(stockDemandByProduct(sameRecipeDuo)), { 'pizza-a': 2 }, 'two identical halves reserve one recipe unit per physical Duo');
 assert.equal(unavailableStockLines([{ catalogItemId: 'pizza-duo', catalogKind: 'pizza_duo', quantity: 1, cartKey: 'broken', nameSnapshot: 'Duo' }], { 'pizza-duo': { stockManaged: false } }).length, 1, 'a malformed explicit Duo cannot fall back to its synthetic parent');

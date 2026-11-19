@@ -33,7 +33,10 @@ type StockCartLine = {
 
 function stockProductIdsForItem(item: StockCartLine): string[] | null {
   if (item.formulaId && item.formulaStepChoices) {
-    return [...new Set(Object.values(item.formulaStepChoices).flat().filter((id): id is string => typeof id === "string" && id.length > 0))];
+    return Object.values(item.formulaStepChoices)
+      .filter(Array.isArray)
+      .flat()
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
   }
   // A Duo consumes its recipe references, never the synthetic menu parent.
   // A malformed explicit Duo is deliberately not downgraded to a classic pizza.
