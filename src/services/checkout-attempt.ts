@@ -103,10 +103,16 @@ export function buildCheckoutAttemptFingerprint(input: CheckoutAttemptInput): st
         totalCents: Number(item.totalCents),
         taxRateBps: Number(item.taxRateBps),
         selectedTemplateOptions: stableValue(item.selectedTemplateOptions ?? {}),
+        selectedLegacyOptions: stableValue(item.selectedLegacyOptions ?? {}),
         addedSupplements: [...(item.addedSupplements ?? [])].sort(),
         removedIngredients: [...(item.removedIngredients ?? [])].sort(),
         formulaId: item.formulaId ?? null,
         formulaStepChoices: canonicalFormulaChoices,
+        duo: item.duo ? {
+          kind: item.duo.kind,
+          leftRecipeId: item.duo.leftRecipeId,
+          rightRecipeId: item.duo.rightRecipeId,
+        } : null,
       });
     })
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));

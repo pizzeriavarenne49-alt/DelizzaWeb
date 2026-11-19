@@ -1,5 +1,5 @@
 /**
- * Firebase Client SDK — browser-side only.
+ * Firebase Client SDK â€” browser-side only.
  *
  * Used for Auth, Firestore (client reads), and Cloud Functions calls.
  *
@@ -12,7 +12,7 @@
  *   NEXT_PUBLIC_FIREBASE_APP_ID
  *
  * Optional env vars:
- *   NEXT_PUBLIC_RECAPTCHA_SITE_KEY — reCAPTCHA Enterprise site key for App Check (production)
+ *   NEXT_PUBLIC_RECAPTCHA_SITE_KEY â€” reCAPTCHA Enterprise site key for App Check (production)
  */
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
@@ -43,15 +43,42 @@ const firebaseConfig = {
 export const CLIENT_WL_APP_ID =
   process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 
+function halloweenLocalMode(): boolean { return process.env.NEXT_PUBLIC_HALLOWEEN_LOCAL === "true"; }
+function assertHalloweenLocal(): void {
+  const loopback = typeof window === "undefined" || ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+  if (process.env.NODE_ENV !== "development" || !loopback || firebaseConfig.projectId !== "demo-halloween-local"
+      || process.env.NEXT_PUBLIC_WL_APP_ID !== "d_lizza") {
+    throw new Error("Halloween local refuses production, non-loopback hosts and unknown projects/tenants.");
+  }
+}
+
 function getClientApp(): FirebaseApp {
+  if (halloweenLocalMode()) assertHalloweenLocal();
+  if (pizzaDuoLocalMode()) assertPizzaDuoLocal();
   if (getApps().length > 0) {
-    return getApp();
+    const app = getApp();
+    if (halloweenLocalMode() && app.options.projectId !== "demo-halloween-local") throw new Error("Existing Firebase app is not the local project.");
+    if (pizzaDuoLocalMode() && app.options.projectId !== "demo-web-duo") throw new Error("Existing Firebase app is outside the local Pizza Duo project.");
+    return app;
   }
   return initializeApp(firebaseConfig);
 }
 
 function marketingTestMode(): boolean {
   return process.env.NEXT_PUBLIC_MARKETING_TEST_MODE === "true";
+}
+
+function pizzaDuoLocalMode(): boolean {
+  return process.env.NEXT_PUBLIC_PIZZA_DUO_LOCAL_EMULATOR === "true";
+}
+
+function assertPizzaDuoLocal(): void {
+  const loopback = typeof window === "undefined" || ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+  if (process.env.NODE_ENV !== "development" || !loopback || firebaseConfig.projectId !== "demo-web-duo" ||
+      process.env.NEXT_PUBLIC_ENABLE_PIZZA_DUO !== "true" || halloweenLocalMode() || marketingTestMode() ||
+      process.env.NEXT_PUBLIC_WL_APP_ID !== "d_lizza") {
+    throw new Error("Pizza Duo local requires the demo-web-duo emulator on loopback for d_lizza.");
+  }
 }
 
 function assertIsolatedMarketingEmulator(): void {
@@ -67,10 +94,17 @@ let functionsEmulatorConnected = false;
 
 export function getClientAuth(): Auth {
   const auth = getAuth(getClientApp());
+  if (halloweenLocalMode() && !authEmulatorConnected) {
+    assertHalloweenLocal(); connectAuthEmulator(auth, "http://127.0.0.1:19099", { disableWarnings: true }); authEmulatorConnected = true;
+  }
   if (marketingTestMode() && !authEmulatorConnected) {
     assertIsolatedMarketingEmulator();
     connectAuthEmulator(auth, "http://127.0.0.1:9909", { disableWarnings: true });
     authEmulatorConnected = true;
+  }
+  if (pizzaDuoLocalMode() && !authEmulatorConnected) {
+    assertPizzaDuoLocal();
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true }); authEmulatorConnected = true;
   }
   return auth;
 }
@@ -81,10 +115,17 @@ export function getClientFirestore(): Firestore {
   // App Check remains fail-closed in production when its site key is absent.
   initAppCheck();
   const firestore = getFirestore(getClientApp());
+  if (halloweenLocalMode() && !firestoreEmulatorConnected) {
+    assertHalloweenLocal(); connectFirestoreEmulator(firestore, "127.0.0.1", 18880); firestoreEmulatorConnected = true;
+  }
   if (marketingTestMode() && !firestoreEmulatorConnected) {
     assertIsolatedMarketingEmulator();
     connectFirestoreEmulator(firestore, "127.0.0.1", 9808);
     firestoreEmulatorConnected = true;
+  }
+  if (pizzaDuoLocalMode() && !firestoreEmulatorConnected) {
+    assertPizzaDuoLocal();
+    connectFirestoreEmulator(firestore, "127.0.0.1", 18787); firestoreEmulatorConnected = true;
   }
   return firestore;
 }
@@ -96,10 +137,17 @@ export function getClientFunctions(): Functions {
   // or synthesize an attestation when configuration is missing.
   initAppCheck();
   const functions = getFunctions(getClientApp(), "europe-west1");
+  if (halloweenLocalMode() && !functionsEmulatorConnected) {
+    assertHalloweenLocal(); connectFunctionsEmulator(functions, "127.0.0.1", 15001); functionsEmulatorConnected = true;
+  }
   if (marketingTestMode() && !functionsEmulatorConnected) {
     assertIsolatedMarketingEmulator();
     connectFunctionsEmulator(functions, "127.0.0.1", 9501);
     functionsEmulatorConnected = true;
+  }
+  if (pizzaDuoLocalMode() && !functionsEmulatorConnected) {
+    assertPizzaDuoLocal();
+    connectFunctionsEmulator(functions, "127.0.0.1", 5001); functionsEmulatorConnected = true;
   }
   return functions;
 }
@@ -128,13 +176,18 @@ function isLocalDevelopmentHost(): boolean {
  * Console for calls to App-Check-protected production Functions.
  */
 export function initAppCheck(): void {
-  if (typeof window === "undefined") return; // server-side — skip
+  if (typeof window === "undefined") return; // server-side â€” skip
   if (appCheckInstance) return; // already initialised
+  if (halloweenLocalMode()) { assertHalloweenLocal(); return; }
 
   // Browser demonstrations and automated tests use the isolated emulator
   // project; never initialise a third-party App Check provider in that mode.
   if (marketingTestMode()) {
     assertIsolatedMarketingEmulator();
+    return;
+  }
+  if (pizzaDuoLocalMode()) {
+    assertPizzaDuoLocal();
     return;
   }
 

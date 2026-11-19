@@ -14,6 +14,7 @@ export interface PreviewCartItem {
   quantity: number;
   formulaId?: string;
   formulaStepChoices?: Record<string, string[]>;
+  duo?: { leftRecipeId: string; rightRecipeId: string };
 }
 
 export interface ProductionAllocationPreview {
@@ -98,6 +99,12 @@ export function buildPreviewCartItems(items: CartItem[]): PreviewCartItem[] {
       if (formulaStepChoices) {
         previewItem.formulaStepChoices = formulaStepChoices;
       }
+    }
+    if (item.duo) {
+      previewItem.duo = {
+        leftRecipeId: item.duo.leftRecipeId,
+        rightRecipeId: item.duo.rightRecipeId,
+      };
     }
 
     return previewItem;

@@ -66,3 +66,37 @@ export function isVisibleInCustomerHistory(
 ): boolean {
   return getCustomerOrderPresentation(order).state !== "hiddenTemporary";
 }
+
+export interface CustomerOrderTracking {
+  phase: "validated" | "preparing" | "ready" | "completed" | "cancelled" | "pending";
+  title: string;
+  description: string;
+  step: -1 | 0 | 1 | 2 | 3;
+  terminal: boolean;
+}
+
+/** Kitchen status is authoritative. Payment validation remains a separate contract. */
+export function getCustomerOrderTracking(order: CustomerOrderPresentationInput): CustomerOrderTracking {
+  const presentation = getCustomerOrderPresentation(order);
+  const status = normalizedStatus(order.status);
+  // Full refunds use their own terminal order status; a payment flag alone can be partial.
+  if (status === "refunded") {
+    return { phase: "cancelled", title: "Commande remboursée", description: "Cette commande a été remboursée. Pour toute question, contactez Deli’Zza.", step: -1, terminal: true };
+  }
+  if (presentation.state === "cancelled") {
+    return { phase: "cancelled", title: "Commande annulée", description: "Cette commande a été annulée. Pour toute question, contactez Deli’Zza.", step: -1, terminal: true };
+  }
+  if (status === "completed") {
+    return { phase: "completed", title: "Commande récupérée", description: "Bon appétit et à bientôt !", step: 3, terminal: true };
+  }
+  if (status === "ready") {
+    return { phase: "ready", title: "Prête à récupérer", description: "Vos pizzas vous attendent !", step: 2, terminal: false };
+  }
+  if (status === "inpreparation") {
+    return { phase: "preparing", title: "En préparation", description: "Vos pizzas sont en préparation !", step: 1, terminal: false };
+  }
+  if (presentation.state === "validated") {
+    return { phase: "validated", title: "Commande validée", description: "Nous avons bien reçu votre commande.", step: 0, terminal: false };
+  }
+  return { phase: "pending", title: "Confirmation en cours", description: "Nous attendons la confirmation de votre commande. Le suivi se met à jour automatiquement : ne payez pas une deuxième fois.", step: -1, terminal: false };
+}

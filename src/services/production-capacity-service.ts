@@ -28,6 +28,7 @@ export async function previewScheduledPickupOptions({
     mode: "cart",
     appId,
     date,
+    source: "web",
     items: buildPreviewCartItems(items),
   });
   const response = result.data as ContinuousPickupPreviewResponse;

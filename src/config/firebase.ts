@@ -1,5 +1,5 @@
 /**
- * Firebase Admin SDK — server-side only (Next.js server components).
+ * Firebase Admin SDK â€” server-side only (Next.js server components).
  *
  * Reads the same Firestore collections as the WLHORIZON Flutter admin:
  *   - wl_catalog_categories
@@ -10,7 +10,7 @@
  *   FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY,
  *   FIREBASE_STORAGE_BUCKET, WL_APP_ID
  *
- * Initialization is lazy — the SDK is only set up on the first actual
+ * Initialization is lazy â€” the SDK is only set up on the first actual
  * database call, so importing this module during build does not fail when
  * credentials are absent.
  */
@@ -21,6 +21,7 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 let _db: Firestore | null = null;
 
 const ISOLATED_MARKETING_PROJECT = "demo-acquisition-marketing";
+const ISOLATED_PIZZA_DUO_PROJECT = "demo-web-duo";
 
 function usesIsolatedMarketingFirestoreEmulator(): boolean {
   return (
@@ -32,11 +33,24 @@ function usesIsolatedMarketingFirestoreEmulator(): boolean {
   );
 }
 
+export function usesIsolatedPizzaDuoFirestoreEmulator(): boolean {
+  if (process.env.NEXT_PUBLIC_PIZZA_DUO_LOCAL_EMULATOR !== "true") return false;
+  const valid = process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_ENABLE_PIZZA_DUO === "true" &&
+    process.env.NEXT_PUBLIC_MARKETING_TEST_MODE !== "true" && process.env.NEXT_PUBLIC_HALLOWEEN_LOCAL !== "true" &&
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === ISOLATED_PIZZA_DUO_PROJECT &&
+    process.env.FIREBASE_PROJECT_ID === ISOLATED_PIZZA_DUO_PROJECT &&
+    process.env.WL_APP_ID === "d_lizza" && process.env.NEXT_PUBLIC_WL_APP_ID === "d_lizza" &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:18787";
+  if (!valid) throw new Error("Pizza Duo local requires the demo-web-duo project on the local Firestore emulator.");
+  return true;
+}
+
 /**
  * Parse FIREBASE_PRIVATE_KEY from environment variable.
  *
  * Handles multiple formats commonly found in CI/CD and hosting platforms:
- *  1. JSON-escaped string with literal `\n` → convert to real newlines
+ *  1. JSON-escaped string with literal `\n` â†’ convert to real newlines
  *  2. Base64-encoded PEM (useful workaround for platforms that mangle newlines)
  *  3. Already-valid multi-line PEM string
  *  4. Keys wrapped in extraneous quotes from shell or Vercel UI
@@ -61,7 +75,7 @@ function parsePrivateKey(raw: string | undefined): string | undefined {
         key = decoded;
       }
     } catch {
-      // Not valid base64 — fall through to normal handling
+      // Not valid base64 â€” fall through to normal handling
     }
   }
 
@@ -79,15 +93,33 @@ function parsePrivateKey(raw: string | undefined): string | undefined {
   return key;
 }
 
+function usesHalloweenLocal(): boolean {
+  if (process.env.NEXT_PUBLIC_HALLOWEEN_LOCAL !== "true") return false;
+  if (process.env.NODE_ENV !== "development" || process.env.FIREBASE_PROJECT_ID !== "demo-halloween-local"
+      || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== "demo-halloween-local"
+      || process.env.WL_APP_ID !== "d_lizza" || process.env.NEXT_PUBLIC_WL_APP_ID !== "d_lizza"
+      || process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:18880"
+      || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:19099") {
+    throw new Error("Halloween local refuses non-emulator Firebase configuration.");
+  }
+  return true;
+}
+
 /** Lazily initialize Firebase Admin and return the Firestore client. */
 export function getDb(): Firestore {
+  const halloweenLocal = usesHalloweenLocal();
+  if (halloweenLocal && getApps().some(app => app.options.projectId !== "demo-halloween-local")) throw new Error("Existing Firebase app is not the local project.");
+  const pizzaDuoLocal = usesIsolatedPizzaDuoFirestoreEmulator();
+  if (pizzaDuoLocal && getApps().some(app => app.options.projectId !== ISOLATED_PIZZA_DUO_PROJECT)) {
+    throw new Error("An existing Firebase app is outside the local Pizza Duo project.");
+  }
   if (_db) return _db;
-  const isolatedEmulator = usesIsolatedMarketingFirestoreEmulator();
+  const isolatedEmulator = halloweenLocal || usesIsolatedMarketingFirestoreEmulator() || pizzaDuoLocal;
   let initializedHere = false;
   if (getApps().length === 0) {
     initializedHere = true;
     if (isolatedEmulator) {
-      initializeApp({ projectId: ISOLATED_MARKETING_PROJECT });
+      initializeApp({ projectId: halloweenLocal ? "demo-halloween-local" : pizzaDuoLocal ? ISOLATED_PIZZA_DUO_PROJECT : ISOLATED_MARKETING_PROJECT });
     } else {
       const privateKey = parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
       if (!privateKey) {
@@ -109,7 +141,7 @@ export function getDb(): Firestore {
   // Firestore Admin settings are immutable after first use. In Next dev HMR
   // this module can reload while the Firebase Admin app remains global.
   if (isolatedEmulator && initializedHere) {
-    _db.settings({ host: "127.0.0.1:9808", ssl: false });
+    _db.settings({ host: halloweenLocal ? "127.0.0.1:18880" : pizzaDuoLocal ? "127.0.0.1:18787" : "127.0.0.1:9808", ssl: false });
   }
   return _db;
 }

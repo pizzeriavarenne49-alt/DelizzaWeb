@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import SearchBar from "@/components/ui/SearchBar";
 import Chip from "@/components/ui/Chip";
 import ProductCard from "@/components/ui/ProductCard";
@@ -8,6 +8,9 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import type { Product, Category } from "@/types";
 import { track } from "@/analytics";
+import { isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isPizzaDuoRecipe } from "@/lib/pizza-duo";
+import { useCatalogAvailability } from "@/contexts/CatalogAvailabilityContext";
+import type { StockAvailabilityProduct } from "@/lib/product-availability";
 
 interface MenuClientProps {
   categories: Category[];
@@ -35,10 +38,32 @@ function normalizeText(value: string) {
     .toLowerCase();
 }
 
+function withLiveAvailability(product: Product, availability: Record<string, StockAvailabilityProduct> | null): Product {
+  if (availability === null) return product;
+  const live = availability[product.id];
+  if (!live) return { ...product, manualOutOfStock: true };
+  return {
+    ...product,
+    manualOutOfStock: live.manualOutOfStock,
+    stockManaged: live.stockManaged,
+    stockQty: live.stockQty ?? undefined,
+  };
+}
+
+const subscribeToFixedEnvironment = () => () => {};
+const hideDuoDuringServerRender = () => false;
+
 export default function MenuClient({ categories, products }: MenuClientProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const onlineOrdering = useOnlineOrderingStatus();
+  const catalogAvailability = useCatalogAvailability();
+  const pizzaDuoEnabled = useSyncExternalStore(subscribeToFixedEnvironment, isPizzaDuoDevelopmentEnabled, hideDuoDuringServerRender);
+  // This uses the provider's single SSE snapshot: a recipe removed or restored
+  // while the Duo modal is open is reflected without another subscription.
+  const liveProducts = useMemo(() => products.map((product) => withLiveAvailability(product, catalogAvailability)), [products, catalogAvailability]);
+  const pizzaDuoRecipes = liveProducts.filter(isPizzaDuoRecipe);
+  const visibleCatalogProducts = liveProducts.filter((product) => !isPizzaDuoProduct(product) || pizzaDuoEnabled);
 
   useEffect(() => {
     track({ name: "view_menu" });
@@ -47,7 +72,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
   const searchTerm = normalizeText(search.trim());
   const isSearching = searchTerm.length > 0;
 
-  const searchFilteredProducts = products.filter((product) => {
+  const searchFilteredProducts = visibleCatalogProducts.filter((product) => {
     if (!isSearching) {
       return true;
     }
@@ -98,9 +123,15 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
 
   for (const category of visibleCategories) {
     if (category.id === "pizzas") {
-      const pizzaProducts = products.filter((product) => product.category === "pizzas");
-      const baseTomate = pizzaProducts.filter((product) => !isCreamBasePizza(product));
-      const baseCreme = pizzaProducts.filter((product) => isCreamBasePizza(product));
+      const pizzaProducts = visibleCatalogProducts.filter((product) => product.category === "pizzas");
+      const duoProducts = pizzaProducts.filter(isPizzaDuoProduct);
+      const recipePizzas = pizzaProducts.filter((product) => !isPizzaDuoProduct(product));
+      const baseTomate = recipePizzas.filter((product) => !isCreamBasePizza(product));
+      const baseCreme = recipePizzas.filter((product) => isCreamBasePizza(product));
+
+      if (duoProducts.length > 0) {
+        allSections.push({ id: "pizza-duo", title: "Pizza Duo", products: duoProducts });
+      }
 
       if (baseTomate.length > 0) {
         allSections.push({
@@ -121,7 +152,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
       continue;
     }
 
-    const categoryProducts = products.filter((product) => product.category === category.id);
+    const categoryProducts = visibleCatalogProducts.filter((product) => product.category === category.id);
     if (categoryProducts.length === 0) {
       continue;
     }
@@ -194,7 +225,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
           <SectionHeader title={`Résultats pour "${search.trim()}"`} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {searchFilteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} />
             ))}
             {searchFilteredProducts.length === 0 && (
               <p className="col-span-2 py-10 text-center text-[#6B6B6B]">
@@ -210,7 +241,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
               <SectionHeader title={section.title} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
                 {section.products.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} />
                 ))}
               </div>
             </div>
@@ -226,7 +257,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
           <SectionHeader title={activeCategoryName} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {visibleProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} />
             ))}
             {visibleProducts.length === 0 && (
               <p className="col-span-2 py-10 text-center text-[#6B6B6B]">

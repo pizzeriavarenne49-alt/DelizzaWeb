@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { loadTsModule } from './support/load-ts-module.mjs';
 
-const { unavailableStockLines, stockDemandByProduct, isAdditionalProductQuantityAvailable, canApplyCartQuantity, isProductUnavailable } = loadTsModule(path.resolve('src/lib/product-availability.ts'));
+const { unavailableStockLines, stockDemandByProduct, isAdditionalProductQuantityAvailable, canApplyCartQuantity, isCartItemStockAvailable, isProductUnavailable } = loadTsModule(path.resolve('src/lib/product-availability.ts'));
 const cart = [{ catalogItemId: 'pizza', quantity: 2, cartKey: 'standard', nameSnapshot: '4 Fromages' },
   { catalogItemId: 'pizza', quantity: 2, cartKey: 'custom', nameSnapshot: '4 Fromages' }];
 assert.equal(unavailableStockLines(cart, { pizza: { stockManaged: true, stockQty: 4 } }).length, 0);
@@ -15,10 +15,31 @@ assert.equal(isAdditionalProductQuantityAvailable(cart, 'pizza', 1, { pizza: { s
 assert.equal(isAdditionalProductQuantityAvailable([], 'pizza', 0, { pizza: { stockManaged: false } }), false);
 assert.equal(isAdditionalProductQuantityAvailable([], 'pizza', 1, {}, { stockManaged: true, stockQty: 1 }), false, 'a removed live product cannot fall back to a stale card');
 assert.equal(canApplyCartQuantity(cart, 'standard', 3, { pizza: { stockManaged: true, stockQty: 4 } }), false, 'functional cart increment rechecks the full candidate basket');
+const cartWithoutEditedLine = cart.filter((item) => item.cartKey !== 'standard');
+assert.equal(
+  isAdditionalProductQuantityAvailable(cartWithoutEditedLine, 'pizza', 2, { pizza: { stockManaged: true, stockQty: 4 } }),
+  true,
+  'replacing a two-unit line must release its own two units before checking the replacement',
+);
 const formulaCart = [{ catalogItemId: 'formula', formulaId: 'formula', formulaStepChoices: { pizza: ['pizza'], drink: ['cola'] }, quantity: 2, cartKey: 'formula', nameSnapshot: 'Menu' }];
 assert.deepEqual(Object.fromEntries(stockDemandByProduct(formulaCart)), { pizza: 2, cola: 2 });
 assert.equal(unavailableStockLines(formulaCart, { pizza: { stockManaged: true, stockQty: 1 }, cola: { stockManaged: false } }).length, 1);
 assert.equal(canApplyCartQuantity(formulaCart, 'formula', 3, { pizza: { stockManaged: true, stockQty: 2 }, cola: { stockManaged: false } }), false, 'formula increments check their components, not catalogItemId');
+const duoCart = [{
+  catalogItemId: 'pizza-duo', catalogKind: 'pizza_duo', quantity: 2, cartKey: 'duo-a-b', nameSnapshot: 'Pizza Duo',
+  duo: { leftRecipeId: 'pizza-a', rightRecipeId: 'pizza-b' },
+}];
+assert.deepEqual(Object.fromEntries(stockDemandByProduct(duoCart)), { 'pizza-a': 2, 'pizza-b': 2 }, 'a Duo consumes each distinct recipe once per physical pizza');
+assert.equal(unavailableStockLines(duoCart, { 'pizza-a': { stockManaged: true, stockQty: 2 }, 'pizza-b': { stockManaged: true, stockQty: 1 } }).length, 1, 'a missing half recipe blocks the whole Duo');
+assert.equal(canApplyCartQuantity(duoCart, 'duo-a-b', 3, { 'pizza-a': { stockManaged: true, stockQty: 3 }, 'pizza-b': { stockManaged: true, stockQty: 2 } }), false, 'Duo quantity changes recheck both recipes');
+const sameRecipeDuo = [{ ...duoCart[0], cartKey: 'duo-a-a', duo: { leftRecipeId: 'pizza-a', rightRecipeId: 'pizza-a' } }];
+assert.deepEqual(Object.fromEntries(stockDemandByProduct(sameRecipeDuo)), { 'pizza-a': 2 }, 'two identical halves reserve one recipe unit per physical Duo');
+assert.equal(unavailableStockLines([{ catalogItemId: 'pizza-duo', catalogKind: 'pizza_duo', quantity: 1, cartKey: 'broken', nameSnapshot: 'Duo' }], { 'pizza-duo': { stockManaged: false } }).length, 1, 'a malformed explicit Duo cannot fall back to its synthetic parent');
+assert.equal(isCartItemStockAvailable(
+  [{ catalogItemId: 'stale', quantity: 1, cartKey: 'stale' }],
+  { ...duoCart[0], quantity: 1 },
+  { stale: { stockManaged: true, stockQty: 0 }, 'pizza-a': { stockManaged: true, stockQty: 1 }, 'pizza-b': { stockManaged: true, stockQty: 1 } },
+), true, 'editing a Duo is not blocked by an unrelated stale cart line');
 
 // The provider's queued state updater, rather than its render-time closure,
 // must enforce the limit when several adds happen before a rerender.
@@ -39,7 +60,7 @@ const cartModule = loadTsModule(path.resolve('src/contexts/CartContext.tsx'), {
   '@/types': { computeTaxFromTtcCents: () => 0 },
   '@/contexts/CatalogAvailabilityContext': { useCatalogAvailability: () => ({ pizza: { stockManaged: true, stockQty: 2 } }) },
   '@/marketing/marketing-client': { recordMarketingEvent: () => {} },
-  '@/lib/product-availability': { isProductUnavailable, isAdditionalProductQuantityAvailable, canApplyCartQuantity },
+  '@/lib/product-availability': { isProductUnavailable, isAdditionalProductQuantityAvailable, canApplyCartQuantity, unavailableStockLines, isCartItemStockAvailable },
 });
 const cartShell = cartModule.CartProvider({ children: null });
 const cartProvider = cartShell.type(cartShell.props);

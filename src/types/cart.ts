@@ -21,9 +21,33 @@ export interface IngredientSnapshot {
   priceDeltaCents?: number;
 }
 
+export interface PizzaDuoRecipeSnapshot {
+  recipeId: string;
+  recipeName: string;
+  /** Explicit catalog base retained for customer and kitchen readability. */
+  base: "tomate" | "creme";
+  description?: string;
+  ingredients?: string[];
+}
+
+/**
+ * Client display snapshot for one physical Pizza Duo.
+ * Only the recipe IDs are sent to the order function. The server resolves and
+ * freezes its own snapshots, availability and fixed price.
+ */
+export interface PizzaDuoComposition {
+  kind: "pizza_duo";
+  leftRecipeId: string;
+  rightRecipeId: string;
+  leftRecipe: PizzaDuoRecipeSnapshot;
+  rightRecipe: PizzaDuoRecipeSnapshot;
+}
+
 export interface CartItemCustomizations {
   /** templateId -> choiceIds, canonical createOrder contract */
   selectedTemplateOptions: Record<string, string[]>;
+  /** Inline catalog optionId -> choiceIds, legacy createOrder contract. */
+  selectedLegacyOptions?: Record<string, string[]>;
   /** Ingredient IDs, canonical createOrder contract */
   addedSupplements: string[];
   /** Ingredient IDs, canonical createOrder contract */
@@ -52,6 +76,7 @@ export interface CartItem {
   /** Selected customization options */
   selectedOptions?: SelectedOption[];
   selectedTemplateOptions?: Record<string, string[]>;
+  selectedLegacyOptions?: Record<string, string[]>;
   addedSupplements?: string[];
   removedIngredients?: string[];
   addedSupplementSnapshots?: IngredientSnapshot[];
@@ -60,4 +85,7 @@ export interface CartItem {
   formulaId?: string;
   /** Formula step choices keyed by step id */
   formulaStepChoices?: Record<string, string[]>;
+  /** Present only for the explicit Pizza Duo catalog product. */
+  catalogKind?: "pizza_duo";
+  duo?: PizzaDuoComposition;
 }

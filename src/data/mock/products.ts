@@ -6,6 +6,7 @@ type MockProduct = Omit<
   | "availableSupplementIds"
   | "allowIngredientRemoval"
   | "appliedTemplateIds"
+  | "legacyOptionIds"
   | "templatePriceOverrides"
   | "ingredientLibrary"
 >;
@@ -141,6 +142,7 @@ export const products: Product[] = mockProducts.map((product) => ({
   availableSupplementIds: [],
   allowIngredientRemoval: false,
   appliedTemplateIds: [],
+  legacyOptionIds: [],
   templatePriceOverrides: {},
   ingredientLibrary: [],
 }));

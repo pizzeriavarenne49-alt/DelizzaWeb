@@ -16,8 +16,14 @@ export interface CreateOrderItem {
   formulaId?: string;
   formulaStepChoices?: Record<string, string[]>;
   selectedTemplateOptions?: Record<string, string[]>;
+  selectedLegacyOptions?: Record<string, string[]>;
   addedSupplements?: string[];
   removedIngredients?: string[];
+  /** One physical Pizza Duo. Its recipes are validated and snapshotted server-side. */
+  duo?: {
+    leftRecipeId: string;
+    rightRecipeId: string;
+  };
 }
 
 export interface CreateOrderParams {
@@ -67,6 +73,10 @@ export interface CreatePaymentIntentResult {
   status?: string;
   idempotent?: boolean;
 }
+export interface CreateDemoPaymentIntentResult extends Omit<CreatePaymentIntentResult, "clientSecret"> { clientSecret: null; simulated: true; }
+
+export interface CompleteDemoPaymentParams { appId: "d_lizza"; orderId: string; paymentIntentId: string; }
+export interface CompleteDemoPaymentResult { success: boolean; orderId: string; status?: string; }
 
 /**
  * Calls the WLHORIZON `createOrder` Cloud Function.
@@ -92,4 +102,17 @@ export async function createPaymentIntent(
   const callable = httpsCallable(functions, "createPaymentIntent");
   const result = await callable(params);
   return result.data as CreatePaymentIntentResult;
+}
+
+/** Strict emulator-only counterpart; the server independently enforces every
+ * local-demo guard and derives the amount from the stored order. */
+export async function createDemoPaymentIntent(params: CreatePaymentIntentParams): Promise<CreateDemoPaymentIntentResult> {
+  const result = await httpsCallable(getClientFunctions(), "createDemoPaymentIntent")(params);
+  return result.data as CreateDemoPaymentIntentResult;
+}
+
+/** Exists only behind the browser and Functions demo-emulator gates. */
+export async function completeDemoPayment(params: CompleteDemoPaymentParams): Promise<CompleteDemoPaymentResult> {
+  const result = await httpsCallable(getClientFunctions(), "completeDemoPayment")(params);
+  return result.data as CompleteDemoPaymentResult;
 }

@@ -16,11 +16,12 @@ function AuthPageForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialMode = searchParams.get("mode") === "forgot" ? "forgot" : "login";
+  const next = searchParams.get("next") === "/checkout" ? "/checkout" : "/menu";
 
   return (
     <LoginForm
       initialMode={initialMode}
-      onSuccess={() => router.push("/menu")}
+      onSuccess={() => router.replace(next)}
     />
   );
 }

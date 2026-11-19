@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import {
   assessCartAvailability,
@@ -12,6 +13,13 @@ import {
 } from "@/lib/cart-availability";
 import { formatPrice, formatTaxRate } from "@/types";
 import { useCatalogAvailability, useCartStockIssues } from "@/contexts/CatalogAvailabilityContext";
+import type { StockAvailabilityProduct } from "@/lib/product-availability";
+import ProductCustomizeModal from "@/components/ui/ProductCustomizeModal";
+import { loadEditableCartProduct, loadEditablePizzaDuoRecipes } from "@/lib/editable-cart-product";
+import type { CartItem } from "@/types/cart";
+import type { Product } from "@/types";
+import PizzaDuoCustomizeModal from "@/components/ui/PizzaDuoCustomizeModal";
+import { isPizzaDuoRecipe } from "@/lib/pizza-duo";
 
 interface CartDrawerProps {
   open: boolean;
@@ -20,13 +28,24 @@ interface CartDrawerProps {
 
 const MINIMUM_ORDER_CENTS = 900;
 
+function withLiveAvailability(product: Product, availability: Record<string, StockAvailabilityProduct> | null): Product {
+  if (availability === null) return product;
+  const live = availability[product.id];
+  if (!live) return { ...product, manualOutOfStock: true };
+  return { ...product, manualOutOfStock: live.manualOutOfStock, stockManaged: live.stockManaged, stockQty: live.stockQty ?? undefined };
+}
+
 export default function CartDrawer({ open, onClose }: CartDrawerProps) {
+  const { user } = useAuth();
+  const customerUid = user?.uid;
   const onlineOrdering = useOnlineOrderingStatus();
   const catalogAvailability = useCatalogAvailability();
   const {
     items,
     removeItem,
     updateQuantity,
+    replaceItemWithOptions,
+    replacePizzaDuo,
     clearCart,
     getSubtotalCents,
     getTotalCents,
@@ -43,12 +62,47 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
   const stockIssues = useCartStockIssues(items);
   const cartIssues = [...new Map([...validatedCartIssues, ...stockIssues].map((issue) => [issue.cartKey, issue])).values()];
   const [cartCheckLoading, setCartCheckLoading] = useState(false);
+  const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editError, setEditError] = useState<{ cartKey: string; message: string } | null>(null);
+  const [duoRecipes, setDuoRecipes] = useState<Product[]>([]);
+  const liveDuoRecipes = useMemo(() => duoRecipes.map((recipe) => withLiveAvailability(recipe, catalogAvailability)).filter(isPizzaDuoRecipe), [duoRecipes, catalogAvailability]);
+
+  const openEditor = async (item: CartItem) => {
+    setEditError(null);
+    if (item.duo) {
+      try {
+        const [product, recipes] = await Promise.all([
+          loadEditableCartProduct(item.catalogItemId),
+          loadEditablePizzaDuoRecipes(),
+        ]);
+        if (!product || recipes.length === 0) throw new Error("indisponible");
+        setDuoRecipes(recipes);
+        setEditingProduct(product);
+        setEditingItem(item);
+      } catch {
+        setEditError({ cartKey: item.cartKey, message: "Impossible de charger les recettes disponibles. Réessayez dans un instant." });
+      }
+      return;
+    }
+    try {
+      const product = await loadEditableCartProduct(item.catalogItemId);
+      if (!product) throw new Error("indisponible");
+      setEditingProduct(product);
+      setEditingItem(item);
+    } catch {
+      setEditError({ cartKey: item.cartKey, message: "Impossible de charger cet article. Vérifiez sa disponibilité dans le menu." });
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     Promise.resolve().then(() => {
       if (cancelled) return null;
+      // Anonymous baskets use the public stock stream. Private catalogue reads
+      // are available once the customer signs in for checkout.
+      if (!customerUid) return { ok: true, issues: [] };
       setCartCheckLoading(items.length > 0);
       return assessCartAvailability(items);
     })
@@ -72,7 +126,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
     return () => {
       cancelled = true;
     };
-  }, [items, open, catalogAvailability]);
+  }, [items, open, catalogAvailability, customerUid]);
 
   const issuesByCartKey = new Map(cartIssues.map((issue) => [issue.cartKey, issue]));
   const checkoutBlocked =
@@ -85,8 +139,8 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
 
   return createPortal(
     <AnimatePresence>
-      {open && (
-        <>
+      {open && !editingItem && (
+        <Fragment key="cart">
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -162,10 +216,21 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                               <div className="mt-0.5 flex flex-col gap-0.5">
                                 {item.selectedOptions.map((opt) => (
                                   <span key={opt.optionId} className="text-[12px] leading-snug text-[#A0A0A0]">
-                                    {opt.optionName}: {opt.choiceNames.join(", ")}
+                                    {opt.optionName}: {opt.choiceNames.join(", ")}{opt.priceDeltaCents !== 0 ? ` · ${opt.priceDeltaCents > 0 ? "+" : ""}${formatPrice(opt.priceDeltaCents)} €` : ""}
                                   </span>
                                 ))}
                               </div>
+                            )}
+                            {item.duo && (
+                              <div className="mt-1 flex flex-col gap-0.5 text-[12px] leading-snug text-[#A0A0A0]">
+                                <span>Moitié 1 · {item.duo.leftRecipe.recipeName} (base {item.duo.leftRecipe.base === "creme" ? "crème" : "tomate"})</span>
+                                {item.duo.leftRecipe.ingredients?.length ? <span>· {item.duo.leftRecipe.ingredients.join(", ")}</span> : null}
+                                <span>Moitié 2 · {item.duo.rightRecipe.recipeName} (base {item.duo.rightRecipe.base === "creme" ? "crème" : "tomate"})</span>
+                                {item.duo.rightRecipe.ingredients?.length ? <span>· {item.duo.rightRecipe.ingredients.join(", ")}</span> : null}
+                              </div>
+                            )}
+                            {editError?.cartKey === item.cartKey && (
+                              <p role="alert" className="mt-1 text-[12px] leading-snug text-[#F59B90]">{editError.message}</p>
                             )}
                             {((item.removedIngredientSnapshots?.length ?? 0) > 0 ||
                               (item.addedSupplementSnapshots?.length ?? 0) > 0) && (
@@ -177,7 +242,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                                 ))}
                                 {item.addedSupplementSnapshots?.map((ingredient) => (
                                   <span key={`add-${ingredient.ingredientId}`} className="text-[12px] leading-snug text-[#A0A0A0]">
-                                    + {ingredient.ingredientName}
+                                    + {ingredient.ingredientName}{typeof ingredient.priceDeltaCents === "number" && ingredient.priceDeltaCents > 0 ? ` · +${formatPrice(ingredient.priceDeltaCents)} €` : ""}
                                   </span>
                                 ))}
                               </div>
@@ -194,9 +259,16 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                           </span>
                           <div className="flex items-center gap-2">
                             <button
+                              type="button"
+                              onClick={() => void openEditor(item)}
+                              className="rounded-full px-2 py-1 text-[12px] text-[#D4A053] hover:bg-[#D4A053]/10"
+                            >
+                              Modifier
+                            </button>
+                            <button
                               onClick={() => removeItem(item.cartKey)}
                               aria-label="Diminuer la quantité"
-                              className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A] text-[16px] font-bold leading-none text-[#A0A0A0] transition-colors hover:text-[#F5F5F5]"
+                              className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1A1A1A] text-[18px] font-bold leading-none text-[#A0A0A0] transition-colors hover:text-[#F5F5F5]"
                             >
                               -
                             </button>
@@ -207,7 +279,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                               onClick={() => updateQuantity(item.cartKey, item.quantity + 1)}
                               disabled={!!issue}
                               aria-label="Augmenter la quantité"
-                              className={`flex h-7 w-7 items-center justify-center rounded-full text-[16px] font-bold leading-none ${
+                              className={`flex h-11 w-11 items-center justify-center rounded-full text-[18px] font-bold leading-none ${
                                 issue
                                   ? "cursor-not-allowed bg-[#3A3A3A] text-[#8A8A8A]"
                                   : "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]"
@@ -296,7 +368,46 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
               </div>
             )}
           </motion.aside>
-        </>
+        </Fragment>
+      )}
+      {open && editingItem && editingProduct && (
+        editingItem.duo ? (
+          <PizzaDuoCustomizeModal
+            key={editingItem.cartKey}
+            product={editingProduct}
+            recipes={liveDuoRecipes}
+            initial={editingItem.duo}
+            initialQuantity={editingItem.quantity}
+            editingCartKey={editingItem.cartKey}
+            onClose={() => { setEditingItem(null); setEditingProduct(null); }}
+            onConfirm={(duo, quantity) => {
+              replacePizzaDuo(editingItem.cartKey, editingProduct, duo, quantity);
+              setEditingItem(null);
+              setEditingProduct(null);
+            }}
+          />
+        ) : (
+        <ProductCustomizeModal
+          key={editingItem.cartKey}
+          product={editingProduct}
+          initialQuantity={editingItem.quantity}
+          initialCartKey={editingItem.cartKey}
+          initialSelectedOptions={editingItem.selectedOptions}
+          initialCustomizations={{
+            selectedTemplateOptions: editingItem.selectedTemplateOptions ?? {},
+            selectedLegacyOptions: editingItem.selectedLegacyOptions ?? {},
+            addedSupplements: editingItem.addedSupplements ?? [],
+            removedIngredients: editingItem.removedIngredients ?? [],
+          }}
+          confirmLabel="Mettre à jour"
+          onClose={() => { setEditingItem(null); setEditingProduct(null); }}
+          onConfirm={(customizations, quantity, selectedOptions) => {
+            replaceItemWithOptions(editingItem.cartKey, editingProduct, customizations, quantity, selectedOptions);
+            setEditingItem(null);
+            setEditingProduct(null);
+          }}
+        />
+        )
       )}
     </AnimatePresence>,
     document.body,

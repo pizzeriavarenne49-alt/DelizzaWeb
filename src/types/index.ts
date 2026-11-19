@@ -26,6 +26,8 @@ export interface Product {
   tags: string[];
   /** Customization options (size, toppings, etc.) embedded in Firestore document */
   options: ProductOption[];
+  /** IDs of legacy inline options; template options are resolved separately. */
+  legacyOptionIds: string[];
   /** WLHORIZON canonical ingredient customization fields. */
   baseIngredientIds: string[];
   availableSupplementIds: string[];
@@ -33,6 +35,12 @@ export interface Product {
   appliedTemplateIds: string[];
   templatePriceOverrides: Record<string, Record<string, number>>;
   ingredientLibrary: ProductIngredient[];
+  /** Explicit catalog kind. Pizza Duo remains disabled unless a development gate is enabled. */
+  kind?: "pizza_duo";
+  /** Explicit recipe base, never inferred from customer-facing copy. */
+  recipeBase?: "tomate" | "creme";
+  /** Canonical production unit marker from the shared catalogue. */
+  pizzaUnits?: 0 | 1;
 }
 
 export interface ProductIngredient {
@@ -81,7 +89,8 @@ export type Platform = "ios" | "android" | "desktop";
 
 /** Format price from cents to display string */
 export function formatPrice(cents: number): string {
-  return (cents / 100).toFixed(2);
+  // Amounts stay integer cents everywhere; this is display-only French notation.
+  return (cents / 100).toFixed(2).replace(".", ",");
 }
 
 /** Compute TTC (tax-included) amount from HT cents and tax rate in basis points */

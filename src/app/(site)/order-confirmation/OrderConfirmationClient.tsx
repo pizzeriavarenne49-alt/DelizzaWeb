@@ -1,355 +1,157 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
-import { getClientFirestore } from "@/config/firebase-client";
+import OrderProgress from "@/components/orders/OrderProgress";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
-import {
-  getCustomerOrderPresentation,
-  type CustomerOrderPresentation,
-} from "@/lib/customer-order-presentation";
-import { clearCheckoutAttemptForOrder } from "@/services/checkout-attempt";
-import { DELIZZA_CUSTOMER_APP_ID } from "@/services/customer-session";
+import { useCustomerOrderTracking } from "@/hooks/useCustomerOrderTracking";
+import { getCustomerOrderPresentation, getCustomerOrderTracking } from "@/lib/customer-order-presentation";
+import { clearCheckoutAttemptForOrder, getStoredCheckoutAttemptOrderId } from "@/services/checkout-attempt";
+import { isValidTrackingOrderId } from "@/services/customer-order-tracking";
 import { formatPrice } from "@/types";
 import { getMarketingState, retryMarketingOrderLinks } from "@/marketing/marketing-client";
 import { useMarketing } from "@/marketing/MarketingProvider";
 import { META_PURCHASE_ARMED_EVENT, trackMetaPaidOrder } from "@/marketing/meta-pixel";
 
-const PENDING_PROLONGED_DELAY_MS = 45000;
-const LEGACY_ORDER_REFERENCE_LABEL = "Référence indisponible";
 const CONFIRMATION_ORDER_KEY = "delizza_order_confirmation_v1";
 const CONFIRMATION_ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-function isValidOrderId(value: string | null): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9_-]{6,120}$/.test(value);
-}
-
 function storedConfirmationOrderId(): string | null {
   try {
-    const stored = JSON.parse(window.sessionStorage.getItem(CONFIRMATION_ORDER_KEY) ?? "null") as { orderId?: unknown; savedAt?: unknown } | null;
-    const orderId = typeof stored?.orderId === "string" ? stored.orderId : null;
-    if (!isValidOrderId(orderId) || typeof stored?.savedAt !== "number" || stored.savedAt > Date.now() || Date.now() - stored.savedAt > CONFIRMATION_ORDER_MAX_AGE_MS) return null;
-    return orderId;
-  } catch { return null; }
+    const saved = JSON.parse(window.sessionStorage.getItem(CONFIRMATION_ORDER_KEY) ?? "null");
+    const orderId = typeof saved?.orderId === "string" ? saved.orderId : null;
+    if (!isValidTrackingOrderId(orderId) || typeof saved.savedAt !== "number") return null;
+    const age = Date.now() - saved.savedAt;
+    return age >= 0 && age <= CONFIRMATION_ORDER_MAX_AGE_MS ? orderId : null;
+  } catch {
+    return null;
+  }
 }
 
 function rememberConfirmationOrderId(orderId: string): boolean {
   try {
     window.sessionStorage.setItem(CONFIRMATION_ORDER_KEY, JSON.stringify({ orderId, savedAt: Date.now() }));
     return true;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
-function subscribeToConfirmationStorage(onChange: () => void): () => void {
+function subscribeToConfirmationStorage(onChange: () => void) {
   window.addEventListener("storage", onChange);
   return () => window.removeEventListener("storage", onChange);
 }
 
-interface OrderView {
-  id: string;
-  appId: string;
-  orderNumber: string;
-  createdAt: string;
-  pickup: string;
-  totalCents: number;
-  status: string;
-  paymentStatus: string;
-  fulfillmentStatus: string;
-  productionAuthorized: boolean;
-  paidTotalCents: number;
-  fulfillmentData: Record<string, unknown> | null;
-}
-
-interface OrderLoadState {
-  key: string;
-  order: OrderView | null;
-  error: string | null;
-  serverOrder?: Record<string, unknown>;
-}
-
-function dateFromFirestore(value: unknown): Date | null {
-  if (value && typeof value === "object" && "toDate" in value) {
-    return (value as { toDate: () => Date }).toDate();
-  }
-  return null;
-}
-
-function formatDate(value: unknown): string {
-  const date = dateFromFirestore(value);
-  return date ? date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
-}
-
-function formatPickup(data: Record<string, unknown>): string {
-  const fulfillment = data.fulfillmentData as Record<string, unknown> | undefined;
-  const raw = fulfillment?.pickupAt ?? data.pickupAt;
-  if (typeof raw === "string") {
-    const date = new Date(raw);
-    if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleString("fr-FR", {
-        timeZone: "Europe/Paris",
-        dateStyle: "short",
-        timeStyle: "short",
-      });
-    }
-  }
-  if (typeof fulfillment?.scheduledTime === "string") return fulfillment.scheduledTime;
-  return "";
-}
-
-function mapOrder(id: string, data: Record<string, unknown>): OrderView {
-  return {
-    id,
-    appId: typeof data.appId === "string" ? data.appId : "",
-    orderNumber: typeof data.orderNumber === "string" && data.orderNumber.trim()
-      ? data.orderNumber
-      : LEGACY_ORDER_REFERENCE_LABEL,
-    createdAt: formatDate(data.createdAt),
-    pickup: formatPickup(data),
-    totalCents: typeof data.totalCents === "number" ? data.totalCents : 0,
-    status: typeof data.status === "string" ? data.status : "unknown",
-    paymentStatus: typeof data.paymentStatus === "string" ? data.paymentStatus : "unknown",
-    fulfillmentStatus: typeof data.fulfillmentStatus === "string" ? data.fulfillmentStatus : "",
-    productionAuthorized: data.productionAuthorized === true,
-    paidTotalCents: typeof data.paidTotalCents === "number" ? data.paidTotalCents : 0,
-    fulfillmentData:
-      typeof data.fulfillmentData === "object" && data.fulfillmentData !== null
-        ? (data.fulfillmentData as Record<string, unknown>)
-        : null,
-  };
-}
-
-function statusMessage(
-  presentation: CustomerOrderPresentation,
-  prolongedPending: boolean,
-): { title: string; body: string; tone: "pending" | "paid" | "failed" } {
-  if (presentation.state === "validated") {
-    return {
-      title: "Commande validée",
-      body: "Le paiement est valide par le backend. Votre commande est transmise a l'equipe.",
-      tone: "paid",
-    };
-  }
-  if (presentation.state === "cancelled") {
-    return {
-      title: "Commande annulée",
-      body: "Cette commande n'est pas active. Vous pouvez revenir au checkout pour passer une nouvelle commande.",
-      tone: "failed",
-    };
-  }
-  if (prolongedPending) {
-    return {
-      title: "Validation plus longue que prevu",
-      body: "La confirmation Stripe prend plus de temps. Ne payez pas une deuxieme fois : gardez cette reference et rechargez la page dans quelques instants.",
-      tone: "pending",
-    };
-  }
-  return {
-    title: "Validation du paiement en cours",
-    body: "Nous attendons la confirmation Stripe et la reconciliation backend.",
-    tone: "pending",
-  };
-}
-
 function OrderConfirmationContent() {
-  const searchParams = useSearchParams();
-  const queryOrderId = searchParams.get("orderId");
+  const queryOrderId = useSearchParams().get("orderId");
   const storedOrderId = useSyncExternalStore(subscribeToConfirmationStorage, storedConfirmationOrderId, () => null);
   const orderId = queryOrderId ?? storedOrderId;
   const { user, loading: authLoading } = useAuth();
   const { consent: marketingConsent, enabled: marketingEnabled } = useMarketing();
-  const { clearCart } = useCart();
-  const [loadState, setLoadState] = useState<OrderLoadState | null>(null);
-  const [prolongedPendingKey, setProlongedPendingKey] = useState<string | null>(null);
   const [metaPurchaseArmed, setMetaPurchaseArmed] = useState(0);
-  const validOrderId = isValidOrderId(orderId);
-  const listenKey = user && validOrderId ? `${user.uid}:${orderId}` : null;
-  const order = loadState?.key === listenKey ? loadState.order : null;
-  const loadError = loadState?.key === listenKey ? loadState.error : null;
-  const derivedError =
-    authLoading
-      ? null
-      : !user
-        ? "Connectez-vous pour consulter cette confirmation."
-        : !validOrderId
-          ? "Lien de confirmation invalide."
-          : loadError;
-  const loading = authLoading || (!!listenKey && loadState?.key !== listenKey);
-  const orderPresentation = useMemo(
-    () => order
-      ? getCustomerOrderPresentation(order)
-      : ({
-          state: "hiddenTemporary",
-          label: "Paiement en cours de validation",
-        } as CustomerOrderPresentation),
-    [order],
-  );
-  const pendingKey = order && orderPresentation.state === "hiddenTemporary"
-    ? `${order.id}:${order.paymentStatus}:${order.status}`
-    : null;
-  const prolongedPending = !!pendingKey && prolongedPendingKey === pendingKey;
+  const { clearCart } = useCart();
+  // Reuses the original onSnapshot subscription, now shared by both entry points.
+  const { order, serverOrder, syncState, error, delayed } = useCustomerOrderTracking(orderId, !authLoading ? user?.uid ?? null : null);
+  const tracking = order ? getCustomerOrderTracking(order) : null;
+  const validOrderId = isValidTrackingOrderId(orderId);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const derivedError = authLoading ? null : !user
+    ? "Connectez-vous pour consulter votre commande."
+    : !validOrderId ? "Lien de suivi invalide." : error;
 
   useEffect(() => {
-    if (!isValidOrderId(queryOrderId) || !marketingEnabled || !marketingConsent?.metaAdvertising ||
+    if (!isValidTrackingOrderId(queryOrderId) || !marketingEnabled || !marketingConsent?.metaAdvertising ||
         !rememberConfirmationOrderId(queryOrderId)) return;
-    // Clean the payment return URL only after saving its reference for refresh.
-    // The Pixel rejects the original URL if the browser cannot replace it.
-    try { window.history.replaceState(window.history.state, "", window.location.pathname); } catch { /* optional URL cleanup */ }
+    try { window.history.replaceState(window.history.state, "", window.location.pathname); } catch { /* Storage and URL cleanup are optional. */ }
   }, [queryOrderId, marketingEnabled, marketingConsent?.metaAdvertising]);
 
   useEffect(() => {
-    const onMetaPurchaseArmed = () => setMetaPurchaseArmed((value) => value + 1);
-    window.addEventListener(META_PURCHASE_ARMED_EVENT, onMetaPurchaseArmed);
-    return () => window.removeEventListener(META_PURCHASE_ARMED_EVENT, onMetaPurchaseArmed);
+    const onArmed = () => setMetaPurchaseArmed(value => value + 1);
+    window.addEventListener(META_PURCHASE_ARMED_EVENT, onArmed);
+    return () => window.removeEventListener(META_PURCHASE_ARMED_EVENT, onArmed);
   }, []);
 
   useEffect(() => {
-    if (!listenKey || !orderId) return;
-
-    const db = getClientFirestore();
-    const unsubscribe = onSnapshot(
-      doc(db, "orders", orderId),
-      { includeMetadataChanges: true },
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          setLoadState({
-            key: listenKey,
-            order: null,
-            error: "Commande introuvable ou inaccessible avec ce compte.",
-          });
-        } else {
-          const mapped = mapOrder(snapshot.id, snapshot.data());
-          if (mapped.appId !== DELIZZA_CUSTOMER_APP_ID) {
-            setLoadState({
-              key: listenKey,
-              order: null,
-              error: "Commande introuvable ou inaccessible avec ce compte.",
-            });
-          } else {
-            const serverOrder = !snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites ? snapshot.data() : undefined;
-            setLoadState({ key: listenKey, order: mapped, error: null, serverOrder });
-          }
-        }
-      },
-      (err) => {
-        console.error("[confirmation] Unable to load order:", {
-          code: typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined,
-        });
-        setLoadState({
-          key: listenKey,
-          order: null,
-          error: "Commande introuvable ou inaccessible avec ce compte.",
-        });
-      },
-    );
-    void retryMarketingOrderLinks();
-
-    return unsubscribe;
-  }, [listenKey, orderId]);
+    if (user?.uid && validOrderId) void retryMarketingOrderLinks();
+  }, [user?.uid, validOrderId, orderId]);
 
   useEffect(() => {
-    if (order && loadState?.serverOrder && marketingEnabled && marketingConsent?.metaAdvertising && getMarketingState().consent?.metaAdvertising) {
-      trackMetaPaidOrder(order.appId, order.id, loadState.serverOrder);
+    if (order && serverOrder && marketingEnabled && marketingConsent?.metaAdvertising && getMarketingState().consent?.metaAdvertising) {
+      trackMetaPaidOrder(order.appId, order.id, serverOrder);
     }
-  }, [order, loadState?.serverOrder, marketingEnabled, marketingConsent?.metaAdvertising, metaPurchaseArmed]);
+  }, [order, serverOrder, marketingEnabled, marketingConsent?.metaAdvertising, metaPurchaseArmed]);
 
   useEffect(() => {
-    if (!pendingKey) return;
-    const timeout = window.setTimeout(() => setProlongedPendingKey(pendingKey), PENDING_PROLONGED_DELAY_MS);
-    return () => window.clearTimeout(timeout);
-  }, [pendingKey]);
-
-  useEffect(() => {
-    if (order && orderPresentation.state === "validated") {
+    // Never clear a new basket when reopening an older order from the profile.
+    // paymentStatus is interpreted by the existing validation contract, not the redirect URL.
+    if (order && (syncState === "live" || syncState === "complete")
+        && getCustomerOrderPresentation(order).state === "validated"
+        && getStoredCheckoutAttemptOrderId() === order.id) {
       clearCheckoutAttemptForOrder(order.id);
       clearCart();
     }
-  }, [clearCart, order, orderPresentation.state]);
+  }, [clearCart, order, syncState]);
 
-  const message = useMemo(
-    () => statusMessage(orderPresentation, prolongedPending),
-    [orderPresentation, prolongedPending],
-  );
+  useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }, []);
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] px-4 py-12">
-      <div className="mx-auto flex max-w-md flex-col gap-6">
-        <div className="text-center">
-          <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ${
-            message.tone === "paid"
-              ? "bg-[#2ECC71]"
-              : message.tone === "failed"
-                ? "bg-[#E74C3C]"
-                : "bg-gradient-to-br from-[#D4A053] to-[#E8C078]"
-          }`}>
-            <span className="text-[28px] font-bold text-[#0D0D0D]">
-              {message.tone === "paid" ? "OK" : message.tone === "failed" ? "!" : "..."}
-            </span>
-          </div>
-          <h1 className="mb-2 text-[26px] font-extrabold text-[#F5F5F5]">{message.title}</h1>
-          <p className="text-[15px] leading-relaxed text-[#A0A0A0]">{message.body}</p>
-        </div>
+    <div className="min-h-[70vh] bg-background px-4 pb-12 pt-7 sm:pt-10">
+      <div className="mx-auto flex max-w-md flex-col gap-5">
+        <header>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold">Deli’Zza · À emporter</p>
+          <h1 ref={titleRef} tabIndex={-1} className="mt-2 text-[28px] font-bold tracking-tight text-foreground">Votre commande</h1>
+          <p className="mt-1 text-sm text-text-secondary">Du four à votre table, suivez chaque étape.</p>
+        </header>
 
-        {loading && (
-          <div className="rounded-[18px] bg-[#1A1A1A] px-6 py-5 text-center text-[14px] text-[#A0A0A0]">
-            {authLoading ? "Restauration de votre session..." : "Chargement de la commande..."}
+        {!order && !derivedError && (
+          <div className="rounded-[20px] border border-white/10 bg-surface px-5 py-6 text-sm leading-relaxed text-text-secondary" role="status">
+            {authLoading ? "Restauration de votre session…"
+              : syncState === "offline" ? "Vous êtes hors connexion. Le suivi reprendra automatiquement au retour du réseau."
+                : delayed ? "La connexion prend plus de temps que prévu. Le suivi apparaîtra automatiquement dès sa synchronisation."
+                  : "Connexion au suivi de votre commande…"}
           </div>
         )}
 
-        {derivedError && !loading && (
-          <div className="rounded-[18px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-6 py-5 text-[14px] text-[#F59B90]">
-            {derivedError}
-          </div>
+        {derivedError && (
+          <div className="rounded-[20px] border border-red-400/25 bg-red-950/20 px-5 py-5 text-sm leading-relaxed text-red-200" role="alert">{derivedError}</div>
         )}
 
-        {order && (
-          <div className="rounded-[18px] bg-[#1A1A1A] px-6 py-5">
-            <h2 className="mb-4 text-[16px] font-bold text-[#F5F5F5]">Details de commande</h2>
-            <dl className="flex flex-col gap-3 text-[14px]">
-              <Row label="Reference" value={order.orderNumber} />
-              <Row label="Date" value={order.createdAt || "-"} />
-              <Row label="Retrait" value={order.pickup || "-"} />
-              <Row label="Total TTC" value={`${formatPrice(order.totalCents)} EUR`} />
-              <Row
-                label="Commande"
-                value={
-                  orderPresentation.state === "validated"
-                    ? "Commande validée"
-                    : orderPresentation.state === "cancelled"
-                      ? "Commande annulée"
-                      : "Paiement en cours de validation"
-                }
-              />
-            </dl>
-          </div>
+        {order && tracking && (
+          <>
+            <OrderProgress key={order.id} tracking={tracking} syncState={syncState} delayed={delayed} />
+            <section className="rounded-[20px] border border-white/10 bg-surface px-5 py-5" aria-label="Détails de commande">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="min-w-0 break-words text-base font-semibold text-foreground">{order.orderNumber}</h2>
+                <span className="shrink-0 text-base font-semibold text-gold">{formatPrice(order.totalCents)} €</span>
+              </div>
+              <dl className="flex flex-col gap-3 text-sm">
+                <Row label="Commandée le" value={order.createdAt || "Date indisponible"} />
+                {order.pickup && <Row label="Retrait prévu" value={order.pickup} />}
+                <Row label="Mode" value="À emporter" />
+              </dl>
+              {order.itemLabels.length > 0 && (
+                <div className="mt-4 border-t border-white/10 pt-3 text-sm text-text-secondary">
+                  {order.itemLabels.map((label, index) => <p key={`${index}-${label}`}>{label}</p>)}
+                </div>
+              )}
+            </section>
+          </>
         )}
 
         <div className="flex flex-col gap-3">
           {!user && !authLoading && (
-            <Link
-              href="/auth"
-              className="block rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-center text-[15px] font-bold text-[#0D0D0D]"
-            >
-              Se connecter
-            </Link>
+            <Link href="/auth" className="flex min-h-12 items-center justify-center rounded-2xl bg-gold px-4 text-sm font-semibold text-background focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">Se connecter</Link>
           )}
-          {user && orderPresentation.state !== "validated" && (
-            <Link
-              href="/checkout"
-              className="block rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-center text-[15px] font-bold text-[#0D0D0D]"
-            >
-              Retour au checkout
-            </Link>
+          {tracking?.terminal && (
+            <Link href="/menu" className="flex min-h-12 items-center justify-center rounded-2xl bg-gold px-4 text-sm font-semibold text-background transition-colors hover:bg-gold-light focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">Découvrir la carte</Link>
           )}
           {user && (
-            <Link
-              href="/profile"
-              className="block rounded-[18px] border border-white/10 py-3.5 text-center text-[14px] text-[#A0A0A0] transition-colors hover:border-white/20 hover:text-[#F5F5F5]"
-            >
-              Voir mon profil
-            </Link>
+            <Link href="/profile" className="flex min-h-12 items-center justify-center rounded-2xl border border-white/15 px-4 text-sm text-foreground transition-colors hover:border-gold/50 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">Retour à mes commandes</Link>
           )}
         </div>
       </div>
@@ -358,24 +160,9 @@ function OrderConfirmationContent() {
 }
 
 function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-[#A0A0A0]">{label}</dt>
-      <dd className="text-right font-medium text-[#F5F5F5]">{value}</dd>
-    </div>
-  );
+  return <div className="flex justify-between gap-4"><dt className="text-text-secondary">{label}</dt><dd className="text-right font-medium text-foreground">{value}</dd></div>;
 }
 
 export default function OrderConfirmationClient() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#0D0D0D]">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#D4A053] border-t-transparent" />
-        </div>
-      }
-    >
-      <OrderConfirmationContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div className="min-h-[50vh] bg-background p-8 text-center text-text-secondary" role="status">Chargement du suivi…</div>}><OrderConfirmationContent /></Suspense>;
 }

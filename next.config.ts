@@ -4,8 +4,29 @@ const directusHostname = process.env.NEXT_PUBLIC_DIRECTUS_URL
   ? new URL(process.env.NEXT_PUBLIC_DIRECTUS_URL).hostname
   : undefined;
 
+const pizzaDuoLocal =
+  process.env.NEXT_PUBLIC_ENABLE_PIZZA_DUO === "true" &&
+  process.env.NEXT_PUBLIC_PIZZA_DUO_LOCAL_EMULATOR === "true";
+const isolatedLocalMode = process.env.NEXT_PUBLIC_HALLOWEEN_LOCAL === "true" || pizzaDuoLocal;
+const isolatedLocalProject = pizzaDuoLocal ? "demo-web-duo" : "demo-halloween-local";
+
 const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
+  // Local-only isolation: never reuse a development bundle built with real Firebase settings.
+  ...(isolatedLocalMode ? {
+    distDir: pizzaDuoLocal ? ".next-pizza-duo-local" : ".next-halloween-local",
+    // Capture-only local instance: keep the framework badge out of screenshots.
+    devIndicators: false,
+    async headers() {
+      if (process.env.NODE_ENV !== "development" || process.env.FIREBASE_PROJECT_ID !== isolatedLocalProject) {
+        throw new Error("Isolated local mode must never run as a production build or project.");
+      }
+      return [{ source: "/:path*", headers: [{
+        key: "Content-Security-Policy",
+        value: "default-src 'self'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; frame-src 'self'; form-action 'self'; object-src 'none'",
+      }] }];
+    },
+  } : {}),
   images: {
     qualities: [60, 75],
     dangerouslyAllowSVG: true,

@@ -205,6 +205,7 @@ function mapProduct(raw: DirectusRecord): Product {
     is_popular: bool(raw.is_popular),
     tags: arr(raw.tags),
     options: [],
+    legacyOptionIds: [],
     baseIngredientIds: [],
     availableSupplementIds: [],
     allowIngredientRemoval: false,
@@ -385,6 +386,7 @@ class EmptyRepository implements DataRepository {
 // ---------------------------------------------------------------------------
 
 import { FirebaseRepository } from "./firebase-repository";
+import { usesIsolatedPizzaDuoFirestoreEmulator } from "@/config/firebase";
 
 /** Detect which data source is active for logging purposes */
 let activeSource: "firebase" | "directus" | "mock" | "empty" = "mock";
@@ -405,6 +407,7 @@ function usesIsolatedMarketingFirestoreEmulator(): boolean {
 function createRepository(): DataRepository {
   // Priority 1: Firebase (same data as WLHORIZON mobile app)
   if (
+    usesIsolatedPizzaDuoFirestoreEmulator() ||
     usesIsolatedMarketingFirestoreEmulator() ||
     (process.env.FIREBASE_PROJECT_ID &&
       process.env.FIREBASE_CLIENT_EMAIL &&

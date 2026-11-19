@@ -11,6 +11,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { cn } from "@/lib/cn";
 import {
   getCustomerOrderPresentation,
+  getCustomerOrderTracking,
   isVisibleInCustomerHistory,
 } from "@/lib/customer-order-presentation";
 import { formatFrenchPhone, normalizeFrenchPhone } from "@/lib/phone";
@@ -286,7 +287,7 @@ export default function ProfileClient() {
     return (
       <main className="flex min-h-[80vh] flex-col items-center justify-center gap-7 px-6 text-center">
         <div className="space-y-2">
-          <h1 className="text-[24px] font-bold text-foreground">Votre espace Deli&apos;Zza</h1>
+          <h1 className="text-[24px] font-bold text-foreground">Votre espace Deli’Zza</h1>
           <p className="max-w-xs text-[15px] leading-relaxed text-text-secondary">
             Connectez-vous pour retrouver votre fidélité, vos commandes et vos informations.
           </p>
@@ -308,7 +309,7 @@ export default function ProfileClient() {
           Bonjour{displayFirstName ? ` ${displayFirstName}` : ""}
         </p>
         <p className="mt-1 text-[14px] leading-relaxed text-text-secondary">
-          Heureux de vous revoir chez Deli&apos;Zza.
+          Heureux de vous revoir chez Deli’Zza.
         </p>
       </header>
 
@@ -556,11 +557,12 @@ function OrdersSection({
 
 function OrderRow({ order }: { order: CustomerOrderSummary }) {
   const presentation = getCustomerOrderPresentation(order);
+  const tracking = getCustomerOrderTracking(order);
   const scheduleLabel = order.pickupLabel || order.createdAtLabel || "Créneau à confirmer";
   const orderNumber = formatOrderNumber(order.orderNumber);
-  const orderStatusLabel = getReadableOrderStatus(presentation.state);
+  const orderStatusLabel = tracking.title;
   const stateClassName =
-    presentation.state === "cancelled"
+    tracking.phase === "cancelled"
       ? "text-red-300"
       : presentation.state === "validated"
         ? "text-[#A7E7B8]"
@@ -576,13 +578,23 @@ function OrderRow({ order }: { order: CustomerOrderSummary }) {
           {formatPrice(order.totalCents)} €
         </p>
       </div>
-      <div className="mt-1.5 flex items-center justify-between gap-3 text-[13px]">
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[13px]">
         <p className="min-w-0 truncate text-text-secondary">{scheduleLabel}</p>
         <p className={cn("shrink-0 font-medium", stateClassName)}>
           {orderStatusLabel}
-          {presentation.state === "validated" ? " ✓" : ""}
         </p>
       </div>
+      {order.itemLabels.length > 0 && (
+        <div className="mt-2 flex flex-col gap-0.5 text-[12px] leading-snug text-text-secondary">
+          {order.itemLabels.map((label, index) => <span key={`${index}-${label}`}>{label}</span>)}
+        </div>
+      )}
+      {!tracking.terminal && (
+        <Link href={`/order-confirmation?orderId=${encodeURIComponent(order.id)}`} prefetch={false} aria-label={`Suivre ${orderNumber}`}
+          className="mt-3 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-gold/25 bg-gold/10 px-3 text-[13px] font-semibold text-gold-light transition-colors hover:bg-gold/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold">
+          Suivre ma commande <span aria-hidden="true">→</span>
+        </Link>
+      )}
     </li>
   );
 }
@@ -842,12 +854,6 @@ function formatOrderNumber(orderNumber: string) {
   return trimmed.startsWith("#") || trimmed.toLowerCase().startsWith("commande")
     ? trimmed
     : `#${trimmed}`;
-}
-
-function getReadableOrderStatus(state: ReturnType<typeof getCustomerOrderPresentation>["state"]) {
-  if (state === "cancelled") return "Annulée";
-  if (state === "validated") return "Validée";
-  return "Paiement en cours";
 }
 
 function clampNonNegativeInteger(value: number) {

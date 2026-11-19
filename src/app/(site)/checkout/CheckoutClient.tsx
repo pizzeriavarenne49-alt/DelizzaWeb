@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -37,7 +37,10 @@ import {
   CLIENT_ERROR_MESSAGES,
   getClientErrorMessage,
 } from "@/lib/client-error-message";
-import { createOrder, createPaymentIntent, type CreateOrderItem } from "@/services/order-service";
+import { completeDemoPayment, createDemoPaymentIntent, createOrder, createPaymentIntent, type CreateOrderItem } from "@/services/order-service";
+import { isDemoPaymentEnabled } from "@/lib/demo-payment";
+import { saveGuestCheckoutIntent } from "@/lib/guest-checkout-intent";
+import { customerOrderItemLabelGroups, customerOrderItemLabels, type CustomerOrderItemLabelGroup } from "@/lib/customer-order-item-labels";
 import {
   buildCheckoutAttemptFingerprint,
   getStoredCheckoutAttemptOrderId,
@@ -63,6 +66,10 @@ const StripeCheckout = dynamic(
   () => import("@/components/checkout/StripeCheckout"),
   { ssr: false },
 );
+const DemoPaymentCheckout = dynamic(
+  () => import("@/components/checkout/DemoPaymentCheckout"),
+  { ssr: false },
+);
 
 const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 const TERMS_VERSION = "cgu-2026-07";
@@ -84,6 +91,7 @@ function nonEmptyArray(value: string[] | undefined): string[] | undefined {
 
 function toCreateOrderItem(item: CartItem): CreateOrderItem {
   const selectedTemplateOptions = nonEmptyRecord(item.selectedTemplateOptions);
+  const selectedLegacyOptions = nonEmptyRecord(item.selectedLegacyOptions);
   const addedSupplements = nonEmptyArray(item.addedSupplements);
   const removedIngredients = nonEmptyArray(item.removedIngredients);
   return {
@@ -92,9 +100,52 @@ function toCreateOrderItem(item: CartItem): CreateOrderItem {
     ...(item.formulaId ? { formulaId: item.formulaId } : {}),
     ...(item.formulaStepChoices ? { formulaStepChoices: item.formulaStepChoices } : {}),
     ...(selectedTemplateOptions ? { selectedTemplateOptions } : {}),
+    ...(selectedLegacyOptions ? { selectedLegacyOptions } : {}),
     ...(addedSupplements ? { addedSupplements } : {}),
     ...(removedIngredients ? { removedIngredients } : {}),
+    ...(item.duo ? {
+      duo: {
+        leftRecipeId: item.duo.leftRecipeId,
+        rightRecipeId: item.duo.rightRecipeId,
+      },
+    } : {}),
   };
+}
+
+/**
+ * Old browser carts predate the split between inline and template options.
+ * Reclassify only their outgoing request from the read-only enriched catalog;
+ * never mutate local history and never guess when the catalog cannot prove it.
+ */
+async function normalizeHistoricOptionContracts(items: CartItem[]): Promise<CartItem[]> {
+  return Promise.all(items.map(async (item) => {
+    const savedTemplateOptions = item.selectedTemplateOptions ?? {};
+    if (Object.keys(savedTemplateOptions).length === 0 ||
+        item.selectedLegacyOptions !== undefined) {
+      return item;
+    }
+    const response = await fetch(`/api/catalog/editable-product/${encodeURIComponent(item.catalogItemId)}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error("Une option de votre panier historique doit être recomposée avant la commande.");
+    }
+    const product = await response.json() as { legacyOptionIds?: unknown };
+    const legacyIds = new Set(
+      Array.isArray(product.legacyOptionIds)
+        ? product.legacyOptionIds.filter((id): id is string => typeof id === "string")
+        : [],
+    );
+    if (legacyIds.size === 0) return item;
+    const selectedLegacyOptions = Object.fromEntries(
+      Object.entries(savedTemplateOptions).filter(([optionId]) => legacyIds.has(optionId)),
+    );
+    if (Object.keys(selectedLegacyOptions).length === 0) return item;
+    const selectedTemplateOptions = Object.fromEntries(
+      Object.entries(savedTemplateOptions).filter(([optionId]) => !legacyIds.has(optionId)),
+    );
+    return { ...item, selectedTemplateOptions, selectedLegacyOptions };
+  }));
 }
 
 function minimumOrderMessage(payableTotalCents: number): string | null {
@@ -142,8 +193,8 @@ function findRewardPreview(
 
   let best: RewardPreview | null = null;
   items.forEach((item, index) => {
-    if (
-      item.formulaId ||
+      if (
+       item.formulaId || item.duo ||
       !item.categoryId ||
       !eligibleCategoryIds.has(item.categoryId) ||
       item.quantity <= 0
@@ -425,6 +476,7 @@ interface Step1Props {
   onlineOrderingMessage: string | null;
   cartAvailabilityLoading: boolean;
   cartAvailabilityIssues: CartAvailabilityIssue[];
+  checkoutError: string | null;
 }
 
 function Step1Fulfillment({
@@ -438,6 +490,7 @@ function Step1Fulfillment({
   onlineOrderingMessage,
   cartAvailabilityLoading,
   cartAvailabilityIssues,
+  checkoutError,
 }: Step1Props) {
   const { items } = useCart();
   const [selectedDate, setSelectedDate] = useState<SlotDateKey>("today");
@@ -702,6 +755,14 @@ function Step1Fulfillment({
   }, [onlineOrderingBlocked, refreshAsapPickupOptions, refreshSchedulePickupOptions]);
 
   const handleDateChange = (dateKey: SlotDateKey) => {
+    // Invalidate before React renders the new date: a visible slot from the
+    // previous day must never be clickable under the next day identity.
+    previewRequestIdRef.current += 1;
+    selectedDateRef.current = dateKey;
+    slotsRef.current = [];
+    setSlots([]);
+    setSlotsLoading(true);
+    setSlotsError(null);
     setSelectedDate(dateKey);
     setSelectedSlot(null);
     onSlotChange({ dateKey, slot: null });
@@ -723,6 +784,11 @@ function Step1Fulfillment({
           {cartAvailabilityIssues.map((issue) => (
             <p key={issue.cartKey}>{issue.message}</p>
           ))}
+        </div>
+      )}
+      {checkoutError && (
+        <div role="alert" className="rounded-[14px] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-4 py-3 text-[13px] leading-relaxed text-[#F5F5F5]">
+          {checkoutError}
         </div>
       )}
 
@@ -1015,6 +1081,30 @@ function Step2Summary({
                   {formatPrice(item.totalCents)}&nbsp;€
                 </span>
               </div>
+              {item.selectedOptions && item.selectedOptions.length > 0 && (
+                <div className="mt-1 flex flex-col gap-0.5 text-[12px] leading-snug text-[#A0A0A0]">
+                  {item.selectedOptions.map((option) => (
+                    <span key={option.optionId}>
+                      {option.optionName}: {option.choiceNames.join(", ")}
+                      {option.priceDeltaCents !== 0 ? ` · ${option.priceDeltaCents > 0 ? "+" : ""}${formatPrice(option.priceDeltaCents)} €` : ""}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {item.duo && (
+                <div className="mt-1 flex flex-col gap-0.5 text-[12px] leading-snug text-[#A0A0A0]">
+                  <span>Moitié 1 · {item.duo.leftRecipe.recipeName} (base {item.duo.leftRecipe.base === "creme" ? "crème" : "tomate"})</span>
+                  {item.duo.leftRecipe.ingredients?.length ? <span>· {item.duo.leftRecipe.ingredients.join(", ")}</span> : null}
+                  <span>Moitié 2 · {item.duo.rightRecipe.recipeName} (base {item.duo.rightRecipe.base === "creme" ? "crème" : "tomate"})</span>
+                  {item.duo.rightRecipe.ingredients?.length ? <span>· {item.duo.rightRecipe.ingredients.join(", ")}</span> : null}
+                </div>
+              )}
+              {((item.removedIngredientSnapshots?.length ?? 0) > 0 || (item.addedSupplementSnapshots?.length ?? 0) > 0) && (
+                <div className="mt-1 flex flex-col gap-0.5 text-[12px] leading-snug text-[#A0A0A0]">
+                  {item.removedIngredientSnapshots?.map((ingredient) => <span key={`remove-${ingredient.ingredientId}`}>Sans {ingredient.ingredientName}</span>)}
+                  {item.addedSupplementSnapshots?.map((ingredient) => <span key={`add-${ingredient.ingredientId}`}>+ {ingredient.ingredientName}{typeof ingredient.priceDeltaCents === "number" && ingredient.priceDeltaCents > 0 ? ` · +${formatPrice(ingredient.priceDeltaCents)} €` : ""}</span>)}
+                </div>
+              )}
               {issuesByCartKey.get(item.cartKey) && (
                 <p className="mt-1 text-[12px] leading-relaxed text-[#F59B90]">
                   {issuesByCartKey.get(item.cartKey)?.message}
@@ -1207,7 +1297,7 @@ function Step2Summary({
 
 export default function CheckoutClient() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { items, isEmpty, getSubtotalCents, getTaxCents, getTotalCents } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
   const catalogAvailability = useCatalogAvailability();
@@ -1229,6 +1319,9 @@ export default function CheckoutClient() {
   // Payment state
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentAmountCents, setPaymentAmountCents] = useState(0);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [paymentItemGroups, setPaymentItemGroups] = useState<CustomerOrderItemLabelGroup[]>([]);
+  const checkoutTitleRef = useRef<HTMLHeadingElement>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1243,9 +1336,35 @@ export default function CheckoutClient() {
   // A stored order is resumed only by the explicit action below. It must not
   // suppress availability checks for the basket currently being edited.
   const pendingOrderId = orderId ?? getStoredCheckoutAttemptOrderId();
+  useEffect(() => {
+    // This runs only at the protected checkout boundary: browsing/signing in
+    // normally can never import a guest basket into an account.
+    if (!authLoading && !user && items.length > 0) saveGuestCheckoutIntent(items);
+  }, [authLoading, items, user]);
   const cartAvailabilityIssues = [...new Map([...validatedCartAvailabilityIssues, ...stockIssues].map((issue) => [issue.cartKey, issue])).values()];
   const submittingRef = useRef(false);
   const checkoutEntryTrackedRef = useRef(false);
+
+  useEffect(() => {
+    checkoutTitleRef.current?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }, [step]);
+
+  const loadPaymentSnapshot = useCallback(async (id: string) => {
+    if (!user) throw new Error("Commande sans client authentifié.");
+    const snapshot = await getDoc(doc(getClientFirestore(), "orders", id));
+    if (!snapshot.exists()) throw new Error("Commande introuvable.");
+    const data = snapshot.data();
+    if (data.appId !== WL_APP_ID || data.clientUserId !== user.uid) throw new Error("Commande inaccessible.");
+    const groups = customerOrderItemLabelGroups(data);
+    // Old snapshots have no immutable line TTC. Keep their existing readable
+    // labels rather than manufacturing a price from a mutable catalogue.
+    setPaymentItemGroups(groups.length ? groups : customerOrderItemLabels(data).map((label) => ({
+      label,
+      details: [],
+      isRewardItem: false,
+    })));
+  }, [user]);
 
   useEffect(() => {
     if (!marketingConsent?.analytics || !marketingEnabled || checkoutEntryTrackedRef.current) return;
@@ -1460,7 +1579,6 @@ export default function CheckoutClient() {
           : "card";
       const customerName = profile?.displayName?.trim() || user.displayName || "";
       const customerPhone = profile?.phone?.trim() || "";
-      const orderItems = items.map(toCreateOrderItem);
       const fingerprint = buildCheckoutAttemptFingerprint({
         appId: WL_APP_ID,
         userId: user.uid,
@@ -1480,6 +1598,8 @@ export default function CheckoutClient() {
         setError(firstIssue?.message ?? "Un produit de votre panier n'est plus disponible.");
         return;
       }
+      const orderItems = (await normalizeHistoricOptionContracts(items))
+        .map(toCreateOrderItem);
 
       const orderResult = await createOrder({
         appId: WL_APP_ID,
@@ -1522,13 +1642,15 @@ export default function CheckoutClient() {
         return;
       }
 
-      const intentResult = await createPaymentIntent({
+      const intentResult = await (isDemoPaymentEnabled() ? createDemoPaymentIntent : createPaymentIntent)({
         appId: WL_APP_ID,
         orderId: orderResult.orderId,
       });
 
       setClientSecret(intentResult.clientSecret);
       setPaymentAmountCents(intentResult.amountCents);
+      setPaymentIntentId(intentResult.paymentIntentId);
+      await loadPaymentSnapshot(orderResult.orderId);
       setStep(3);
     } catch (err: unknown) {
       console.error("[checkout] Unable to create order or payment intent:", err);
@@ -1600,9 +1722,11 @@ export default function CheckoutClient() {
     rewardPreview,
     onlineOrdering.message,
     onlineOrderingBlocked,
+    cartAvailabilityLoading,
     termsAccepted,
     profile,
     profileLoading,
+    loadPaymentSnapshot,
   ]);
 
   const handleResumePendingPayment = useCallback(async () => {
@@ -1616,13 +1740,15 @@ export default function CheckoutClient() {
       // This intentionally does not validate the current cart, stock or slot:
       // it resumes an already-created order. The callable verifies ownership
       // and that the order is still payable before it returns a client secret.
-      const intentResult = await createPaymentIntent({
+      const intentResult = await (isDemoPaymentEnabled() ? createDemoPaymentIntent : createPaymentIntent)({
         appId: WL_APP_ID,
         orderId: resumableOrderId,
       });
       setOrderId(resumableOrderId);
       setClientSecret(intentResult.clientSecret);
       setPaymentAmountCents(intentResult.amountCents);
+      setPaymentIntentId(intentResult.paymentIntentId);
+      await loadPaymentSnapshot(resumableOrderId);
       setStep(3);
     } catch (err: unknown) {
       console.error("[checkout] Unable to resume payment intent:", err);
@@ -1631,13 +1757,19 @@ export default function CheckoutClient() {
       setLoading(false);
       submittingRef.current = false;
     }
-  }, [orderId]);
+  }, [orderId, loadPaymentSnapshot]);
 
   const handlePaymentSuccess = useCallback(() => {
     router.push(
       `/order-confirmation${orderId ? `?orderId=${orderId}` : ""}`,
     );
   }, [router, orderId]);
+
+  const handleDemoPayment = useCallback(async () => {
+    if (!isDemoPaymentEnabled() || !orderId || !paymentIntentId) throw new Error("La simulation locale n’est pas disponible.");
+    await completeDemoPayment({ appId: "d_lizza", orderId, paymentIntentId });
+    handlePaymentSuccess();
+  }, [handlePaymentSuccess, orderId, paymentIntentId]);
 
   const handlePaymentError = useCallback((error: unknown) => {
     console.error("[stripe] Payment failed:", error);
@@ -1647,7 +1779,7 @@ export default function CheckoutClient() {
   }, []);
 
   return (
-    <AuthGuard>
+    <AuthGuard redirectTo="/checkout">
       <div className="min-h-screen bg-[#0D0D0D] px-4 py-8">
         <div className="mx-auto max-w-lg">
           {/* Header */}
@@ -1666,7 +1798,7 @@ export default function CheckoutClient() {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
-            <h1 className="text-[22px] font-bold text-[#F5F5F5]">Commander</h1>
+            <h1 ref={checkoutTitleRef} tabIndex={-1} className="text-[22px] font-bold text-[#F5F5F5]">Commander</h1>
           </div>
 
           <StepIndicator current={step} />
@@ -1683,6 +1815,7 @@ export default function CheckoutClient() {
               onlineOrderingMessage={onlineOrdering.message}
               cartAvailabilityLoading={cartAvailabilityLoading}
               cartAvailabilityIssues={cartAvailabilityIssues}
+              checkoutError={error}
             />
           )}
 
@@ -1713,7 +1846,7 @@ export default function CheckoutClient() {
             />
           )}
 
-          {step === 3 && clientSecret && (
+          {step === 3 && (clientSecret || (isDemoPaymentEnabled() && paymentIntentId)) && (
             <div className="flex flex-col gap-5">
               <OnlineOrderingNotice message={onlineOrdering.message} />
 
@@ -1724,26 +1857,51 @@ export default function CheckoutClient() {
                 </span>
               </div>
 
+              <section className="rounded-[18px] bg-[#1A1A1A] p-5" aria-label="Produits confirmés pour le paiement">
+                <h2 className="text-[15px] font-semibold text-[#F5F5F5]">Votre commande</h2>
+                <p className="mt-1 text-[12px] text-[#A0A0A0]">Détails enregistrés avec cette commande.</p>
+                <div className="mt-3 flex flex-col gap-3 text-[13px] leading-relaxed text-[#CFCFCF]">
+                  {paymentItemGroups.map((item, index) => (
+                    <div key={`${index}-${item.label}`} className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-3 text-[#F5F5F5]">
+                        <p className="font-medium">{item.label}</p>
+                        {item.totalTtcCents !== undefined && (
+                          <p className="shrink-0 font-semibold text-[#D4A053]">
+                            {formatPrice(item.totalTtcCents)}&nbsp;€
+                            {item.isRewardItem && <span className="ml-1 text-[11px] font-normal text-[#A0A0A0]">avant remise fidélité</span>}
+                          </p>
+                        )}
+                      </div>
+                      {item.details.length > 0 && (
+                        <div className="mt-1.5 flex flex-col gap-0.5 text-[12px] text-[#A0A0A0]">
+                          {item.details.map((detail, detailIndex) => <p key={`${detailIndex}-${detail}`}>{detail}</p>)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               {error && (
                 <div className="rounded-[14px] bg-[#E74C3C]/10 border border-[#E74C3C]/30 px-4 py-3 text-[13px] text-[#E74C3C]">
                   {error}
                 </div>
               )}
 
-              <StripeCheckout
-                clientSecret={clientSecret}
-                amountCents={paymentAmountCents}
-                orderId={orderId ?? ""}
-                onSuccess={handlePaymentSuccess}
-                onError={handlePaymentError}
-                disabled={onlineOrderingBlocked}
-                disabledMessage={onlineOrdering.message}
-                disabledCode={
-                  onlineOrdering.isEmergency
-                    ? "ONLINE_ORDERING_EMERGENCY"
-                    : "ONLINE_ORDERING_CLOSED"
-                }
-              />
+              {isDemoPaymentEnabled() ? (
+                <DemoPaymentCheckout amountCents={paymentAmountCents} onComplete={handleDemoPayment} disabled={onlineOrderingBlocked} />
+              ) : clientSecret ? (
+                <StripeCheckout
+                  clientSecret={clientSecret}
+                  amountCents={paymentAmountCents}
+                  orderId={orderId ?? ""}
+                  onSuccess={handlePaymentSuccess}
+                  onError={handlePaymentError}
+                  disabled={onlineOrderingBlocked}
+                  disabledMessage={onlineOrdering.message}
+                  disabledCode={onlineOrdering.isEmergency ? "ONLINE_ORDERING_EMERGENCY" : "ONLINE_ORDERING_CLOSED"}
+                />
+              ) : null}
             </div>
           )}
         </div>

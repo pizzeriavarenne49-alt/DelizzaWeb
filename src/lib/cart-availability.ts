@@ -44,6 +44,9 @@ type LiveProduct = {
   baseIngredientIds: string[];
   availableSupplementIds: string[];
   allowIngredientRemoval: boolean;
+  kind: string;
+  recipeBase: string;
+  pizzaUnits: number | null;
 };
 
 type LiveFormula = { appId: string; name: string; isActive: boolean; visible: boolean | null; published: boolean | null; archived: boolean | null; deleted: boolean | null; isArchived: boolean | null; isDeleted: boolean | null };
@@ -202,6 +205,9 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
     baseIngredientIds: stringArray(data.baseIngredientIds),
     availableSupplementIds: stringArray(data.availableSupplementIds),
     allowIngredientRemoval: typeof data.allowIngredientRemoval === "boolean" ? data.allowIngredientRemoval : false,
+    kind: stringOrEmpty(data.kind),
+    recipeBase: stringOrEmpty(data.recipeBase),
+    pizzaUnits: numberOrNull(data.pizzaUnits),
   };
 }
 
@@ -399,7 +405,11 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
   const productCache = new Map<string, LiveProduct | null>();
   const formulaCache = new Map<string, LiveFormula | null>();
   await Promise.all(
-    [...new Set([...items.filter((item) => !item.formulaId).map((item) => item.catalogItemId), ...stockDemand.keys()])].map(async (catalogItemId) => {
+    [...new Set([
+      ...items.filter((item) => !item.formulaId).map((item) => item.catalogItemId),
+      ...items.flatMap((item) => item.duo ? [item.duo.leftRecipeId, item.duo.rightRecipeId] : []),
+      ...stockDemand.keys(),
+    ])].map(async (catalogItemId) => {
       productCache.set(catalogItemId, await loadLiveProduct(catalogItemId));
     }),
   );
@@ -452,6 +462,34 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
           issues.push(buildProductIssue(item, componentName, "product_out_of_stock", `${componentName} est en rupture.`, "en rupture"));
           break;
         }
+      }
+      continue;
+    }
+    if (item.duo) {
+      const duoProduct = productCache.get(item.catalogItemId);
+      const duoName = displayName(item, duoProduct?.name);
+      if (!duoProduct || duoProduct.kind !== "pizza_duo" || duoProduct.priceCents !== 1490 || duoProduct.pizzaUnits !== 1 ||
+          isCommerciallyUnavailable(duoProduct) || duoProduct.manualOutOfStock === true) {
+        issues.push(buildProductIssue(item, duoName, "product_unavailable", `${duoName} doit être recomposée avant la commande.`, "à recomposer"));
+        continue;
+      }
+      const recipeIds = [item.duo.leftRecipeId, item.duo.rightRecipeId];
+      if (recipeIds.some((id) => typeof id !== "string" || !id)) {
+        issues.push(buildProductIssue(item, duoName, "product_unavailable", `${duoName} doit contenir deux recettes.`, "à recomposer"));
+        continue;
+      }
+      let invalidRecipe: LiveProduct | null = null;
+      for (const recipeId of recipeIds) {
+        const recipe = productCache.get(recipeId) ?? null;
+        if (!recipe || recipe.categoryId !== "pizzas" || recipe.kind === "pizza_duo" || recipe.pizzaUnits !== 1 ||
+            !["tomate", "creme", "crème"].includes(recipe.recipeBase) || isCommerciallyUnavailable(recipe) || recipe.manualOutOfStock === true ||
+            (recipe.stockManaged === true && (recipe.stockQty === null || recipe.stockQty <= 0 || (stockDemand.get(recipeId) ?? 0) > recipe.stockQty))) {
+          invalidRecipe = recipe;
+          break;
+        }
+      }
+      if (invalidRecipe !== null || recipeIds.some((id) => !productCache.get(id))) {
+        issues.push(buildProductIssue(item, duoName, "product_unavailable", "Une recette de cette Pizza Duo n'est plus disponible.", "recette indisponible"));
       }
       continue;
     }

@@ -6,17 +6,18 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface AuthGuardProps {
   children: ReactNode;
+  redirectTo?: "/checkout";
 }
 
-export default function AuthGuard({ children }: AuthGuardProps) {
+export default function AuthGuard({ children, redirectTo }: AuthGuardProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/auth");
+      router.replace(redirectTo ? `/auth?next=${encodeURIComponent(redirectTo)}` : "/auth");
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, redirectTo]);
 
   if (loading) {
     return (

@@ -10,6 +10,8 @@ import type { CartItemCustomizations, SelectedOption } from "@/types/cart";
 import { formatPrice } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
+import PizzaDuoCustomizeModal from "@/components/ui/PizzaDuoCustomizeModal";
+import { isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isValidPizzaDuoProduct } from "@/lib/pizza-duo";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import { useToast } from "@/contexts/ToastContext";
 const ProductCustomizeModal = dynamic(() => import("@/components/ui/ProductCustomizeModal"), { ssr: false });
@@ -19,6 +21,7 @@ import { useLiveProduct } from "@/contexts/CatalogAvailabilityContext";
 
 interface ProductCardProps {
   product: Product;
+  pizzaDuoRecipes?: Product[];
 }
 
 function hasProductCustomizations(product: Product): boolean {
@@ -30,30 +33,34 @@ function hasProductCustomizations(product: Product): boolean {
   );
 }
 
-export default function ProductCard({ product: initialProduct }: ProductCardProps) {
+export default function ProductCard({ product: initialProduct, pizzaDuoRecipes = [] }: ProductCardProps) {
   const product = useLiveProduct(initialProduct);
-  const { addItem, addItemWithOptions, canAddProductQuantity } = useCart();
+  const { addItem, addItemWithOptions, addPizzaDuo, canAddProductQuantity } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
   const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const isUnavailable = isProductUnavailable(product);
   const orderingDisabled = !onlineOrdering.canStartOrder;
   const stockLimitReached = !canAddProductQuantity(product.id, 1, product);
-  const cannotOrder = isUnavailable || orderingDisabled || stockLimitReached;
   const hasCustomizations = hasProductCustomizations(product);
+  const isDuo = isPizzaDuoProduct(product);
+  const hasValidDuoConfiguration = !isDuo || isValidPizzaDuoProduct(product);
+  const duoIllustrations = isDuo ? pizzaDuoRecipes.filter((recipe) => !isProductUnavailable(recipe)).slice(0, 2) : [];
+  const cannotOrder = isUnavailable || orderingDisabled || stockLimitReached || !hasValidDuoConfiguration;
+  if (isDuo && !isPizzaDuoDevelopmentEnabled()) return null;
 
   const handleAdd = () => {
     if (orderingDisabled) {
       showToast(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
       return;
     }
-    if (isUnavailable || !canAddProductQuantity(product.id, 1, product)) {
+    if (!hasValidDuoConfiguration || isUnavailable || !canAddProductQuantity(product.id, 1, product)) {
       showToast(`${product.name} est indisponible`);
       return;
     }
 
     track({ name: "click_add_product", payload: { productId: product.id } });
-    if (hasCustomizations) {
+    if (hasCustomizations || isDuo) {
       setModalOpen(true);
     } else {
       addItem(product);
@@ -71,6 +78,12 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
   const handleAddClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     handleAdd();
+  };
+
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    openDetails();
   };
 
   const handleModalConfirm = (
@@ -96,22 +109,23 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
 
   return (
     <>
-      <motion.article
+      <motion.div
         data-seasonal-product=""
         whileTap={{ scale: 0.97 }}
-        className="relative rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col transition-colors hover:bg-[#202020]"
+        role="button"
+        tabIndex={0}
+        onClick={openDetails}
+        onKeyDown={handleCardKeyDown}
+        aria-label={`Voir le détail de ${product.name}`}
+        className={cn("rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col cursor-pointer transition-colors hover:bg-[#202020] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]", isDuo && "col-span-full sm:flex-row")}
       >
         {/* Image */}
-        <div data-seasonal-product-image="" className="relative aspect-[4/3] bg-[#252525]">
-          <Image
-            src={product.image}
-            alt={product.name}
-            fill
-            sizes="(max-width: 768px) calc((100vw - 44px) / 2), 200px"
-            quality={60}
-            className="object-cover"
-            loading="lazy"
-          />
+        <div data-seasonal-product-image="" className={cn("relative aspect-[4/3] bg-[#252525]", isDuo && "sm:w-[46%] sm:shrink-0")}>
+          {isDuo && duoIllustrations.length === 2 ? (
+            <div className="grid h-full grid-cols-2 gap-px bg-[#0D0D0D]" aria-label="Illustration des deux moitiés disponibles">
+              {duoIllustrations.map((recipe, index) => <div key={recipe.id} className="relative overflow-hidden"><Image src={recipe.image} alt={`Moitié ${index + 1} : ${recipe.name}`} fill sizes="(max-width: 768px) 50vw, 260px" className="object-cover" loading="lazy" /></div>)}
+            </div>
+          ) : <Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover" loading="lazy" />}
           {product.badge && (
             <span className="absolute top-2 left-2 rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] px-2.5 py-0.5 text-[11px] font-semibold text-[#0D0D0D]">
               {product.badge}
@@ -157,10 +171,11 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
                       ? "Commandes en ligne indisponibles"
                       : stockLimitReached
                         ? `${product.name} : quantité maximale disponible atteinte`
-                      : `Ajouter ${product.name} au panier`
+                      : isDuo ? `Composer ${product.name}` : `Ajouter ${product.name} au panier`
                 }
                 className={cn(
-                  "relative z-20 flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+                  "flex h-8 items-center justify-center rounded-full",
+                  isDuo ? "min-w-[88px] px-2" : "w-8",
                   cannotOrder
                     ? "bg-[#3A3A3A] text-[#8A8A8A] cursor-not-allowed"
                     : "bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D]",
@@ -170,18 +185,31 @@ export default function ProductCard({ product: initialProduct }: ProductCardProp
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]",
                 )}
               >
-                {cannotOrder ? "x" : "+"}
+                {cannotOrder ? "x" : isDuo ? <span className="px-2 text-[12px]">Composer</span> : "+"}
               </button>
             </div>
           </div>
         </div>
-      </motion.article>
+      </motion.div>
 
-      {modalOpen && (
+      {modalOpen && !isDuo && (
         <ProductCustomizeModal
           product={product}
           onClose={() => setModalOpen(false)}
           onConfirm={handleModalConfirm}
+        />
+      )}
+      {modalOpen && isDuo && (
+        <PizzaDuoCustomizeModal
+          product={product}
+          recipes={pizzaDuoRecipes}
+          onClose={() => setModalOpen(false)}
+          onConfirm={(duo, quantity) => {
+            if (!hasValidDuoConfiguration || orderingDisabled || isUnavailable || !canAddProductQuantity(product.id, quantity, product)) return;
+            addPizzaDuo(product, duo, quantity);
+            showToast(`${product.name} ajouté au panier ✓`);
+            setModalOpen(false);
+          }}
         />
       )}
     </>

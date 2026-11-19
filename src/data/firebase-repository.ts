@@ -420,12 +420,16 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
     is_popular: bool(data.isPopular, false),
     tags: arr(data.tags),
     options: parseOptions(data.options),
+    legacyOptionIds: parseOptions(data.options).map((option) => option.id),
     baseIngredientIds: arr(data.baseIngredientIds),
     availableSupplementIds: arr(data.availableSupplementIds),
     allowIngredientRemoval: bool(data.allowIngredientRemoval, false),
     appliedTemplateIds: parseTemplateIds(data.appliedTemplateIds),
     templatePriceOverrides: parseTemplatePriceOverrides(data.templatePriceOverrides),
     ingredientLibrary: [],
+    kind: data.kind === "pizza_duo" ? "pizza_duo" : undefined,
+    recipeBase: data.recipeBase === "tomate" ? "tomate" : data.recipeBase === "creme" || data.recipeBase === "crème" ? "creme" : undefined,
+    pizzaUnits: data.pizzaUnits === 0 || data.pizzaUnits === 1 ? data.pizzaUnits : undefined,
   };
 }
 

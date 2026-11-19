@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { getClientFirestore } from "@/config/firebase-client";
 import { DELIZZA_CUSTOMER_APP_ID } from "@/services/customer-session";
+import { customerOrderItemLabels } from "@/lib/customer-order-item-labels";
 
 const LEGACY_ORDER_REFERENCE_LABEL = "Commande ancienne";
 
@@ -33,6 +34,7 @@ export interface CustomerOrderSummary {
   productionAuthorized: boolean;
   paidTotalCents: number;
   fulfillmentData: Record<string, unknown> | null;
+  itemLabels: string[];
 }
 
 function dateLabel(value: unknown): string {
@@ -106,6 +108,7 @@ export async function listRecentCustomerOrders(uid: string): Promise<CustomerOrd
         typeof data.fulfillmentData === "object" && data.fulfillmentData !== null
           ? (data.fulfillmentData as Record<string, unknown>)
           : null,
+      itemLabels: customerOrderItemLabels(data),
     };
   });
 }

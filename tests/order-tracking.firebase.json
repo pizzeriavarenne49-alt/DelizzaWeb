@@ -1,0 +1,19 @@
+{
+  "firestore": {
+    "rules": "order-tracking.firestore.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 9808
+    },
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9909
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
+  }
+}

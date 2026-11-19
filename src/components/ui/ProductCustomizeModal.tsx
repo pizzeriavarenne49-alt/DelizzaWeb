@@ -19,6 +19,11 @@ interface ProductCustomizeModalProps {
     quantity: number,
     selectedOptions: SelectedOption[],
   ) => void;
+  initialCustomizations?: CartItemCustomizations;
+  initialSelectedOptions?: SelectedOption[];
+  initialQuantity?: number;
+  initialCartKey?: string;
+  confirmLabel?: string;
 }
 
 function computeOptionsDeltaCents(
@@ -114,14 +119,29 @@ export default function ProductCustomizeModal({
   product,
   onClose,
   onConfirm,
+  initialCustomizations,
+  initialSelectedOptions = [],
+  initialQuantity = 1,
+  initialCartKey,
+  confirmLabel = "Ajouter",
 }: ProductCustomizeModalProps) {
   const onlineOrdering = useOnlineOrderingStatus();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const { canAddProductQuantity } = useCart();
-  const [selections, setSelections] = useState<Record<string, string[]>>({});
-  const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
-  const [addedSupplements, setAddedSupplements] = useState<string[]>([]);
-  const [quantity, setQuantity] = useState(1);
+  const { canAddProductQuantity, canReplaceProductQuantity } = useCart();
+  const legacyOptionIds = useMemo(
+    () => new Set(product.legacyOptionIds ?? []),
+    [product.legacyOptionIds],
+  );
+  const [selections, setSelections] = useState<Record<string, string[]>>(
+    () => ({
+      ...(initialCustomizations?.selectedTemplateOptions ?? {}),
+      ...(initialCustomizations?.selectedLegacyOptions ?? {}),
+      ...Object.fromEntries(initialSelectedOptions.map((option) => [option.optionId, option.choiceIds])),
+    }),
+  );
+  const [removedIngredients, setRemovedIngredients] = useState<string[]>(() => initialCustomizations?.removedIngredients ?? []);
+  const [addedSupplements, setAddedSupplements] = useState<string[]>(() => initialCustomizations?.addedSupplements ?? []);
+  const [quantity, setQuantity] = useState(initialQuantity);
 
   const sortedOptions = useMemo(
     () => [...product.options].sort((a, b) => a.order - b.order),
@@ -160,11 +180,16 @@ export default function ProductCustomizeModal({
   );
   const deltasCents =
     computeOptionsDeltaCents(product, sortedOptions, selections) +
+    initialSelectedOptions
+      .filter((option) => !sortedOptions.some((current) => current.id === option.optionId))
+      .reduce((sum, option) => sum + option.priceDeltaCents, 0) +
     supplementDeltasCents;
   const unitPriceCents = product.price_cents + deltasCents;
   const totalTtcCents = unitPriceCents * quantity;
   const canAdd = areRequiredOptionsFilled(sortedOptions, selections) &&
-    !isProductUnavailable(product) && canAddProductQuantity(product.id, quantity, product);
+    !isProductUnavailable(product) && (initialCartKey
+      ? canReplaceProductQuantity(initialCartKey, product.id, quantity, product)
+      : canAddProductQuantity(product.id, quantity, product));
   const orderingBlocked = !onlineOrdering.canStartOrder;
   const hasOptions = sortedOptions.length > 0;
   const hasIngredients = product.ingredients.length > 0;
@@ -173,27 +198,38 @@ export default function ProductCustomizeModal({
   const hasCustomizations = hasOptions || hasRemovableIngredients || hasSupplements;
   const hasTags = product.tags.length > 0;
 
-  const toggleRemovedIngredient = useCallback((ingredientId: string) => {
+  function toggleRemovedIngredient(ingredientId: string) {
     setRemovedIngredients((prev) =>
       prev.includes(ingredientId)
         ? prev.filter((id) => id !== ingredientId)
         : [...prev, ingredientId],
     );
-  }, []);
+  }
 
-  const toggleSupplement = useCallback((ingredientId: string) => {
+  function toggleSupplement(ingredientId: string) {
     setAddedSupplements((prev) =>
       prev.includes(ingredientId)
         ? prev.filter((id) => id !== ingredientId)
         : [...prev, ingredientId],
     );
-  }, []);
+  }
 
   const handleConfirm = () => {
     if (!canAdd || orderingBlocked) return;
-    const selectedOptions = buildSelectedOptions(product, sortedOptions, selections);
+    const selectedOptions = [
+      ...initialSelectedOptions.filter((option) => !sortedOptions.some((current) => current.id === option.optionId)),
+      ...buildSelectedOptions(product, sortedOptions, selections),
+    ];
+    const allSelectedOptions = buildSelectedTemplateOptions(sortedOptions, selections);
+    const selectedTemplateOptions = Object.fromEntries(
+      Object.entries(allSelectedOptions).filter(([optionId]) => !legacyOptionIds.has(optionId)),
+    );
+    const selectedLegacyOptions = Object.fromEntries(
+      Object.entries(allSelectedOptions).filter(([optionId]) => legacyOptionIds.has(optionId)),
+    );
     const customizations: CartItemCustomizations = {
-      selectedTemplateOptions: buildSelectedTemplateOptions(sortedOptions, selections),
+      selectedTemplateOptions,
+      selectedLegacyOptions,
       addedSupplements,
       removedIngredients,
       addedSupplementSnapshots: selectedSupplementIngredients.map((ingredient) => ({
@@ -495,6 +531,7 @@ export default function ProductCustomizeModal({
                         disabled={orderingBlocked}
                         onClick={() => toggleSupplement(ingredient.id)}
                         aria-pressed={isAdded}
+                        aria-label={`${isAdded ? "Retirer" : "Ajouter"} le supplément ${ingredient.name}`}
                         className={`flex items-center justify-between rounded-[14px] border px-4 py-3 transition-colors ${
                           isAdded
                             ? "border-[#D4A053]/50 bg-[#D4A053]/15"
@@ -524,7 +561,7 @@ export default function ProductCustomizeModal({
                   disabled={orderingBlocked}
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   aria-label="Diminuer la quantité"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[#252525] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors text-[18px] font-bold leading-none"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[#252525] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors text-[18px] font-bold leading-none"
                 >
                   −
                 </button>
@@ -536,7 +573,7 @@ export default function ProductCustomizeModal({
                   disabled={orderingBlocked || !canAddProductQuantity(product.id, quantity + 1, product)}
                   onClick={() => setQuantity((q) => q + 1)}
                   aria-label="Augmenter la quantité"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D] text-[18px] font-bold leading-none"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D] text-[18px] font-bold leading-none"
                 >
                   +
                 </button>
@@ -560,7 +597,7 @@ export default function ProductCustomizeModal({
               {orderingBlocked
                 ? "Commande indisponible"
                 : canAdd
-                ? `Ajouter — ${formatPrice(totalTtcCents)} €`
+                ? `${confirmLabel} — ${formatPrice(totalTtcCents)} €`
                 : "Veuillez compléter les options obligatoires"}
             </button>
           </div>

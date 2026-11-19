@@ -11,6 +11,9 @@ const sitemap = loadTsModule(path.resolve("src/app/sitemap.ts"));
 const checkoutAttempt = loadTsModule(path.resolve("src/services/checkout-attempt.ts"));
 const clientErrorMessage = loadTsModule(path.resolve("src/lib/client-error-message.ts"));
 const productAvailability = loadTsModule(path.resolve("src/lib/product-availability.ts"));
+const pizzaDuo = loadTsModule(path.resolve("src/lib/pizza-duo.ts"));
+const guestCheckoutIntent = loadTsModule(path.resolve("src/lib/guest-checkout-intent.ts"));
+const { buildCartKey } = loadTsModule(path.resolve("src/lib/cart-line-key.ts"));
 
 function run(name, fn) {
   try {
@@ -383,6 +386,75 @@ run("capacity V2 preview reflects cart size changes and empty availability", () 
   assert.deepEqual(empty, []);
 });
 
+run("Pizza Duo preview transports exactly two recipe identifiers", () => {
+  const items = productionCapacityPreview.buildPreviewCartItems([{
+    catalogItemId: "pizza-duo",
+    quantity: 2,
+    cartKey: "pizza-duo__duo:a|b",
+    nameSnapshot: "Pizza Duo",
+    unitPriceCents: 1490,
+    totalCents: 2980,
+    taxRateBps: 1000,
+    duo: {
+      kind: "pizza_duo",
+      leftRecipeId: "pizza-a",
+      rightRecipeId: "pizza-b",
+      leftRecipe: { recipeId: "pizza-a", recipeName: "A" },
+      rightRecipe: { recipeId: "pizza-b", recipeName: "B" },
+    },
+  }]);
+  assert.deepEqual(items, [{
+    catalogItemId: "pizza-duo",
+    quantity: 2,
+    duo: { leftRecipeId: "pizza-a", rightRecipeId: "pizza-b" },
+  }]);
+});
+
+run("Pizza Duo cart identity keeps the two kitchen sides ordered", () => {
+  const duo = {
+    kind: "pizza_duo",
+    leftRecipeId: "pizza-a",
+    rightRecipeId: "pizza-b",
+    leftRecipe: { recipeId: "pizza-a", recipeName: "A" },
+    rightRecipe: { recipeId: "pizza-b", recipeName: "B" },
+  };
+  assert.equal(pizzaDuo.pizzaDuoCartKey("pizza-duo", duo), 'pizza-duo__duo:["pizza-a","pizza-b"]');
+  assert.notEqual(pizzaDuo.pizzaDuoCartKey("pizza-duo", duo), pizzaDuo.pizzaDuoCartKey("pizza-duo", { ...duo, leftRecipeId: "pizza-b", rightRecipeId: "pizza-a" }));
+  assert.notEqual(
+    pizzaDuo.pizzaDuoCartKey("pizza-duo", { ...duo, leftRecipeId: "pizza-a|pizza-b", rightRecipeId: "pizza-c" }),
+    pizzaDuo.pizzaDuoCartKey("pizza-duo", { ...duo, leftRecipeId: "pizza-a", rightRecipeId: "pizza-b|pizza-c" }),
+  );
+});
+
+run("Pizza Duo only proposes complete, available recipes", () => {
+  const recipe = {
+    id: "pizza-a", category: "pizzas", kind: undefined, pizzaUnits: 1,
+    recipeBase: "tomate", active: true, manualOutOfStock: false,
+    price_cents: 1200, ingredients: ["Tomate"], baseIngredientIds: [], stockManaged: false,
+  };
+  assert.equal(pizzaDuo.isPizzaDuoRecipe(recipe), true);
+  assert.equal(pizzaDuo.isPizzaDuoRecipe({ ...recipe, ingredients: [], baseIngredientIds: [] }), false);
+  assert.equal(pizzaDuo.isPizzaDuoRecipe({ ...recipe, stockManaged: true, stockQty: 0 }), false);
+  assert.equal(pizzaDuo.isPizzaDuoRecipe({ ...recipe, price_cents: 0 }), false);
+  const mixed = { ...recipe, baseIngredientIds: ["m"], ingredientLibrary: [{ id: "m", name: "Mozzarella" }], ingredients: ["mozzarella", "Basilic"] };
+  assert.deepEqual(pizzaDuo.getPizzaDuoIngredientNames(mixed), ["Mozzarella", "Basilic"]);
+  assert.equal(pizzaDuo.isPizzaDuoRecipe({ ...mixed, ingredientLibrary: [] }), false);
+  assert.equal(pizzaDuo.isPizzaDuoRecipeCandidate({ ...mixed, stockManaged: true, stockQty: 0 }), true);
+});
+
+run("Pizza Duo card presents two recipe illustrations and a composer action", () => {
+  const cardSource = readFileSync(path.resolve("src/components/ui/ProductCard.tsx"), "utf8");
+  assert.equal(cardSource.includes("duoIllustrations.length === 2"), true);
+  assert.equal(cardSource.includes("Composer ${product.name}"), true);
+});
+
+run("explicit guest checkout hand-off merges only identical cart compositions", () => {
+  const base = { catalogItemId: "marg", cartKey: "marg__plain", quantity: 1, unitPriceCents: 1100, totalCents: 1100, taxRateBps: 1000, nameSnapshot: "Margherita" };
+  const alternate = { ...base, cartKey: "marg__cuisson", quantity: 1, unitPriceCents: 1150, totalCents: 1150 };
+  const merged = guestCheckoutIntent.mergeCartItems([base], [{ ...base, quantity: 2, totalCents: 2200 }, alternate]);
+  assert.deepEqual(merged, [{ ...base, quantity: 3, totalCents: 3300 }, alternate]);
+});
+
 run("capacity V2 selection identity includes pickup time, opening and slot id", () => {
   const left = {
     pickupAt: "2026-07-28T10:30:00.000Z",
@@ -408,6 +480,45 @@ run("checkout uses capacity V2 preview", () => {
   assert.equal(checkoutSource.includes("previewRequestIdRef"), true);
   assert.equal(checkoutSource.includes("PICKUP_SLOT_UNAVAILABLE_MESSAGE"), true);
   assert.equal(checkoutSource.includes("isAsap: true"), false);
+  assert.match(checkoutSource, /selectedDateRef\.current = dateKey;\s+slotsRef\.current = \[\];\s+setSlots\(\[\]\);\s+setSlotsLoading\(true\);/);
+  assert.equal(checkoutSource.includes("checkoutError={error}"), true);
+});
+
+run("checkout keeps inline and template option contracts distinct", () => {
+  const checkoutSource = readFileSync(path.resolve("src/app/(site)/checkout/CheckoutClient.tsx"), "utf8");
+  const orderServiceSource = readFileSync(path.resolve("src/services/order-service.ts"), "utf8");
+  const cartSource = readFileSync(path.resolve("src/contexts/CartContext.tsx"), "utf8");
+  const modalSource = readFileSync(path.resolve("src/components/ui/ProductCustomizeModal.tsx"), "utf8");
+
+  assert.equal(checkoutSource.includes("selectedLegacyOptions"), true);
+  assert.equal(orderServiceSource.includes("selectedLegacyOptions?: Record<string, string[]>"), true);
+  assert.notEqual(buildCartKey("p", { selectedTemplateOptions: { sauce: ["a"] } }),
+    buildCartKey("p", { selectedLegacyOptions: { sauce: ["a"] } }));
+  assert.notEqual(buildCartKey("p", { addedSupplements: ["a,b"] }), buildCartKey("p", { addedSupplements: ["a", "b"] }));
+  assert.equal(buildCartKey("p", { addedSupplements: ["b", "a"] }), buildCartKey("p", { addedSupplements: ["a", "b"] }));
+  assert.equal(modalSource.includes("legacyOptionIds"), true);
+  assert.equal(checkoutSource.includes("normalizeHistoricOptionContracts"), true);
+  assert.equal(checkoutSource.includes("editable-product/${encodeURIComponent(item.catalogItemId)}"), true);
+  assert.equal(checkoutSource.includes("item.selectedOptions && item.selectedOptions.length > 0"), true);
+  assert.equal(checkoutSource.includes("{option.optionName}: {option.choiceNames.join"), true);
+  assert.equal(checkoutSource.includes("item.removedIngredientSnapshots?.map"), true);
+  assert.equal(checkoutSource.includes("item.addedSupplementSnapshots?.map"), true);
+  assert.equal(checkoutSource.includes("completeDemoPayment({ appId: \"d_lizza\", orderId, paymentIntentId })"), true);
+  assert.equal(checkoutSource.includes("createDemoPaymentIntent"), true);
+  assert.equal(checkoutSource.includes("window.scrollTo({ top: 0, left: 0, behavior: \"smooth\" })"), true);
+  assert.equal(checkoutSource.includes("isDemoPaymentEnabled() ?"), true);
+  assert.equal(checkoutSource.includes("loadPaymentSnapshot(resumableOrderId)"), true);
+  assert.equal(checkoutSource.includes("customerOrderItemLabels(data)"), true);
+  assert.equal(checkoutSource.includes("customerOrderItemLabelGroups(data)"), true);
+  assert.equal(checkoutSource.includes("item.totalTtcCents"), true);
+  assert.equal(checkoutSource.includes("avant remise fidélité"), true);
+  assert.equal(checkoutSource.includes("Produits confirmés pour le paiement"), true);
+  assert.equal(readFileSync(path.resolve("src/lib/demo-payment.ts"), "utf8").includes("demo-web-duo"), true);
+  assert.equal(modalSource.includes("canReplaceProductQuantity(initialCartKey"), true);
+  assert.equal(cartSource.includes("return previous.map((item) => item.cartKey === cartKey ? nextItem : item);"), true);
+  assert.equal(cartSource.includes("takeGuestCheckoutIntent"), true);
+  assert.equal(readFileSync(path.resolve("src/components/auth/AuthGuard.tsx"), "utf8").includes("/auth?next="), true);
+  assert.equal(readFileSync(path.resolve("src/app/(site)/auth/AuthPageClient.tsx"), "utf8").includes('searchParams.get("next") === "/checkout"'), true);
 });
 
 run("checkout attempt fingerprint changes with cart and pickup", () => {
@@ -558,7 +669,8 @@ run("checkout source uses stable idempotency and submission lock", () => {
   assert.equal(orderServiceSource.includes("Date.now()"), false);
   assert.equal(orderServiceSource.includes("randomUUID().slice"), false);
   assert.equal(checkoutSource.includes("submittingRef.current"), true);
-  assert.equal(checkoutSource.indexOf("rememberCheckoutAttemptOrder(fingerprint, orderResult.orderId)") < checkoutSource.indexOf("const intentResult = await createPaymentIntent"), true);
+  const paymentIntentCreation = checkoutSource.indexOf("const intentResult = await (isDemoPaymentEnabled() ? createDemoPaymentIntent : createPaymentIntent)");
+  assert.equal(checkoutSource.indexOf("rememberCheckoutAttemptOrder(fingerprint, orderResult.orderId)") < paymentIntentCreation, true);
   assert.equal(checkoutSource.includes("getOrCreateCheckoutAttempt"), true);
   assert.equal(checkoutSource.includes("clearCheckoutAttempt"), false);
   assert.equal(checkoutSource.includes("card_with_loyalty_reward"), true);
@@ -627,9 +739,11 @@ run("checkout maps canonical inventory errors to the affected product", () => {
 
 run("confirmation source reads backend status and does not trust Stripe redirect status", () => {
   const source = readFileSync(path.resolve("src/app/(site)/order-confirmation/OrderConfirmationClient.tsx"), "utf8");
+  const listener = readFileSync(path.resolve("src/services/customer-order-tracking.ts"), "utf8");
 
-  assert.equal(source.includes("onSnapshot"), true);
-  assert.equal(source.includes("paymentStatus"), true);
+  assert.equal(source.includes("useCustomerOrderTracking(orderId"), true);
+  assert.equal(listener.includes("onSnapshot("), true);
+  assert.equal(listener.includes("paymentStatus"), true);
   assert.equal(source.includes("redirect_status"), false);
   assert.equal(source.includes("payment_intent_client_secret"), false);
   assert.equal(source.includes("CONFIRMATION_ORDER_KEY"), true);
