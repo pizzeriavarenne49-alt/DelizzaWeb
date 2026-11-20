@@ -13,6 +13,7 @@
 
 import { FieldPath } from "firebase-admin/firestore";
 import { isPublicProductDoc } from "@/lib/catalog-publication";
+import { getPizzaDuoRecipeBase } from "@/lib/pizza-duo";
 import type { Product, Category, HeroSlide, Offer, ProductIngredient } from "@/types";
 import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
 import type { DataRepository } from "@/data/repository";
@@ -428,7 +429,7 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
     templatePriceOverrides: parseTemplatePriceOverrides(data.templatePriceOverrides),
     ingredientLibrary: [],
     kind: data.kind === "pizza_duo" ? "pizza_duo" : undefined,
-    recipeBase: data.recipeBase === "tomate" ? "tomate" : data.recipeBase === "creme" || data.recipeBase === "crème" ? "creme" : undefined,
+    recipeBase: getPizzaDuoRecipeBase(str(data.categoryId), data.recipeBase),
     pizzaUnits: data.pizzaUnits === 0 || data.pizzaUnits === 1 ? data.pizzaUnits : undefined,
     homepageFeatured: bool(data.homepageFeatured, false),
     homepageOrder: num(data.homepageOrder, 0),

@@ -1,4 +1,5 @@
 import type { Product } from "@/types";
+import { isDelizzaPizzaCategory } from "@/lib/pizza-duo";
 
 export type HomepagePromotionAction = "menu" | "product" | "counter";
 
@@ -49,7 +50,7 @@ export function isSafeHomepagePromotionImage(path: string | null): path is strin
 
 export function sortHomepageFeaturedProducts(products: Product[]): Product[] {
   return products
-    .filter((product) => product.homepageFeatured === true && product.kind !== "pizza_duo" && product.active && product.pizzaUnits === 1 && product.manualOutOfStock !== true && !(product.stockManaged === true && (!Number.isSafeInteger(product.stockQty) || (product.stockQty ?? 0) <= 0)))
+    .filter((product) => product.homepageFeatured === true && isDelizzaPizzaCategory(product.category) && product.kind !== "pizza_duo" && product.active && product.pizzaUnits === 1 && product.manualOutOfStock !== true && !(product.stockManaged === true && (!Number.isSafeInteger(product.stockQty) || (product.stockQty ?? 0) <= 0)))
     .sort((left, right) => (left.homepageOrder ?? 0) - (right.homepageOrder ?? 0) || left.id.localeCompare(right.id));
 }
 

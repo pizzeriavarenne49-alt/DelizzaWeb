@@ -7,7 +7,7 @@ const promotion = loadTsModule(path.resolve("src/lib/homepage-promotion.ts"));
 const photo = "website/d_lizza/home-promo/0123456789abcdef0123456789abcdef.jpg";
 const product = (id, order = 0, fields = {}) => ({
   id, homepageFeatured: true, homepageOrder: order, kind: undefined,
-  active: true, pizzaUnits: 1, price_cents: 1290, ...fields,
+  active: true, category: "3LPzBegYvk8oA8rSVjkc", pizzaUnits: 1, price_cents: 1290, ...fields,
 });
 const published = (fields = {}) => ({
   title: "Deux envies. Une seule pizza.",

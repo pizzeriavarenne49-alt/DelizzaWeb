@@ -3,6 +3,28 @@ import type { PizzaDuoComposition, PizzaDuoRecipeSnapshot } from "@/types/cart";
 
 export const PIZZA_DUO_FIXED_PRICE_CENTS = 1490;
 export const PIZZA_DUO_TENANT_ID = "d_lizza";
+export const PIZZA_DUO_CATALOG_ID = "d_lizza_pizza_duo_comptoir";
+const DELIZZA_BASE_CATEGORIES: Readonly<Record<string, "tomate" | "creme">> = {
+  "3LPzBegYvk8oA8rSVjkc": "tomate",
+  "PxEZOWgUxAHxedwWHOSp": "creme",
+};
+
+export function isDelizzaPizzaCategory(categoryId: string): boolean {
+  return categoryId === "pizzas" || Object.hasOwn(DELIZZA_BASE_CATEGORIES, categoryId);
+}
+
+/** Production recipes may store their base only via the category, as in Firestore. */
+export function getPizzaDuoRecipeBase(categoryId: string, explicitBase: unknown): "tomate" | "creme" | undefined {
+  if (!isDelizzaPizzaCategory(categoryId)) return undefined;
+  const base = typeof explicitBase === "string" ? explicitBase.trim().toLowerCase() : "";
+  if (base === "tomate") return "tomate";
+  if (base === "creme" || base === "crème") return "creme";
+  if (base === "" && Object.hasOwn(DELIZZA_BASE_CATEGORIES, categoryId)) {
+    return DELIZZA_BASE_CATEGORIES[categoryId];
+  }
+  return undefined;
+}
+
 
 /**
  * The feature is intentionally local-only until every operational reader has
@@ -32,10 +54,10 @@ export function isValidPizzaDuoProduct(product: Product): boolean {
 }
 
 export function isPizzaDuoRecipeCandidate(product: Product): boolean {
-  return product.category === "pizzas" &&
+  return isDelizzaPizzaCategory(product.category) &&
     product.kind !== "pizza_duo" &&
     product.pizzaUnits === 1 &&
-    !!product.recipeBase &&
+    !!getPizzaDuoRecipeBase(product.category, product.recipeBase) &&
     product.active &&
     Number.isSafeInteger(product.price_cents) && product.price_cents > 0 &&
     product.baseIngredientIds.every(id => product.ingredientLibrary?.some(ingredient => ingredient.id === id && ingredient.name.trim())) &&
@@ -51,7 +73,7 @@ function snapshotRecipe(product: Product): PizzaDuoRecipeSnapshot {
   return {
     recipeId: product.id,
     recipeName: product.name,
-    base: product.recipeBase === "creme" ? "creme" : "tomate",
+    base: getPizzaDuoRecipeBase(product.category, product.recipeBase) ?? "tomate",
     description: product.description_short || undefined,
     ingredients: getPizzaDuoIngredientNames(product),
   };

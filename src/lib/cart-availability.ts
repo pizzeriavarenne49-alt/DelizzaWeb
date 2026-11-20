@@ -4,6 +4,7 @@ import { doc, getDocFromServer } from "firebase/firestore";
 import { getClientFirestore } from "@/config/firebase-client";
 import type { CartItem, SelectedOption } from "@/types/cart";
 import { stockDemandByProduct } from "@/lib/product-availability";
+import { getPizzaDuoRecipeBase, PIZZA_DUO_CATALOG_ID } from "@/lib/pizza-duo";
 
 const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 
@@ -180,14 +181,7 @@ async function loadLiveOptions(data: Record<string, unknown>): Promise<LiveOptio
 
 async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | null> {
   let data: Record<string, unknown> | null = null;
-  try {
-    const db = getClientFirestore();
-    const snap = await getDocFromServer(doc(db, "wl_catalog_items", catalogItemId));
-    if (snap.exists() && snap.data().appId === WL_APP_ID) data = snap.data();
-  } catch {
-    // The canonical Duo remains private in browser Firestore rules.
-  }
-  if (!data && catalogItemId === "d_lizza_pizza_duo_comptoir") {
+  if (catalogItemId === PIZZA_DUO_CATALOG_ID) {
     const response = await fetch(`/api/catalog/editable-product/${catalogItemId}`, { cache: "no-store", credentials: "same-origin" });
     if (response.ok) {
       const product = await response.json() as { name?: string; category?: string; active?: boolean; manualOutOfStock?: boolean; stockManaged?: boolean; stockQty?: number; price_cents?: number; options?: LiveOption[]; baseIngredientIds?: string[]; availableSupplementIds?: string[]; allowIngredientRemoval?: boolean; kind?: string; recipeBase?: string; pizzaUnits?: number };
@@ -197,6 +191,10 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
         availableSupplementIds: product.availableSupplementIds, allowIngredientRemoval: product.allowIngredientRemoval,
         kind: product.kind, recipeBase: product.recipeBase, pizzaUnits: product.pizzaUnits };
     }
+  } else {
+    const db = getClientFirestore();
+    const snap = await getDocFromServer(doc(db, "wl_catalog_items", catalogItemId));
+    if (snap.exists() && snap.data().appId === WL_APP_ID) data = snap.data();
   }
   if (!data) return null;
 
@@ -496,7 +494,7 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
       for (const recipeId of recipeIds) {
         const recipe = productCache.get(recipeId) ?? null;
         if (!recipe || recipe.kind === "pizza_duo" || recipe.pizzaUnits !== 1 ||
-            !["tomate", "creme", "crème"].includes(recipe.recipeBase) || isCommerciallyUnavailable(recipe) || recipe.manualOutOfStock === true ||
+            !getPizzaDuoRecipeBase(recipe.categoryId, recipe.recipeBase) || isCommerciallyUnavailable(recipe) || recipe.manualOutOfStock === true ||
             (recipe.stockManaged === true && (recipe.stockQty === null || recipe.stockQty <= 0 || (stockDemand.get(recipeId) ?? 0) > recipe.stockQty))) {
           invalidRecipe = recipe;
           break;
