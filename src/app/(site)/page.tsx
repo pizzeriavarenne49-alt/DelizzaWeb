@@ -4,6 +4,7 @@ import HomeLanding from "@/components/home/HomeLanding";
 import type { Metadata } from "next";
 import { SITE_URL, OG_IMAGE } from "@/lib/seo";
 import { getPublishedHomepagePromotion } from "@/data/website-homepage";
+import { sortHomepageFeaturedProducts } from "@/lib/homepage-promotion";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -71,10 +72,19 @@ async function loadFeaturedProducts() {
 }
 
 export default async function HomePage() {
-  const featuredProducts = await loadFeaturedProducts();
-  const promotion = hasRealCmsSourceConfigured()
-    ? await getPublishedHomepagePromotion(await repo.getProducts())
-    : null;
+  const usesFirebase = Boolean(process.env.FIREBASE_PROJECT_ID) &&
+    Boolean(process.env.FIREBASE_CLIENT_EMAIL || process.env.NEXT_PUBLIC_HOMEPAGE_TEST_MODE === "true") &&
+    Boolean(process.env.WL_APP_ID);
+  const products = usesFirebase ? await repo.getProducts() : null;
+  const featuredProducts = products ? sortHomepageFeaturedProducts(products) : await loadFeaturedProducts();
+  let promotion = null;
+  if (products) {
+    try {
+      promotion = await getPublishedHomepagePromotion(products);
+    } catch (error) {
+      console.warn("[CMS] Homepage promotion unavailable; rendering without it.", error);
+    }
+  }
 
   return <HomeLanding products={featuredProducts} promotion={promotion} />;
 }

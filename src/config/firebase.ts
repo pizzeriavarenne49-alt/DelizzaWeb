@@ -23,6 +23,7 @@ let _db: Firestore | null = null;
 
 const ISOLATED_MARKETING_PROJECT = "demo-acquisition-marketing";
 const ISOLATED_PIZZA_DUO_PROJECT = "demo-web-duo";
+const ISOLATED_HOMEPAGE_PROJECT = "demo-delizza-homepage";
 
 function usesIsolatedMarketingFirestoreEmulator(): boolean {
   return (
@@ -44,6 +45,19 @@ export function usesIsolatedPizzaDuoFirestoreEmulator(): boolean {
     process.env.WL_APP_ID === "d_lizza" && process.env.NEXT_PUBLIC_WL_APP_ID === "d_lizza" &&
     process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:18787";
   if (!valid) throw new Error("Pizza Duo local requires the demo-web-duo project on the local Firestore emulator.");
+  return true;
+}
+
+/** Explicitly isolated only test configuration for the homepage CMS contract. */
+function usesIsolatedHomepageFirestoreEmulator(): boolean {
+  if (process.env.NEXT_PUBLIC_HOMEPAGE_TEST_MODE !== "true") return false;
+  const valid = process.env.FIREBASE_PROJECT_ID === ISOLATED_HOMEPAGE_PROJECT &&
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === ISOLATED_HOMEPAGE_PROJECT &&
+    process.env.WL_APP_ID === "d_lizza" && process.env.NEXT_PUBLIC_WL_APP_ID === "d_lizza" &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:18291" &&
+    ["127.0.0.1:19291", "http://127.0.0.1:19291"].includes(process.env.STORAGE_EMULATOR_HOST ?? "") &&
+    !process.env.FIREBASE_CLIENT_EMAIL && !process.env.FIREBASE_PRIVATE_KEY;
+  if (!valid) throw new Error("Homepage test mode requires the loopback demo-delizza-homepage emulators and no production credentials.");
   return true;
 }
 
@@ -114,13 +128,15 @@ export function getDb(): Firestore {
   if (pizzaDuoLocal && getApps().some(app => app.options.projectId !== ISOLATED_PIZZA_DUO_PROJECT)) {
     throw new Error("An existing Firebase app is outside the local Pizza Duo project.");
   }
+  const homepageLocal = usesIsolatedHomepageFirestoreEmulator();
+  if (homepageLocal && getApps().some(app => app.options.projectId !== ISOLATED_HOMEPAGE_PROJECT)) throw new Error("Existing Firebase app is outside the homepage local project.");
   if (_db) return _db;
-  const isolatedEmulator = halloweenLocal || usesIsolatedMarketingFirestoreEmulator() || pizzaDuoLocal;
+  const isolatedEmulator = halloweenLocal || usesIsolatedMarketingFirestoreEmulator() || pizzaDuoLocal || homepageLocal;
   let initializedHere = false;
   if (getApps().length === 0) {
     initializedHere = true;
     if (isolatedEmulator) {
-      initializeApp({ projectId: halloweenLocal ? "demo-halloween-local" : pizzaDuoLocal ? ISOLATED_PIZZA_DUO_PROJECT : ISOLATED_MARKETING_PROJECT });
+      initializeApp({ projectId: halloweenLocal ? "demo-halloween-local" : pizzaDuoLocal ? ISOLATED_PIZZA_DUO_PROJECT : homepageLocal ? ISOLATED_HOMEPAGE_PROJECT : ISOLATED_MARKETING_PROJECT, storageBucket: process.env.FIREBASE_STORAGE_BUCKET });
     } else {
       const privateKey = parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
       if (!privateKey) {
@@ -143,7 +159,7 @@ export function getDb(): Firestore {
   // Firestore Admin settings are immutable after first use. In Next dev HMR
   // this module can reload while the Firebase Admin app remains global.
   if (isolatedEmulator && initializedHere) {
-    _db.settings({ host: halloweenLocal ? "127.0.0.1:18880" : pizzaDuoLocal ? "127.0.0.1:18787" : "127.0.0.1:9808", ssl: false });
+    _db.settings({ host: halloweenLocal ? "127.0.0.1:18880" : pizzaDuoLocal ? "127.0.0.1:18787" : homepageLocal ? "127.0.0.1:18291" : "127.0.0.1:9808", ssl: false });
   }
   return _db;
 }

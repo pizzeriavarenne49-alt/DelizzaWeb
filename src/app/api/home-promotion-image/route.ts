@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
   const [exists] = await file.exists();
   if (!exists) return new NextResponse(null, { status: 404 });
   const [contents] = await file.download();
+  if (contents.length < 4 || contents[0] !== 0xff || contents[1] !== 0xd8 || contents[2] !== 0xff) {
+    return new NextResponse(null, { status: 415 });
+  }
   return new NextResponse(new Uint8Array(contents), {
     headers: {
       "Content-Type": "image/jpeg",

@@ -79,7 +79,7 @@ body {
 .home-hero-note strong { color: #e8c078; font-size: 52px; }
 .home-section { margin-top: 56px; scroll-margin-top: 24px; }
 .home-promotion { display: grid; overflow: hidden; margin-top: 40px; border: 1px solid #51412d; border-radius: 24px; background: #201a13; }
-.home-promotion-image { width: 100%; min-height: 220px; aspect-ratio: 1.5; object-fit: cover; background: #30261a; }
+.home-promotion-image { position: relative; width: 100%; min-height: 220px; aspect-ratio: 1.5; background: #30261a; }
 .home-promotion-copy { display: grid; align-content: center; justify-items: start; gap: 14px; padding: 26px; }
 .home-promotion-copy h2 { font: 500 clamp(29px, 6vw, 45px)/1.05 Georgia, serif; letter-spacing: -.03em; }
 .home-promotion-copy > p:not(.home-eyebrow):not(.home-promotion-note) { max-width: 60ch; color: #ded4c7; line-height: 1.55; }

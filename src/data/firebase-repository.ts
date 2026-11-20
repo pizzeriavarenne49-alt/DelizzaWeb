@@ -16,7 +16,7 @@ import { isPublicProductDoc } from "@/lib/catalog-publication";
 import type { Product, Category, HeroSlide, Offer, ProductIngredient } from "@/types";
 import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
 import type { DataRepository } from "@/data/repository";
-import { buildFeaturedProducts } from "@/data/repository";
+import { sortHomepageFeaturedProducts } from "@/lib/homepage-promotion";
 import { getDb, WL_APP_ID, FIREBASE_STORAGE_BUCKET } from "@/config/firebase";
 import {
   categories as mockCategories,
@@ -454,9 +454,7 @@ export class FirebaseRepository implements DataRepository {
   async getFeaturedProducts(): Promise<Product[]> {
     // Homepage selection is opt-in. An empty selection deliberately hides the
     // whole section instead of inventing a carousel from popular products.
-    const featured = (await this.getProducts())
-      .filter((product) => product.homepageFeatured === true && product.kind !== "pizza_duo")
-      .sort((left, right) => (left.homepageOrder ?? 0) - (right.homepageOrder ?? 0) || left.id.localeCompare(right.id));
+    const featured = sortHomepageFeaturedProducts(await this.getProducts());
     logFeaturedProductsSelection("firebase", `appId=${WL_APP_ID}`, featured);
     return featured;
   }
@@ -485,6 +483,7 @@ export class FirebaseRepository implements DataRepository {
     const rawProducts = snap.docs
       .map((doc) => ({ id: doc.id, data: doc.data() }))
       .filter(({ data }) => isPublicProductDoc(data))
+      .filter(({ data }) => data.kind !== "pizza_duo")
       .map(({ id, data }) => mapProduct(id, data));
 
     // The canonical Duo stays deliberately private for POS. It is projected
@@ -492,20 +491,27 @@ export class FirebaseRepository implements DataRepository {
     // its independent web channel. Browser Firestore rules never need to
     // expose the private parent document.
     if (WL_APP_ID === "d_lizza") {
-      const [appDoc, duoDoc] = await Promise.all([
-        getDb().collection("wl_apps").doc(WL_APP_ID).get(),
-        getDb().collection("wl_catalog_items").doc("d_lizza_pizza_duo_comptoir").get(),
-      ]);
-      const duo = duoDoc.data();
-      if (appDoc.data()?.pizzaDuoWebEnabled === true && duoDoc.exists && duo &&
-        duo.appId === WL_APP_ID && duo.kind === "pizza_duo" && duo.posDuoActive === true &&
-        duo.price?.amountCents === 1490 && duo.pizzaUnits === 1 && duo.manualOutOfStock !== true) {
-        rawProducts.push(mapProduct(duoDoc.id, {
-          ...duo,
-          // This projection is intentionally public only in the server result.
-          isActive: true,
-          visible: true,
-        }));
+      try {
+        const [appDoc, duoDoc] = await Promise.all([
+          getDb().collection("wl_apps").doc(WL_APP_ID).get(),
+          getDb().collection("wl_catalog_items").doc("d_lizza_pizza_duo_comptoir").get(),
+        ]);
+        const duo = duoDoc.data();
+        const categoryDoc = typeof duo?.categoryId === "string"
+          ? await getDb().collection("wl_catalog_categories").doc(duo.categoryId).get()
+          : null;
+        const category = categoryDoc?.data();
+        const validBaseCategory = category?.appId === WL_APP_ID && category?.isActive === true &&
+          ["base tomate", "base crème", "base creme"].includes(String(category?.name ?? "").trim().toLocaleLowerCase("fr"));
+        if (appDoc.data()?.pizzaDuoWebEnabled === true && duoDoc.exists && duo &&
+          duo.appId === WL_APP_ID && duo.kind === "pizza_duo" && duo.isActive === false && duo.visible === false &&
+          duo.price?.amountCents === 1490 && String(duo.price?.currency ?? "EUR").toUpperCase() === "EUR" &&
+          duo.pizzaUnits === 1 && duo.manualOutOfStock !== true && validBaseCategory &&
+          !["hidden", "archived", "isArchived", "deleted", "isDeleted"].some((field) => duo[field] === true)) {
+          rawProducts.push(mapProduct(duoDoc.id, { ...duo, isActive: true, visible: true }));
+        }
+      } catch (error) {
+        console.warn("[CMS] Pizza Duo web contract unavailable; omitting the private product.", error);
       }
     }
 

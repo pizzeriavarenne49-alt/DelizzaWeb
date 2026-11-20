@@ -59,7 +59,8 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled }:
   const [activeCategory, setActiveCategory] = useState("all");
   const onlineOrdering = useOnlineOrderingStatus();
   const catalogAvailability = useCatalogAvailability();
-  const pizzaDuoEnabled = pizzaDuoWebEnabled || useSyncExternalStore(subscribeToFixedEnvironment, isPizzaDuoDevelopmentEnabled, hideDuoDuringServerRender);
+  const localPizzaDuoEnabled = useSyncExternalStore(subscribeToFixedEnvironment, isPizzaDuoDevelopmentEnabled, hideDuoDuringServerRender);
+  const pizzaDuoEnabled = pizzaDuoWebEnabled || localPizzaDuoEnabled;
   // This uses the provider's single SSE snapshot: a recipe removed or restored
   // while the Duo modal is open is reflected without another subscription.
   const liveProducts = useMemo(() => products.map((product) => withLiveAvailability(product, catalogAvailability)), [products, catalogAvailability]);

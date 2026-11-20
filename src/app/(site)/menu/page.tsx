@@ -39,11 +39,16 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function MenuPage() {
-  const [cats, prods, pizzaDuoWebEnabled] = await Promise.all([
+  const [cats, prods] = await Promise.all([
     withFallback(() => repo.getCategories(), () => mockRepo.getCategories()),
     withFallback(() => repo.getProducts(), () => mockRepo.getProducts()),
-    getPizzaDuoWebEnabled(),
   ]);
+  let pizzaDuoWebEnabled = false;
+  try {
+    pizzaDuoWebEnabled = await getPizzaDuoWebEnabled();
+  } catch (error) {
+    console.warn("[CMS] Pizza Duo web activation unavailable; keeping the web channel closed.", error);
+  }
 
   return (
     <MenuClient
