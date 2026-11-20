@@ -22,6 +22,7 @@ import { useLiveProduct } from "@/contexts/CatalogAvailabilityContext";
 interface ProductCardProps {
   product: Product;
   pizzaDuoRecipes?: Product[];
+  pizzaDuoWebEnabled?: boolean;
 }
 
 function hasProductCustomizations(product: Product): boolean {
@@ -33,7 +34,7 @@ function hasProductCustomizations(product: Product): boolean {
   );
 }
 
-export default function ProductCard({ product: initialProduct, pizzaDuoRecipes = [] }: ProductCardProps) {
+export default function ProductCard({ product: initialProduct, pizzaDuoRecipes = [], pizzaDuoWebEnabled = false }: ProductCardProps) {
   const product = useLiveProduct(initialProduct);
   const { addItem, addItemWithOptions, addPizzaDuo, canAddProductQuantity } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
@@ -47,7 +48,7 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
   const hasValidDuoConfiguration = !isDuo || isValidPizzaDuoProduct(product);
   const duoIllustrations = isDuo ? pizzaDuoRecipes.filter((recipe) => !isProductUnavailable(recipe)).slice(0, 2) : [];
   const cannotOrder = isUnavailable || orderingDisabled || stockLimitReached || !hasValidDuoConfiguration;
-  if (isDuo && !isPizzaDuoDevelopmentEnabled()) return null;
+  if (isDuo && !pizzaDuoWebEnabled && !isPizzaDuoDevelopmentEnabled()) return null;
 
   const handleAdd = () => {
     if (orderingDisabled) {

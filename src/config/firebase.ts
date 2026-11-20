@@ -17,6 +17,7 @@
 
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 let _db: Firestore | null = null;
 
@@ -134,6 +135,7 @@ export function getDb(): Firestore {
           clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
           privateKey,
         }),
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
       });
     }
   }
@@ -149,3 +151,10 @@ export function getDb(): Firestore {
 export const WL_APP_ID = process.env.WL_APP_ID ?? "";
 export const FIREBASE_STORAGE_BUCKET =
   process.env.FIREBASE_STORAGE_BUCKET ?? "";
+
+/** The private promotion image is proxied by a route after schedule checks. */
+export function getStorageBucket() {
+  if (!FIREBASE_STORAGE_BUCKET) throw new Error("FIREBASE_STORAGE_BUCKET is missing");
+  getDb();
+  return getStorage().bucket(FIREBASE_STORAGE_BUCKET);
+}

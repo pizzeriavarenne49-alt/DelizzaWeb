@@ -4,6 +4,8 @@ import ProductCard from "@/components/ui/ProductCard";
 import HomeClient from "@/app/(site)/HomeClient";
 import { BUSINESS } from "@/lib/seo";
 import type { Product } from "@/types";
+import type { HomepagePromotion } from "@/data/website-homepage";
+import { formatPrice } from "@/types";
 
 const craft = [
   ["01", "Le temps de la pâte", "Une maturation d’environ 24 heures au froid."],
@@ -12,7 +14,7 @@ const craft = [
   ["04", "La juste cuisson", "Une cuisson maîtrisée à haute température."],
 ] as const;
 
-export default function HomeLanding({ products }: { products: Product[] }) {
+export default function HomeLanding({ products, promotion }: { products: Product[]; promotion?: HomepagePromotion | null }) {
   // Use actual catalogue photography; never present mock illustrations as real products.
   const hero = products.find(p => p.active && p.image.startsWith("https://") && !p.image.includes("placeholder"));
   const address = `${BUSINESS.address.streetAddress}, La Varenne, ${BUSINESS.address.postalCode} ${BUSINESS.address.addressLocality}`;
@@ -32,6 +34,20 @@ export default function HomeLanding({ products }: { products: Product[] }) {
         <figcaption><span>Dans notre carte</span><strong>{hero.name}</strong><Link href="/menu">Découvrir la recette <span aria-hidden="true">↗</span></Link></figcaption>
       </figure> : <div className="home-hero-note"><span>À chaque envie,</span><strong>sa pizza.</strong><Link href="/menu" className="home-text-link">Découvrir notre carte ↗</Link></div>}
     </section>
+
+    {promotion && <section className="home-promotion" aria-labelledby="promotion-title">
+      <img src={`/api/home-promotion-image?path=${encodeURIComponent(promotion.imageVersion)}`} alt="" className="home-promotion-image" />
+      <div className="home-promotion-copy">
+        <p className="home-eyebrow">À découvrir</p>
+        <h2 id="promotion-title">{promotion.title}</h2>
+        <p>{promotion.description}</p>
+        {promotion.priceCents !== null && <strong className="home-promotion-price">{formatPrice(promotion.priceCents)} €</strong>}
+        {promotion.counterOnly && <p className="home-promotion-note">Disponible au comptoir et par téléphone.</p>}
+        {promotion.action === "counter"
+          ? <a href={`tel:${BUSINESS.telephone.replaceAll(" ", "")}`} className="home-button home-button-primary">{promotion.buttonLabel}</a>
+          : <Link href={promotion.action === "product" && promotion.productId ? `/menu?product=${encodeURIComponent(promotion.productId)}` : "/menu"} className="home-button home-button-primary">{promotion.buttonLabel} <span aria-hidden="true">↗</span></Link>}
+      </div>
+    </section>}
 
     {products.length > 0 && <section className="home-section" aria-labelledby="selection-title">
       <div className="home-section-heading"><div><p className="home-eyebrow">À partager. Ou pas.</p><h2 id="selection-title">La carte donne envie.</h2></div><Link href="/menu" className="home-text-link">Toute la carte <span aria-hidden="true">↗</span></Link></div>

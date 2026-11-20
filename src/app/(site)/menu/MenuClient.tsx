@@ -15,6 +15,7 @@ import type { StockAvailabilityProduct } from "@/lib/product-availability";
 interface MenuClientProps {
   categories: Category[];
   products: Product[];
+  pizzaDuoWebEnabled: boolean;
 }
 
 type MenuSection = {
@@ -53,12 +54,12 @@ function withLiveAvailability(product: Product, availability: Record<string, Sto
 const subscribeToFixedEnvironment = () => () => {};
 const hideDuoDuringServerRender = () => false;
 
-export default function MenuClient({ categories, products }: MenuClientProps) {
+export default function MenuClient({ categories, products, pizzaDuoWebEnabled }: MenuClientProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const onlineOrdering = useOnlineOrderingStatus();
   const catalogAvailability = useCatalogAvailability();
-  const pizzaDuoEnabled = useSyncExternalStore(subscribeToFixedEnvironment, isPizzaDuoDevelopmentEnabled, hideDuoDuringServerRender);
+  const pizzaDuoEnabled = pizzaDuoWebEnabled || useSyncExternalStore(subscribeToFixedEnvironment, isPizzaDuoDevelopmentEnabled, hideDuoDuringServerRender);
   // This uses the provider's single SSE snapshot: a recipe removed or restored
   // while the Duo modal is open is reflected without another subscription.
   const liveProducts = useMemo(() => products.map((product) => withLiveAvailability(product, catalogAvailability)), [products, catalogAvailability]);
@@ -225,7 +226,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
           <SectionHeader title={`Résultats pour "${search.trim()}"`} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {searchFilteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} />
+              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} pizzaDuoWebEnabled={pizzaDuoEnabled} />
             ))}
             {searchFilteredProducts.length === 0 && (
               <p className="col-span-2 py-10 text-center text-[#6B6B6B]">
@@ -241,7 +242,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
               <SectionHeader title={section.title} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
                 {section.products.map((product) => (
-                  <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} />
+                  <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} pizzaDuoWebEnabled={pizzaDuoEnabled} />
                 ))}
               </div>
             </div>
@@ -257,7 +258,7 @@ export default function MenuClient({ categories, products }: MenuClientProps) {
           <SectionHeader title={activeCategoryName} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {visibleProducts.map((product) => (
-              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} />
+              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} pizzaDuoWebEnabled={pizzaDuoEnabled} />
             ))}
             {visibleProducts.length === 0 && (
               <p className="col-span-2 py-10 text-center text-[#6B6B6B]">

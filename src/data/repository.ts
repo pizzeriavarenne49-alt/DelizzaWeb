@@ -44,6 +44,11 @@ export interface DataRepository {
 
 /** Build the featured product list: badge+image first, then image-only, max 5 */
 export function buildFeaturedProducts(all: Product[]): Product[] {
+  const homepageFeatured = all
+    .filter((product) => product.homepageFeatured === true)
+    .sort((left, right) => (left.homepageOrder ?? 0) - (right.homepageOrder ?? 0) || left.id.localeCompare(right.id));
+  if (homepageFeatured.length > 0) return homepageFeatured;
+
   const seenIds = new Set<string>();
   const badged = all.filter(p => p.badge && p.image && !p.image.includes('placeholder'));
   const withImage = all.filter(p => p.image && !p.image.includes('placeholder'));

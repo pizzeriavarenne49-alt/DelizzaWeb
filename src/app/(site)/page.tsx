@@ -3,8 +3,10 @@ import { DIRECTUS_URL } from "@/config/cms";
 import HomeLanding from "@/components/home/HomeLanding";
 import type { Metadata } from "next";
 import { SITE_URL, OG_IMAGE } from "@/lib/seo";
+import { getPublishedHomepagePromotion } from "@/data/website-homepage";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   "title": {
@@ -70,6 +72,9 @@ async function loadFeaturedProducts() {
 
 export default async function HomePage() {
   const featuredProducts = await loadFeaturedProducts();
+  const promotion = hasRealCmsSourceConfigured()
+    ? await getPublishedHomepagePromotion(await repo.getProducts())
+    : null;
 
-  return <HomeLanding products={featuredProducts} />;
+  return <HomeLanding products={featuredProducts} promotion={promotion} />;
 }

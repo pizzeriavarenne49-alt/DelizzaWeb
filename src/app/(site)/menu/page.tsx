@@ -1,5 +1,6 @@
 import { repo, withFallback, mockRepo, POPULAR_CATEGORY } from "@/data/repository";
 import MenuClient from "./MenuClient";
+import { getPizzaDuoWebEnabled } from "@/data/website-homepage";
 import type { Metadata } from "next";
 import { SITE_URL, OG_IMAGE } from "@/lib/seo";
 
@@ -38,15 +39,17 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function MenuPage() {
-  const [cats, prods] = await Promise.all([
+  const [cats, prods, pizzaDuoWebEnabled] = await Promise.all([
     withFallback(() => repo.getCategories(), () => mockRepo.getCategories()),
     withFallback(() => repo.getProducts(), () => mockRepo.getProducts()),
+    getPizzaDuoWebEnabled(),
   ]);
 
   return (
     <MenuClient
       categories={[POPULAR_CATEGORY, ...cats]}
       products={prods}
+      pizzaDuoWebEnabled={pizzaDuoWebEnabled}
     />
   );
 }

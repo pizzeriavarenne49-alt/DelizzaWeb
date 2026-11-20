@@ -41,6 +41,11 @@ export interface Product {
   recipeBase?: "tomate" | "creme";
   /** Canonical production unit marker from the shared catalogue. */
   pizzaUnits?: 0 | 1;
+  /** Controlled by WLHORIZON on the Deli'Zza homepage. */
+  homepageFeatured?: boolean;
+  homepageOrder?: number;
+  /** Shows the small "Nouveau" label only when the product is featured. */
+  isNew?: boolean;
 }
 
 export interface ProductIngredient {

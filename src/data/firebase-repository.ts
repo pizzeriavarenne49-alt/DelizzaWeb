@@ -410,7 +410,7 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
       data.imageUrl as string | null,
     ),
     category: str(data.categoryId),
-    badge: typeof data.badge === "string" ? data.badge : undefined,
+    badge: bool(data.isNew, false) ? "Nouveau" : typeof data.badge === "string" ? data.badge : undefined,
     active: bool(data.isActive, true),
     manualOutOfStock: bool(data.manualOutOfStock, false),
     stockManaged: bool(data.stockManaged, false),
@@ -430,6 +430,9 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
     kind: data.kind === "pizza_duo" ? "pizza_duo" : undefined,
     recipeBase: data.recipeBase === "tomate" ? "tomate" : data.recipeBase === "creme" || data.recipeBase === "crème" ? "creme" : undefined,
     pizzaUnits: data.pizzaUnits === 0 || data.pizzaUnits === 1 ? data.pizzaUnits : undefined,
+    homepageFeatured: bool(data.homepageFeatured, false),
+    homepageOrder: num(data.homepageOrder, 0),
+    isNew: bool(data.isNew, false),
   };
 }
 
@@ -449,7 +452,11 @@ export class FirebaseRepository implements DataRepository {
   }
 
   async getFeaturedProducts(): Promise<Product[]> {
-    const featured = buildFeaturedProducts(await this.getPopularProducts());
+    // Homepage selection is opt-in. An empty selection deliberately hides the
+    // whole section instead of inventing a carousel from popular products.
+    const featured = (await this.getProducts())
+      .filter((product) => product.homepageFeatured === true && product.kind !== "pizza_duo")
+      .sort((left, right) => (left.homepageOrder ?? 0) - (right.homepageOrder ?? 0) || left.id.localeCompare(right.id));
     logFeaturedProductsSelection("firebase", `appId=${WL_APP_ID}`, featured);
     return featured;
   }
@@ -479,6 +486,28 @@ export class FirebaseRepository implements DataRepository {
       .map((doc) => ({ id: doc.id, data: doc.data() }))
       .filter(({ data }) => isPublicProductDoc(data))
       .map(({ id, data }) => mapProduct(id, data));
+
+    // The canonical Duo stays deliberately private for POS. It is projected
+    // into the public server response only when this tenant explicitly opens
+    // its independent web channel. Browser Firestore rules never need to
+    // expose the private parent document.
+    if (WL_APP_ID === "d_lizza") {
+      const [appDoc, duoDoc] = await Promise.all([
+        getDb().collection("wl_apps").doc(WL_APP_ID).get(),
+        getDb().collection("wl_catalog_items").doc("d_lizza_pizza_duo_comptoir").get(),
+      ]);
+      const duo = duoDoc.data();
+      if (appDoc.data()?.pizzaDuoWebEnabled === true && duoDoc.exists && duo &&
+        duo.appId === WL_APP_ID && duo.kind === "pizza_duo" && duo.posDuoActive === true &&
+        duo.price?.amountCents === 1490 && duo.pizzaUnits === 1 && duo.manualOutOfStock !== true) {
+        rawProducts.push(mapProduct(duoDoc.id, {
+          ...duo,
+          // This projection is intentionally public only in the server result.
+          isActive: true,
+          visible: true,
+        }));
+      }
+    }
 
     // Collect all unique template IDs referenced across products
     const allTemplateIds = [
