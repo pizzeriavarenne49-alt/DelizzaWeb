@@ -41,6 +41,10 @@ assert.equal(promotion.normalizePublishedHomepagePromotion(published({ endsAt: n
 const counterDuo = promotion.normalizePublishedHomepagePromotion(published({ productId: "d_lizza_pizza_duo_comptoir" }), [], 1490, true);
 assert.equal(counterDuo?.action, "counter");
 assert.equal(counterDuo?.counterOnly, true);
+assert.equal(counterDuo?.buttonLabel, "Commander par téléphone");
+assert.equal(promotion.homepagePromotionExpiryDelay(3_000_000_000, 0), 2_147_000_000);
+assert.equal(promotion.homepagePromotionExpiryDelay(123, 100), 23);
+assert.equal(promotion.homepagePromotionExpiryDelay(123, 124), 0);
 assert.equal(counterDuo?.priceCents, 1490);
 const webDuo = promotion.normalizePublishedHomepagePromotion(published({ productId: "d_lizza_pizza_duo_comptoir" }), [product("d_lizza_pizza_duo_comptoir", 0, { kind: "pizza_duo", price_cents: 1490 })], 1490, false);
 assert.equal(webDuo?.action, "product");

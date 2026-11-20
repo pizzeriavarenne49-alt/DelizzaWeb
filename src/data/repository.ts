@@ -391,7 +391,7 @@ class EmptyRepository implements DataRepository {
 // ---------------------------------------------------------------------------
 
 import { FirebaseRepository } from "./firebase-repository";
-import { usesIsolatedPizzaDuoFirestoreEmulator } from "@/config/firebase";
+import { usesIsolatedHomepageFirestoreEmulator, usesIsolatedPizzaDuoFirestoreEmulator } from "@/config/firebase";
 
 /** Detect which data source is active for logging purposes */
 let activeSource: "firebase" | "directus" | "mock" | "empty" = "mock";
@@ -413,6 +413,7 @@ function createRepository(): DataRepository {
   // Priority 1: Firebase (same data as WLHORIZON mobile app)
   if (
     usesIsolatedPizzaDuoFirestoreEmulator() ||
+    usesIsolatedHomepageFirestoreEmulator() ||
     usesIsolatedMarketingFirestoreEmulator() ||
     (process.env.FIREBASE_PROJECT_ID &&
       process.env.FIREBASE_CLIENT_EMAIL &&

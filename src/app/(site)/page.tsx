@@ -1,4 +1,4 @@
-import { repo, withFallback, mockRepo } from "@/data/repository";
+import { isFirebaseSourceActive, repo, withFallback, mockRepo } from "@/data/repository";
 import { DIRECTUS_URL } from "@/config/cms";
 import HomeLanding from "@/components/home/HomeLanding";
 import type { Metadata } from "next";
@@ -72,10 +72,9 @@ async function loadFeaturedProducts() {
 }
 
 export default async function HomePage() {
-  const usesFirebase = Boolean(process.env.FIREBASE_PROJECT_ID) &&
-    Boolean(process.env.FIREBASE_CLIENT_EMAIL || process.env.NEXT_PUBLIC_HOMEPAGE_TEST_MODE === "true") &&
-    Boolean(process.env.WL_APP_ID);
-  const products = usesFirebase ? await repo.getProducts() : null;
+  const products = isFirebaseSourceActive()
+    ? await withFallback(() => repo.getProducts(), () => mockRepo.getProducts())
+    : null;
   const featuredProducts = products ? sortHomepageFeaturedProducts(products) : await loadFeaturedProducts();
   let promotion = null;
   if (products) {

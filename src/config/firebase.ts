@@ -49,7 +49,7 @@ export function usesIsolatedPizzaDuoFirestoreEmulator(): boolean {
 }
 
 /** Explicitly isolated only test configuration for the homepage CMS contract. */
-function usesIsolatedHomepageFirestoreEmulator(): boolean {
+export function usesIsolatedHomepageFirestoreEmulator(): boolean {
   if (process.env.NEXT_PUBLIC_HOMEPAGE_TEST_MODE !== "true") return false;
   const valid = process.env.FIREBASE_PROJECT_ID === ISOLATED_HOMEPAGE_PROJECT &&
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === ISOLATED_HOMEPAGE_PROJECT &&

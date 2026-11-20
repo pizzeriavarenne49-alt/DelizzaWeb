@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { homepagePromotionExpiryDelay } from "@/lib/homepage-promotion";
 import { BUSINESS } from "@/lib/seo";
 import { formatPrice } from "@/types";
 import type { HomepagePromotion as Promotion } from "@/data/website-homepage";
@@ -11,9 +12,17 @@ export default function HomepagePromotion({ promotion }: { promotion: Promotion 
   const [visible, setVisible] = useState(() => !promotion.endsAt || Date.parse(promotion.endsAt) > Date.now());
   useEffect(() => {
     if (!promotion.endsAt) return;
-    const delay = Date.parse(promotion.endsAt) - Date.now();
-    if (delay <= 0) return;
-    const timer = window.setTimeout(() => setVisible(false), delay);
+    const end = Date.parse(promotion.endsAt);
+    if (!Number.isFinite(end) || end <= Date.now()) return;
+    let timer: number;
+    const check = () => {
+      if (end <= Date.now()) {
+        setVisible(false);
+      } else {
+        timer = window.setTimeout(check, homepagePromotionExpiryDelay(end, Date.now()));
+      }
+    };
+    timer = window.setTimeout(check, homepagePromotionExpiryDelay(end, Date.now()));
     return () => window.clearTimeout(timer);
   }, [promotion.endsAt]);
   if (!visible) return null;
@@ -21,7 +30,7 @@ export default function HomepagePromotion({ promotion }: { promotion: Promotion 
     ? `/menu?product=${encodeURIComponent(promotion.productId)}`
     : "/menu";
   return <section className="home-promotion" aria-labelledby="promotion-title">
-    <div className="home-promotion-image"><Image src={`/api/home-promotion-image?path=${encodeURIComponent(promotion.imageVersion)}`} alt="" fill sizes="(max-width: 767px) 100vw, 50vw" className="object-cover" /></div>
+    <div className="home-promotion-image"><Image src={`/api/home-promotion-image?path=${encodeURIComponent(promotion.imageVersion)}`} alt="" fill unoptimized sizes="(max-width: 767px) 100vw, 50vw" className="object-cover" /></div>
     <div className="home-promotion-copy">
       <p className="home-eyebrow">À découvrir</p>
       <h2 id="promotion-title">{promotion.title}</h2>

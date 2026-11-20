@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(new Uint8Array(contents), {
     headers: {
       "Content-Type": "image/jpeg",
-      "Cache-Control": "private, max-age=60, stale-while-revalidate=60",
+      "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
     },
   });

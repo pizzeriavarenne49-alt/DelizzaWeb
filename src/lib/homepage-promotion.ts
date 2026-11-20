@@ -82,7 +82,7 @@ export function normalizePublishedHomepagePromotion(
   return {
     title,
     description,
-    buttonLabel,
+    buttonLabel: isDuo && !webDuo && action === "product" ? "Commander par téléphone" : buttonLabel,
     action: isDuo && !webDuo ? "counter" : action,
     productId: selected?.id ?? null,
     imageVersion: imagePath,
@@ -90,4 +90,9 @@ export function normalizePublishedHomepagePromotion(
     counterOnly: isDuo && !webDuo,
     endsAt: date(record.endsAt)?.toISOString() ?? null,
   };
+}
+
+/** Keep the browser timer within the signed 32-bit setTimeout range. */
+export function homepagePromotionExpiryDelay(endMs: number, nowMs: number): number {
+  return Math.max(0, Math.min(2_147_000_000, endMs - nowMs));
 }
