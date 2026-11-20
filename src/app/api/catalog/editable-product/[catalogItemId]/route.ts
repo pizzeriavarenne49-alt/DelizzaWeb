@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { repo } from "@/data/repository";
-import { usesIsolatedPizzaDuoFirestoreEmulator } from "@/config/firebase";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +12,7 @@ export async function GET(_request: Request, context: { params: Promise<{ catalo
       catalogItemId === "." || catalogItemId === ".." || /^__.*__$/.test(catalogItemId) ||
       Buffer.byteLength(catalogItemId, "utf8") > 1500) return new NextResponse(null, { status: 404 });
   const product = (await repo.getProducts()).find((candidate) => candidate.id === catalogItemId);
-  if (!product || product.manualOutOfStock || (product.kind === "pizza_duo" && !usesIsolatedPizzaDuoFirestoreEmulator())) {
+  if (!product || product.manualOutOfStock) {
     return new NextResponse(null, { status: 404 });
   }
   return NextResponse.json(product, { headers: { "Cache-Control": "no-store" } });

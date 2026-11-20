@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 // same public products as the menu, for the server-configured tenant.
 export async function GET(request: Request): Promise<Response> {
   if (!isFirebaseSourceActive() || !WL_APP_ID) return new Response(null, { status: 204 });
+  const appDoc = WL_APP_ID === "d_lizza" ? await getDb().collection("wl_apps").doc(WL_APP_ID).get() : null;
+  const includeDuo = appDoc?.data()?.pizzaDuoWebEnabled === true;
   const encoder = new TextEncoder();
   let cleanup: (close?: boolean) => void = () => {};
   const stream = new ReadableStream<Uint8Array>({
@@ -46,6 +48,13 @@ export async function GET(request: Request): Promise<Response> {
                   manualOutOfStock: data.manualOutOfStock === true,
                 }];
               }));
+            if (includeDuo) {
+              const duo = snapshot.docs.find((doc) => doc.id === "d_lizza_pizza_duo_comptoir")?.data();
+              if (duo?.appId === WL_APP_ID && duo.kind === "pizza_duo" && duo.isActive === false && duo.visible === false &&
+                duo.price?.amountCents === 1490 && duo.pizzaUnits === 1 && duo.manualOutOfStock !== true) {
+                products.d_lizza_pizza_duo_comptoir = { stockManaged: false, stockQty: null, manualOutOfStock: false };
+              }
+            }
             const payload = JSON.stringify(products);
             if (payload === lastPayload) return;
             lastPayload = payload;
