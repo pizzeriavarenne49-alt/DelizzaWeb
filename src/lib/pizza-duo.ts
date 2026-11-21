@@ -7,6 +7,7 @@ import type {
 export const PIZZA_DUO_FIXED_PRICE_CENTS = 1490;
 export const PIZZA_DUO_TENANT_ID = "d_lizza";
 export const PIZZA_DUO_CATALOG_ID = "d_lizza_pizza_duo_comptoir";
+export const PIZZA_DUO_CATEGORY_ID = "d_lizza_pizza_duo";
 const DELIZZA_BASE_CATEGORIES: Readonly<Record<string, "tomate" | "creme">> = {
   "3LPzBegYvk8oA8rSVjkc": "tomate",
   "PxEZOWgUxAHxedwWHOSp": "creme",

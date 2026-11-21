@@ -8,7 +8,7 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import type { Product, Category } from "@/types";
 import { track } from "@/analytics";
-import { isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isPizzaDuoRecipe } from "@/lib/pizza-duo";
+import { isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isPizzaDuoRecipe, PIZZA_DUO_CATEGORY_ID } from "@/lib/pizza-duo";
 import { useCatalogAvailability } from "@/contexts/CatalogAvailabilityContext";
 import type { StockAvailabilityProduct } from "@/lib/product-availability";
 
@@ -57,7 +57,7 @@ const hideDuoDuringServerRender = () => false;
 
 export default function MenuClient({ categories, products, pizzaDuoWebEnabled, requestedProductId }: MenuClientProps) {
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const onlineOrdering = useOnlineOrderingStatus();
   const catalogAvailability = useCatalogAvailability();
   const localPizzaDuoEnabled = useSyncExternalStore(subscribeToFixedEnvironment, isPizzaDuoDevelopmentEnabled, hideDuoDuringServerRender);
@@ -67,6 +67,16 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled, r
   const liveProducts = useMemo(() => products.map((product) => withLiveAvailability(product, catalogAvailability)), [products, catalogAvailability]);
   const pizzaDuoRecipes = liveProducts.filter(isPizzaDuoRecipe);
   const visibleCatalogProducts = liveProducts.filter((product) => !isPizzaDuoProduct(product) || pizzaDuoEnabled);
+  const duoProducts = visibleCatalogProducts.filter(isPizzaDuoProduct);
+  const standardProducts = visibleCatalogProducts.filter((product) => !isPizzaDuoProduct(product));
+  const hasDuo = duoProducts.length > 0;
+  const assignedDuoCategory = categories.find((category) => category.id === PIZZA_DUO_CATEGORY_ID &&
+    duoProducts.some((product) => product.category === category.id));
+  const duoCategoryTitle = assignedDuoCategory?.name ?? "Pizza Duo";
+  const activeCategory = selectedCategory === PIZZA_DUO_CATEGORY_ID && !hasDuo ? "all" : selectedCategory;
+  const isDuoCategory = activeCategory === PIZZA_DUO_CATEGORY_ID;
+  const menuCategories = categories.filter((category) => category.id !== "popular" &&
+    (category.id !== PIZZA_DUO_CATEGORY_ID || category === assignedDuoCategory));
   const renderProduct = (product: Product) => (
     <ProductCard
       key={product.id}
@@ -84,7 +94,7 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled, r
   const searchTerm = normalizeText(search.trim());
   const isSearching = searchTerm.length > 0;
 
-  const searchFilteredProducts = visibleCatalogProducts.filter((product) => {
+  const searchFilteredProducts = (isDuoCategory ? duoProducts : visibleCatalogProducts).filter((product) => {
     if (!isSearching) {
       return true;
     }
@@ -114,10 +124,10 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled, r
     return haystack.includes("creme");
   };
 
-  const visibleCategories = categories
-    .filter((category) => category.id !== "popular")
+  const visibleCategories = menuCategories
     .slice()
     .sort((a, b) => {
+      if (assignedDuoCategory) return a.order - b.order;
       const priorityOf = (id: string) => {
         const priority = CATEGORY_PRIORITY.indexOf(id);
         return priority === -1 ? Number.MAX_SAFE_INTEGER : priority;
@@ -132,18 +142,20 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled, r
     });
 
   const allSections: MenuSection[] = [];
+  const duoSection = { id: PIZZA_DUO_CATEGORY_ID, title: duoCategoryTitle, products: duoProducts };
+  if (hasDuo && !assignedDuoCategory) {
+    allSections.push(duoSection);
+  }
 
   for (const category of visibleCategories) {
+    if (category.id === PIZZA_DUO_CATEGORY_ID) {
+      allSections.push(duoSection);
+      continue;
+    }
     if (category.id === "pizzas") {
-      const pizzaProducts = visibleCatalogProducts.filter((product) => product.category === "pizzas");
-      const duoProducts = pizzaProducts.filter(isPizzaDuoProduct);
-      const recipePizzas = pizzaProducts.filter((product) => !isPizzaDuoProduct(product));
+      const recipePizzas = standardProducts.filter((product) => product.category === "pizzas");
       const baseTomate = recipePizzas.filter((product) => !isCreamBasePizza(product));
       const baseCreme = recipePizzas.filter((product) => isCreamBasePizza(product));
-
-      if (duoProducts.length > 0) {
-        allSections.push({ id: "pizza-duo", title: "Pizza Duo", products: duoProducts });
-      }
 
       if (baseTomate.length > 0) {
         allSections.push({
@@ -164,7 +176,7 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled, r
       continue;
     }
 
-    const categoryProducts = visibleCatalogProducts.filter((product) => product.category === category.id);
+    const categoryProducts = standardProducts.filter((product) => product.category === category.id);
     if (categoryProducts.length === 0) {
       continue;
     }
@@ -176,19 +188,12 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled, r
     });
   }
 
-  const activeCategoryName =
-    activeCategory === "popular"
-      ? "Produits populaires"
-      : activeCategory === "all"
-        ? "Tout le catalogue"
-        : categories.find((category) => category.id === activeCategory)?.name ?? "";
-
-  const visibleProducts =
-    activeCategory === "popular"
-      ? searchFilteredProducts.filter((product) => product.is_popular)
-      : activeCategory === "all"
-        ? searchFilteredProducts
-        : searchFilteredProducts.filter((product) => product.category === activeCategory);
+  const activeCategoryName = isDuoCategory
+    ? duoCategoryTitle
+    : menuCategories.find((category) => category.id === activeCategory)?.name ?? "";
+  const visibleProducts = isDuoCategory
+    ? duoProducts
+    : standardProducts.filter((product) => product.category === activeCategory);
 
   return (
     <div className="flex flex-col gap-5 px-4 pt-4">
@@ -219,15 +224,28 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled, r
           label="Tous"
           icon="✨"
           active={activeCategory === "all"}
-          onClick={() => setActiveCategory("all")}
+          onClick={() => setSelectedCategory("all")}
         />
-        {categories.map((cat) => (
+        {hasDuo && !assignedDuoCategory && (
+          <Chip
+            label={duoCategoryTitle}
+            active={isDuoCategory}
+            onClick={() => {
+              setSearch("");
+              setSelectedCategory(PIZZA_DUO_CATEGORY_ID);
+            }}
+          />
+        )}
+        {menuCategories.map((cat) => (
           <Chip
             key={cat.id}
             label={cat.name}
             icon={cat.icon}
             active={activeCategory === cat.id}
-            onClick={() => setActiveCategory(cat.id)}
+            onClick={() => {
+              if (cat.id === PIZZA_DUO_CATEGORY_ID) setSearch("");
+              setSelectedCategory(cat.id);
+            }}
           />
         ))}
       </div>

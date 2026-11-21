@@ -13,7 +13,7 @@
 
 import { FieldPath } from "firebase-admin/firestore";
 import { isPublicProductDoc } from "@/lib/catalog-publication";
-import { getPizzaDuoRecipeBase } from "@/lib/pizza-duo";
+import { getPizzaDuoRecipeBase, PIZZA_DUO_CATALOG_ID, PIZZA_DUO_CATEGORY_ID } from "@/lib/pizza-duo";
 import type { Product, Category, HeroSlide, Offer, ProductIngredient } from "@/types";
 import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
 import type { DataRepository } from "@/data/repository";
@@ -495,19 +495,21 @@ export class FirebaseRepository implements DataRepository {
       try {
         const [appDoc, duoDoc] = await Promise.all([
           getDb().collection("wl_apps").doc(WL_APP_ID).get(),
-          getDb().collection("wl_catalog_items").doc("d_lizza_pizza_duo_comptoir").get(),
+          getDb().collection("wl_catalog_items").doc(PIZZA_DUO_CATALOG_ID).get(),
         ]);
         const duo = duoDoc.data();
         const categoryDoc = typeof duo?.categoryId === "string"
           ? await getDb().collection("wl_catalog_categories").doc(duo.categoryId).get()
           : null;
         const category = categoryDoc?.data();
-        const validBaseCategory = category?.appId === WL_APP_ID && category?.isActive === true &&
-          ["base tomate", "base crème", "base creme"].includes(String(category?.name ?? "").trim().toLocaleLowerCase("fr"));
+        const validDuoCategory = category?.appId === WL_APP_ID && category?.isActive === true &&
+          (categoryDoc?.id === PIZZA_DUO_CATEGORY_ID
+            ? isPublicCategoryDoc(category)
+            : ["base tomate", "base crème", "base creme"].includes(str(category.name).trim().toLocaleLowerCase("fr")));
         if (appDoc.data()?.pizzaDuoWebEnabled === true && duoDoc.exists && duo &&
           duo.appId === WL_APP_ID && duo.kind === "pizza_duo" && duo.isActive === false && duo.visible === false &&
           duo.price?.amountCents === 1490 && String(duo.price?.currency ?? "EUR").toUpperCase() === "EUR" &&
-          duo.pizzaUnits === 1 && duo.manualOutOfStock !== true && validBaseCategory &&
+          duo.pizzaUnits === 1 && duo.manualOutOfStock !== true && validDuoCategory &&
           !["hidden", "archived", "isArchived", "deleted", "isDeleted"].some((field) => duo[field] === true)) {
           rawProducts.push(mapProduct(duoDoc.id, { ...duo, isActive: true, visible: true }));
         }

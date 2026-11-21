@@ -1,4 +1,4 @@
-import { repo, withFallback, mockRepo, POPULAR_CATEGORY } from "@/data/repository";
+import { repo, withFallback, mockRepo } from "@/data/repository";
 import MenuClient from "./MenuClient";
 import { getPizzaDuoWebEnabled } from "@/data/website-homepage";
 import type { Metadata } from "next";
@@ -53,7 +53,7 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
 
   return (
     <MenuClient
-      categories={[POPULAR_CATEGORY, ...cats]}
+      categories={cats}
       products={prods}
       pizzaDuoWebEnabled={pizzaDuoWebEnabled}
       requestedProductId={typeof params.product === "string" ? params.product : undefined}

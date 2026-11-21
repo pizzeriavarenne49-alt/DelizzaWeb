@@ -15,16 +15,6 @@
 import type { Product, Category, HeroSlide, Offer } from "@/types";
 // HeroSlide kept for DirectusRepository which still maps hero_slides from CMS
 
-/** Virtual "Populaire" category prepended to the list from CMS */
-export const POPULAR_CATEGORY: Category = {
-  id: "popular",
-  name: "Populaire",
-  slug: "populaire",
-  order: -1,
-  active: true,
-  icon: "🔥",
-};
-
 // ---------------------------------------------------------------------------
 // Repository interface
 // ---------------------------------------------------------------------------
