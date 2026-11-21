@@ -9,6 +9,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { formatPrice } from "@/types";
+import { isLocalStripeTestEnabled } from "@/lib/demo-payment";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
@@ -83,6 +84,11 @@ function StripeCheckoutForm({
         <PaymentElement
           options={{
             layout: "tabs",
+            // Link may take over the automatic submit flow. The isolated recipe
+            // specifically validates a test card, so leave Link untouched outside it.
+            ...(isLocalStripeTestEnabled()
+              ? { wallets: { link: "never" as const } }
+              : {}),
           }}
         />
       </div>
