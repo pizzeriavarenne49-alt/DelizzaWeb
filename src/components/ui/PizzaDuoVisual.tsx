@@ -53,9 +53,9 @@ export default function PizzaDuoVisual({ left, right, variant = "duo" }: { left?
       {!single && <div aria-hidden="true" className="absolute inset-y-[8%] left-1/2 w-px -translate-x-1/2 bg-[#f7dfa8]/80 shadow-[0_0_10px_rgba(255,220,156,.85)]" />}
       <div aria-hidden="true" className="absolute inset-[9%] rounded-full border border-white/20" />
     </div>
-    <div className={`mt-3 grid ${single ? "grid-cols-1" : "grid-cols-2"} gap-2 text-center text-[11px] font-semibold uppercase tracking-[.13em] text-[#d9bd86]`}>
-      <span className="truncate">{left?.name ?? (single ? "Votre pizza" : "Première moitié")}</span>
-      {!single && <span className="truncate">{right?.name ?? "Deuxième moitié"}</span>}
-    </div>
+    {!single && <div className="mt-3 grid grid-cols-2 gap-2 text-center text-[11px] font-semibold uppercase tracking-[.13em] text-[#d9bd86]">
+      <span className="truncate">{left?.name ?? "Première moitié"}</span>
+      <span className="truncate">{right?.name ?? "Deuxième moitié"}</span>
+    </div>}
   </div>;
 }
