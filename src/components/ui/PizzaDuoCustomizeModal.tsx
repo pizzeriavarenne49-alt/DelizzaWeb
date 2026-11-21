@@ -49,6 +49,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   const [quantity, setQuantity] = useState(initialQuantity);
   const [stage, setStage] = useState<Stage>(initial ? { page: "review" } : { page: "recipe", side: "left" });
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
+  const [openSupplementId, setOpenSupplementId] = useState<string>();
   const [supplementSelections, setSupplementSelections] = useState<PizzaDuoSupplementSelection[]>(() =>
     normalizePizzaDuoSupplementSelections((initial?.supplements ?? []).map(({ ingredientId, target }) => ({ ingredientId, target }))),
   );
@@ -121,10 +122,16 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
     workshopScroll.current?.scrollTo({ top: 0 });
     stepHeading.current?.focus({ preventScroll: true });
   }, [page, side]);
+  useEffect(() => {
+    if (openSupplementId) {
+      document.getElementById(`duo-extra-scope-${openSupplementId}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [openSupplementId]);
 
   function goTo(next: Stage) {
     setStage(next);
     setOpenPanel(null);
+    setOpenSupplementId(undefined);
     if (next.page === "recipe") {
       setFilter("all");
       setRecipePage(0);
@@ -179,26 +186,19 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
     confirmLock.current = true;
     onConfirm(composition, quantity);
   }
-  function toggleSupplement(ingredientId: string, supplementTarget: PizzaDuoSupplementTarget) {
+  function setIngredientTarget(ingredientId: string, target?: PizzaDuoSupplementTarget) {
     setSupplementSelections((previous) => {
-      const ingredientSelections = previous.filter((item) => item.ingredientId === ingredientId);
       const rest = previous.filter((item) => item.ingredientId !== ingredientId);
-      const selectedHere = ingredientSelections.some((item) => item.target === supplementTarget);
-      if (selectedHere) return rest.concat(ingredientSelections.filter((item) => item.target !== supplementTarget));
-      if (supplementTarget === "whole") {
-        const next = normalizePizzaDuoSupplementSelections(rest.concat({ ingredientId, target: "whole" }));
-        return next.length <= 40 ? next : previous;
-      }
-      if (ingredientSelections.some((item) => item.target === "whole")) {
-        return normalizePizzaDuoSupplementSelections(rest.concat({
-          ingredientId,
-          target: supplementTarget === "left" ? "right" : "left",
-        }));
-      }
-      const halfSelections = ingredientSelections;
-      const next = normalizePizzaDuoSupplementSelections(rest.concat(halfSelections, { ingredientId, target: supplementTarget }));
-      return next.length <= 40 ? next : previous;
+      if (!target) return rest;
+      return rest.length < 40 ? rest.concat({ ingredientId, target }) : previous;
     });
+    setOpenSupplementId(undefined);
+    dialog.current?.querySelector<HTMLButtonElement>(`[data-duo-supplement="${CSS.escape(ingredientId)}"]`)?.focus({ preventScroll: true });
+  }
+
+  function togglePanel(panel: Exclude<OpenPanel, null>) {
+    setOpenPanel((previous) => previous === panel ? null : panel);
+    setOpenSupplementId(undefined);
   }
   function toggleRemovedIngredient(target: Side, ingredientId: string) {
     setRemovedIngredientIds((previous) => ({
@@ -219,9 +219,9 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
       : undefined;
   const supplementTarget = page === "whole" ? "whole" : side;
   const supplementOptions = getPizzaDuoSupplementOptions(left, right, supplementTarget, product);
-  const selectedSupplementIds = new Set(validSupplements
-    .filter(({ target }) => target === supplementTarget || target === "whole")
-    .map(({ ingredientId }) => ingredientId));
+  const wholeSupplementIds = new Set(getPizzaDuoSupplementOptions(left, right, "whole", product).map(({ id }) => id));
+  const selectedTargets = new Map(validSupplements.map(({ ingredientId, target }) => [ingredientId, target]));
+  const currentHalfSupplementCount = validSupplements.filter(({ target }) => target === side || target === "whole").length;
   const removableIngredients = current?.allowIngredientRemoval ? getPizzaDuoBaseIngredients(current) : [];
   const defaultBase = normalizedBase(current?.recipeBase) === "tomate" ? "tomate"
     : normalizedBase(current?.recipeBase) === "creme" ? "crème" : undefined;
@@ -243,14 +243,41 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
     }
     return <SupplementPicker
       ingredients={supplementOptions}
-      itemsClassName="grid grid-cols-2 gap-2"
+      itemsClassName="grid grid-cols-2 items-start gap-2"
       renderIngredient={(ingredient) => {
-        const priceDeltaCents = getPizzaDuoSupplementPriceCents(ingredient.defaultPriceModifier.amountCents, supplementTarget);
-        const selected = selectedSupplementIds.has(ingredient.id);
-        return <button key={ingredient.id} type="button" onClick={() => toggleSupplement(ingredient.id, supplementTarget)} aria-pressed={selected} className={`flex min-h-12 items-center gap-2 rounded-xl border p-2 text-left sm:px-3 ${selected ? "border-[#E8C078] bg-[#352817]" : "border-[#493a2c] bg-[#211a14] hover:border-[#89623a]"}`}>
-          <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border text-xs ${selected ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#806646] text-transparent"}`}>✓</span>
-          <span className="min-w-0 flex-1"><span className="block break-words text-xs font-bold text-[#F6EEE1] sm:text-sm">{ingredient.name}</span><span className="block whitespace-nowrap text-[11px] text-[#C7B498]">+ {formatPrice(priceDeltaCents)} €</span></span>
-        </button>;
+        const selectedTarget = selectedTargets.get(ingredient.id);
+        const selected = selectedTarget === supplementTarget || selectedTarget === "whole";
+        const editingWhole = supplementTarget === "whole";
+        const expanded = !editingWhole && openSupplementId === ingredient.id;
+        const choiceId = `duo-extra-scope-${ingredient.id}`;
+        const fullPriceCents = ingredient.defaultPriceModifier.amountCents;
+        const price = (target: PizzaDuoSupplementTarget) => `+ ${formatPrice(getPizzaDuoSupplementPriceCents(fullPriceCents, target))} €`;
+        const selectionLabel = selectedTarget === "whole" && !editingWhole ? "Sur les deux moitiés"
+          : selectedTarget && !selected && !editingWhole ? "Sur l’autre moitié" : undefined;
+        const scopeOptions: { target: PizzaDuoSupplementTarget; label: string }[] = [{ target: side, label: "Cette moitié" }];
+        if (wholeSupplementIds.has(ingredient.id)) scopeOptions.push({ target: "whole", label: "Toute la pizza" });
+        return <div key={ingredient.id} className={`min-w-0 overflow-hidden rounded-xl border ${selected || expanded ? "border-[#E8C078] bg-[#352817]" : "border-[#493a2c] bg-[#211a14] hover:border-[#89623a]"}`}>
+          <button type="button" data-duo-supplement={ingredient.id}
+            onClick={() => editingWhole ? setIngredientTarget(ingredient.id, selected ? undefined : "whole") : setOpenSupplementId(expanded ? undefined : ingredient.id)}
+            aria-pressed={editingWhole ? selected : undefined} aria-expanded={editingWhole ? undefined : expanded}
+            aria-controls={expanded ? choiceId : undefined}
+            className="flex min-h-12 w-full items-center gap-2 rounded-xl p-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#E8C078] sm:px-3">
+            <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border text-xs ${selected ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#806646] text-[#E8C078]"}`}>{selected ? "✓" : expanded ? "−" : "+"}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block break-words text-xs font-bold text-[#F6EEE1] sm:text-sm">{ingredient.name}</span>
+              <span className="block text-[11px] text-[#D7C0A2]">{selectionLabel ?? price(supplementTarget)}</span>
+            </span>
+          </button>
+          {expanded && <div id={choiceId} role="group" aria-label={`Votre choix pour ${ingredient.name}`} className="scroll-mb-28 space-y-1.5 border-t border-[#6d5132] p-1.5 sm:p-2">
+            {scopeOptions.map(({ target, label }) => <button key={target} type="button" data-duo-extra-target={target} aria-pressed={selectedTarget === target}
+              onClick={() => setIngredientTarget(ingredient.id, target)}
+              className={`block min-h-10 w-full rounded-lg border px-2 py-1.5 text-left text-[11px] font-semibold leading-tight focus-visible:outline-2 focus-visible:outline-[#E8C078] sm:text-xs ${selectedTarget === target ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#6d5132] bg-[#211a14] text-[#F6EEE1] hover:border-[#E8C078]"}`}>
+              <span className="block">{label}</span><span className="block whitespace-nowrap">{price(target)}</span>
+            </button>)}
+            {selected && <button type="button" data-duo-extra-target="remove" onClick={() => setIngredientTarget(ingredient.id, selectedTarget === "whole" ? (side === "left" ? "right" : "left") : undefined)}
+              className="min-h-10 w-full rounded-lg px-2 text-left text-[11px] font-semibold text-[#E8C078] hover:underline focus-visible:outline-2 focus-visible:outline-[#E8C078]">Retirer de cette moitié</button>}
+          </div>}
+        </div>;
       }}
     />;
   }
@@ -334,7 +361,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
             </section>}
             <section className={optionPanelClass} aria-label="Ingrédients de la recette">
               {removableIngredients.length > 0 ? <>
-                <button type="button" aria-expanded={openPanel === "removals"} aria-controls="duo-removal-options" onClick={() => setOpenPanel(openPanel === "removals" ? null : "removals")} className={panelButtonClass}>
+                <button type="button" aria-expanded={openPanel === "removals"} aria-controls="duo-removal-options" onClick={() => togglePanel("removals")} className={panelButtonClass}>
                   <span>Retirer des ingrédients</span>
                   <span aria-hidden="true" className="shrink-0 text-xs text-[#E8C078]">{removedIngredientIds[side].length || ""} {openPanel === "removals" ? "−" : "+"}</span>
                 </button>
@@ -349,13 +376,13 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
               </> : <p className="px-4 py-3 text-xs text-[#C7B498]">Retrait d’ingrédients indisponible pour cette recette.</p>}
             </section>
             <section className={optionPanelClass} aria-label="Suppléments de cette moitié">
-              <button type="button" aria-expanded={openPanel === "supplements"} aria-controls="duo-supplement-options" onClick={() => setOpenPanel(openPanel === "supplements" ? null : "supplements")} className={panelButtonClass}>
+              <button type="button" aria-expanded={openPanel === "supplements"} aria-controls="duo-supplement-options" onClick={() => togglePanel("supplements")} className={panelButtonClass}>
                 <span>Ajouter des suppléments</span>
-                <span aria-hidden="true" className="shrink-0 text-xs text-[#E8C078]">{selectedSupplementIds.size || ""} {openPanel === "supplements" ? "−" : "+"}</span>
+                <span aria-hidden="true" className="shrink-0 text-xs text-[#E8C078]">{currentHalfSupplementCount || ""} {openPanel === "supplements" ? "−" : "+"}</span>
               </button>
               <div id="duo-supplement-options" hidden={openPanel !== "supplements"}>
                 {openPanel === "supplements" && <div className="space-y-2 px-3 pb-3">
-                  <p className="text-xs text-[#C7B498]">Tarifs à la moitié, arrondis au centime.</p>
+                  <p className="text-xs text-[#C7B498]">Touchez un supplément pour choisir où l’ajouter.</p>
                   {renderSupplementOptions()}
                 </div>}
               </div>

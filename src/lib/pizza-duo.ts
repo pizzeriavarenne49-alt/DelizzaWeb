@@ -151,7 +151,8 @@ function duoPolicySupplements(duoProduct: Product, ids: readonly string[]): Prod
 /**
  * A saved Duo policy belongs to the parent product and applies to either half
  * and the whole pizza. Older parents have no field and retain the recipe
- * policy, preserving existing carts and catalogue entries.
+ * policy, preserving existing carts and catalogue entries. A shared policy
+ * can already quote a whole-pizza extra while the second recipe is unselected.
  */
 export function getPizzaDuoSupplementOptions(
   left: Product | undefined,
@@ -159,7 +160,7 @@ export function getPizzaDuoSupplementOptions(
   target: PizzaDuoSupplementTarget,
   duoProduct?: Product,
 ): ProductIngredient[] {
-  if (target === "whole" ? !left || !right : !(target === "left" ? left : right)) return [];
+  if (!left && !right) return [];
   if (duoProduct?.pizzaDuoSupplementIds !== undefined) return duoPolicySupplements(duoProduct, duoProduct.pizzaDuoSupplementIds);
   if (duoProduct?.pizzaCommonSupplementIds !== undefined) return duoPolicySupplements(duoProduct, duoProduct.pizzaCommonSupplementIds);
   if (target === "left") return validSupplements(left);

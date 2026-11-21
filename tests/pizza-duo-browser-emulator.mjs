@@ -147,13 +147,31 @@ try {
       section.click(); return true;
     })()`);
     await eventually(`(() => {
-      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.includes('Mozzarella') && /[+] 0[.,]63/.test(b.textContent));
+      const button = document.querySelector('[role="dialog"] [data-duo-supplement="mozza"]');
       if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-duo-extra-target="left"]');
+      if (!button || !/0[.,]63/.test(button.textContent)) return false;
       button.click(); return true;
     })()`);
     // A single half at 1.25 EUR is charged as 0.63 EUR (rounded), proving the
     // half-price path before the matching right-half selection is made.
     await eventually(`document.querySelector('[role="dialog"]')?.textContent.match(/15[.,]53/)`);
+    // Explicitly promote the extra to the whole pizza before a right recipe is
+    // picked. This must not require a completed Duo selection.
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-duo-supplement="mozza"]');
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-duo-extra-target="whole"]');
+      if (!button || !/1[.,]25/.test(button.textContent)) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`document.querySelector('[role="dialog"]')?.textContent.match(/16[.,]15/)`);
     await eventually(`(() => {
       const button = document.querySelector('[role="dialog"] [data-testid="pizza-duo-next-half"]');
       if (!button || button.disabled) return false;
@@ -166,6 +184,29 @@ try {
       button.click(); return true;
     })()`);
     await eventually(`document.querySelector('[role="dialog"]')?.querySelector('[data-testid="pizza-duo-review"]')`);
+    await eventually(`(() => {
+      const section = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.firstElementChild?.textContent.trim() === 'Ajouter des suppléments' && b.getAttribute('aria-expanded') === 'false');
+      if (!section) return false;
+      section.click(); return true;
+    })()`);
+    // The second side can see that the extra is already applied to both halves.
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-duo-supplement="mozza"]');
+      return button?.textContent.includes('Sur les deux moitiés');
+    })()`);
+    // Removing only the current (right) side downgrades the previous whole
+    // allocation to the left half instead of dropping the extra entirely.
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-duo-supplement="mozza"]');
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-duo-extra-target="remove"]');
+      if (!button || !button.textContent.includes('Retirer de cette moitié')) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`document.querySelector('[role="dialog"]')?.textContent.match(/15[.,]53/)`);
     await eventually(`(() => {
       const section = Array.from(document.querySelectorAll('[role="dialog"] summary, [role="dialog"] button')).find(b => b.firstElementChild?.textContent.trim() === 'Retirer des ingrédients');
       if (!section) return false;
@@ -182,12 +223,18 @@ try {
       section.click(); return true;
     })()`);
     await eventually(`(() => {
-      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.includes('Mozzarella') && /[+] 0[.,]63/.test(b.textContent));
+      const button = document.querySelector('[role="dialog"] [data-duo-supplement="mozza"]');
       if (!button) return false;
       button.click(); return true;
     })()`);
-    // Two matching half additions normalize to the full 1.25 EUR supplement.
-    await eventually(`document.querySelector('[role="dialog"]')?.textContent.match(/16[.,]15/)`);
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-duo-extra-target="right"]');
+      if (!button || !/0[.,]63/.test(button.textContent)) return false;
+      button.click(); return true;
+    })()`);
+    // Selecting only the current half moves the extra to the right at the
+    // same rounded half price of 0.63 EUR.
+    await eventually(`document.querySelector('[role="dialog"]')?.textContent.match(/15[.,]53/)`);
     await eventually(`(() => {
       const button = document.querySelector('[role="dialog"] [data-testid="pizza-duo-review"]');
       if (!button || button.disabled) return false;
@@ -215,7 +262,7 @@ try {
     })()`);
     assert.equal(await eventually(`(() => {
       const dialog = document.querySelector('[role="dialog"]');
-      if (!dialog?.textContent.match(/17[.,]40/)) return false;
+      if (!dialog?.textContent.match(/16[.,]78/)) return false;
       const button = dialog.querySelector('[data-testid="pizza-duo-confirm"]');
       if (!button || button.disabled) return false;
       button.click(); return true;
@@ -253,9 +300,9 @@ try {
     })()`);
     await eventually(`!document.getElementById('pizza-duo-title') && !document.querySelector('[aria-label="Panier"]').textContent.includes('Chèvre miel')`);
     await evaluate(`document.querySelector('button[aria-label="Augmenter la quantité"]').click()`);
-    await eventually(`/34[.,]80/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
+    await eventually(`/33[.,]56/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
     await evaluate(`document.querySelector('button[aria-label="Diminuer la quantité"]').click()`);
-    await eventually(`!/34[.,]80/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
+    await eventually(`!/33[.,]56/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
     await evaluate(`document.querySelector('button[aria-label="Diminuer la quantité"]').click()`);
     await eventually(`document.querySelector('[aria-label="Panier"]')?.textContent.includes('Votre panier est vide')`);
     console.log(`Duo browser configured, added, edited and removed at ${width}px`);
