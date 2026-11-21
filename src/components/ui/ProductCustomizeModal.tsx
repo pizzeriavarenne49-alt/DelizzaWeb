@@ -315,7 +315,7 @@ export default function ProductCustomizeModal({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 32, scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="pointer-events-auto flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-[#D4A053]/20 bg-[#13110F] shadow-[0_-8px_40px_rgba(0,0,0,0.6)] md:max-h-[88dvh] md:max-w-[720px] md:rounded-[22px] md:shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
+          className="relative pointer-events-auto flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-[#D4A053]/20 bg-[#13110F] shadow-[0_-8px_40px_rgba(0,0,0,0.6)] md:max-h-[88dvh] md:max-w-[720px] md:rounded-[22px] md:shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
           aria-modal="true"
           role="dialog"
           aria-label={`Détail de ${product.name}`}

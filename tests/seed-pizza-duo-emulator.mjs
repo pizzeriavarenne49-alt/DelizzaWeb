@@ -59,7 +59,11 @@ await db.collection("wl_apps").doc("d_lizza").set({
   appId: "d_lizza",
   timeZone: "Europe/Paris",
   defaultDailyProductionUnits: 80,
-  ...(stripeBrowser ? { pizzaDuoWebEnabled: true, pizzaDuoPosEnabled: false } : {}),
+  ...(stripeBrowser ? {
+    pizzaDuoWebEnabled: true,
+    pizzaDuoPosEnabled: false,
+    paymentSettings: { enabledMethods: ["card"] },
+  } : {}),
   fixtureOnly: true,
 }, { merge: true });
 await db.collection("wl_time_slots_config").doc("d_lizza").set(capacityConfig, { merge: true });
