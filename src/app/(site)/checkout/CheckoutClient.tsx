@@ -1782,8 +1782,10 @@ export default function CheckoutClient() {
   const handlePaymentError = useCallback((error: unknown) => {
     console.error("[stripe] Payment failed:", error);
     recordMarketingEvent("checkout_error", { path: "/checkout", errorCode: "payment_failed" });
-    setError(getClientErrorMessage(error, "payment"));
-    setStep(2);
+    const message = getClientErrorMessage(error, "payment");
+    setError(message);
+    // A declined card can be replaced on the same Stripe intent.
+    if (message !== CLIENT_ERROR_MESSAGES.paymentDeclined) setStep(2);
   }, []);
 
   return (

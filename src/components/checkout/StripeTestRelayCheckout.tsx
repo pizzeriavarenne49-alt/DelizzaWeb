@@ -52,6 +52,9 @@ export default function StripeTestRelayCheckout({ appId, orderId, paymentIntentI
         window.location.assign(redirect.href);
         return;
       }
+      if (data.status === "requires_payment_method" && scenario === "decline") {
+        throw Object.assign(new Error("Card declined in Stripe Test."), { code: "card_declined" });
+      }
       throw new Error(data.message ?? "Le paiement Stripe Test a été refusé.");
     } catch (error) {
       confirming.current = false;
