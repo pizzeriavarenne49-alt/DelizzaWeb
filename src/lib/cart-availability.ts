@@ -4,7 +4,10 @@ import { doc, getDocFromServer } from "firebase/firestore";
 import { getClientFirestore } from "@/config/firebase-client";
 import type { CartItem, SelectedOption } from "@/types/cart";
 import { stockDemandByProduct } from "@/lib/product-availability";
-import { getPizzaDuoRecipeBase, PIZZA_DUO_CATALOG_ID } from "@/lib/pizza-duo";
+import {
+  getPizzaDuoRecipeBase, getPizzaDuoSupplementPriceCents, isPizzaDuoSupplementTarget,
+  PIZZA_DUO_CATALOG_ID,
+} from "@/lib/pizza-duo";
 
 const WL_APP_ID = process.env.NEXT_PUBLIC_WL_APP_ID ?? process.env.WL_APP_ID ?? "d_lizza";
 
@@ -24,6 +27,8 @@ type LiveIngredient = {
   appId: string;
   name: string;
   isActive: boolean;
+  priceModifierCents: number | null;
+  priceModifierCurrency: string;
 };
 
 type LiveProduct = {
@@ -251,11 +256,14 @@ async function loadLiveIngredient(ingredientId: string): Promise<LiveIngredient 
   const data = snap.data();
   if (data.appId !== WL_APP_ID) return null;
 
+  const modifier = data.defaultPriceModifier;
   return {
     id: snap.id,
     appId: stringOrEmpty(data.appId),
     name: stringOrEmpty(data.name),
     isActive: typeof data.isActive === "boolean" ? data.isActive : true,
+    priceModifierCents: numberOrNull(modifier?.amountCents),
+    priceModifierCurrency: (stringOrEmpty(modifier?.currency) || "EUR").toUpperCase(),
   };
 }
 
@@ -429,6 +437,7 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
 
   const ingredientIds = new Set<string>();
   for (const item of items) {
+    for (const extra of item.duo?.supplements ?? []) ingredientIds.add(extra.ingredientId);
     for (const ingredientId of item.addedSupplements ?? []) {
       ingredientIds.add(ingredientId);
     }
@@ -502,6 +511,23 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
       }
       if (invalidRecipe !== null || recipeIds.some((id) => !productCache.get(id))) {
         issues.push(buildProductIssue(item, duoName, "product_unavailable", "Une recette de cette Pizza Duo n'est plus disponible.", "recette indisponible"));
+        continue;
+      }
+      for (const extra of item.duo.supplements ?? []) {
+        const ingredient = ingredientCache.get(extra.ingredientId);
+        const chosenRecipeIds = extra.target === "whole" ? recipeIds : [extra.target === "left" ? recipeIds[0] : recipeIds[1]];
+        const available = isPizzaDuoSupplementTarget(extra.target) && ingredient?.isActive &&
+          ingredient.name.trim() && ingredient.priceModifierCurrency === "EUR" &&
+          chosenRecipeIds.every((id) => productCache.get(id)?.availableSupplementIds.includes(extra.ingredientId));
+        if (!available || ingredient.priceModifierCents === null ||
+            !Number.isSafeInteger(ingredient.priceModifierCents) || ingredient.priceModifierCents < 0) {
+          issues.push(buildProductIssue(item, duoName, "ingredient_unavailable", "Un supplément de cette Pizza Duo n’est plus disponible. Modifiez sa composition.", "supplément indisponible"));
+          break;
+        }
+        if (getPizzaDuoSupplementPriceCents(ingredient.priceModifierCents, extra.target) !== extra.priceDeltaCents) {
+          issues.push(buildProductIssue(item, duoName, "ingredient_unavailable", "Le prix d’un supplément de cette Pizza Duo a changé. Modifiez sa composition.", "prix du supplément modifié"));
+          break;
+        }
       }
       continue;
     }

@@ -1,5 +1,8 @@
-import type { Product } from "@/types";
-import type { PizzaDuoComposition, PizzaDuoRecipeSnapshot } from "@/types/cart";
+import type { Product, ProductIngredient } from "@/types";
+import type {
+  PizzaDuoComposition, PizzaDuoOrderSelection, PizzaDuoRecipeSnapshot,
+  PizzaDuoSupplementSelection, PizzaDuoSupplementTarget,
+} from "@/types/cart";
 
 export const PIZZA_DUO_FIXED_PRICE_CENTS = 1490;
 export const PIZZA_DUO_TENANT_ID = "d_lizza";
@@ -95,17 +98,95 @@ export function getPizzaDuoIngredientNames(product: Product): string[] {
   return names;
 }
 
-export function createPizzaDuoComposition(leftRecipe: Product, rightRecipe: Product): PizzaDuoComposition {
+function validSupplements(product: Product): ProductIngredient[] {
+  return (product.ingredientLibrary ?? []).filter((ingredient) =>
+    ingredient.appId === PIZZA_DUO_TENANT_ID && ingredient.isActive &&
+    ingredient.name.trim() && ingredient.defaultPriceModifier.currency.toUpperCase() === "EUR" &&
+    Number.isSafeInteger(ingredient.defaultPriceModifier.amountCents) &&
+    ingredient.defaultPriceModifier.amountCents >= 0 &&
+    product.availableSupplementIds?.includes(ingredient.id));
+}
+
+export function getPizzaDuoSupplementOptions(left: Product, right: Product, target: PizzaDuoSupplementTarget): ProductIngredient[] {
+  if (target === "left") return validSupplements(left);
+  if (target === "right") return validSupplements(right);
+  const rightIds = new Set(validSupplements(right).map(({ id }) => id));
+  return validSupplements(left).filter(({ id }) => rightIds.has(id));
+}
+
+export function getPizzaDuoSupplementPriceCents(cataloguePriceCents: number, target: PizzaDuoSupplementTarget): number {
+  return target === "whole" ? cataloguePriceCents : Math.round(cataloguePriceCents / 2);
+}
+
+export function isPizzaDuoSupplementTarget(value: unknown): value is PizzaDuoSupplementTarget {
+  return value === "whole" || value === "left" || value === "right";
+}
+
+export function pizzaDuoSupplementTargetLabel(target: PizzaDuoSupplementTarget): string {
+  if (target === "left") return "Moitié 1";
+  if (target === "right") return "Moitié 2";
+  return "Pizza entière";
+}
+
+export function normalizePizzaDuoSupplementSelections(selections: readonly PizzaDuoSupplementSelection[]): PizzaDuoSupplementSelection[] {
+  const targetsByIngredient = new Map<string, Set<PizzaDuoSupplementTarget>>();
+  for (const { ingredientId, target } of selections) {
+    if (typeof ingredientId !== "string" || !ingredientId || !isPizzaDuoSupplementTarget(target)) continue;
+    const targets = targetsByIngredient.get(ingredientId) ?? new Set<PizzaDuoSupplementTarget>();
+    targets.add(target);
+    targetsByIngredient.set(ingredientId, targets);
+  }
+  return [...targetsByIngredient.keys()].sort().map((ingredientId) => {
+    const targets = targetsByIngredient.get(ingredientId)!;
+    // Covering both halves is one whole-pizza supplement, also for odd prices.
+    const target = targets.has("whole") || targets.size === 2 ? "whole" : targets.has("left") ? "left" : "right";
+    return { ingredientId, target };
+  });
+}
+
+export function createPizzaDuoComposition(
+  leftRecipe: Product, rightRecipe: Product, selections: readonly PizzaDuoSupplementSelection[] = [],
+): PizzaDuoComposition {
+  const options = {
+    left: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "left"),
+    right: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "right"),
+    whole: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "whole"),
+  };
+  const allowed = selections.filter(({ ingredientId, target }) =>
+    isPizzaDuoSupplementTarget(target) && options[target].some(({ id }) => id === ingredientId));
+  const supplements = normalizePizzaDuoSupplementSelections(allowed).flatMap(({ ingredientId, target }) => {
+    const ingredient = options[target].find(({ id }) => id === ingredientId);
+    if (!ingredient) return [];
+    return [{
+      ingredientId, target, ingredientName: ingredient.name,
+      priceDeltaCents: getPizzaDuoSupplementPriceCents(ingredient.defaultPriceModifier.amountCents, target),
+    }];
+  });
   return {
     kind: "pizza_duo",
     leftRecipeId: leftRecipe.id,
     rightRecipeId: rightRecipe.id,
     leftRecipe: snapshotRecipe(leftRecipe),
     rightRecipe: snapshotRecipe(rightRecipe),
+    ...(supplements.length ? { supplements } : {}),
+  };
+}
+
+export function getPizzaDuoUnitPriceCents(duo: PizzaDuoComposition): number {
+  return PIZZA_DUO_FIXED_PRICE_CENTS + (duo.supplements ?? []).reduce((total, item) => total + item.priceDeltaCents, 0);
+}
+
+export function pizzaDuoOrderSelection(duo: PizzaDuoComposition): PizzaDuoOrderSelection {
+  const supplements = normalizePizzaDuoSupplementSelections(duo.supplements ?? []);
+  return {
+    leftRecipeId: duo.leftRecipeId,
+    rightRecipeId: duo.rightRecipeId,
+    ...(supplements.length ? { supplements } : {}),
   };
 }
 
 export function pizzaDuoCartKey(productId: string, duo: PizzaDuoComposition): string {
   // Left/right ordering is intentionally preserved for kitchen readability.
-  return `${productId}__duo:${JSON.stringify([duo.leftRecipeId, duo.rightRecipeId])}`;
+  const { leftRecipeId, rightRecipeId, supplements } = pizzaDuoOrderSelection(duo);
+  return `${productId}__duo:${JSON.stringify(supplements ? [leftRecipeId, rightRecipeId, supplements] : [leftRecipeId, rightRecipeId])}`;
 }

@@ -30,10 +30,28 @@ export interface PizzaDuoRecipeSnapshot {
   ingredients?: string[];
 }
 
+export type PizzaDuoSupplementTarget = "whole" | "left" | "right";
+
+export interface PizzaDuoSupplementSelection {
+  ingredientId: string;
+  target: PizzaDuoSupplementTarget;
+}
+
+export interface PizzaDuoSupplementSnapshot extends PizzaDuoSupplementSelection {
+  ingredientName: string;
+  priceDeltaCents: number;
+}
+
+export interface PizzaDuoOrderSelection {
+  leftRecipeId: string;
+  rightRecipeId: string;
+  supplements?: PizzaDuoSupplementSelection[];
+}
+
 /**
  * Client display snapshot for one physical Pizza Duo.
- * Only the recipe IDs are sent to the order function. The server resolves and
- * freezes its own snapshots, availability and fixed price.
+ * The order function receives the recipe IDs and supplement selections.
+ * It resolves its own ingredient snapshots, eligibility and prices.
  */
 export interface PizzaDuoComposition {
   kind: "pizza_duo";
@@ -41,6 +59,7 @@ export interface PizzaDuoComposition {
   rightRecipeId: string;
   leftRecipe: PizzaDuoRecipeSnapshot;
   rightRecipe: PizzaDuoRecipeSnapshot;
+  supplements?: PizzaDuoSupplementSnapshot[];
 }
 
 export interface CartItemCustomizations {

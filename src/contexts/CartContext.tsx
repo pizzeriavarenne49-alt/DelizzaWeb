@@ -18,7 +18,7 @@ import { isProductUnavailable } from "@/lib/product-availability";
 import { isAdditionalProductQuantityAvailable, canApplyCartQuantity, unavailableStockLines, isCartItemStockAvailable, type StockAvailabilityProduct } from "@/lib/product-availability";
 import { useCatalogAvailability } from "@/contexts/CatalogAvailabilityContext";
 import { recordMarketingEvent } from "@/marketing/marketing-client";
-import { PIZZA_DUO_FIXED_PRICE_CENTS, pizzaDuoCartKey, isValidPizzaDuoProduct } from "@/lib/pizza-duo";
+import { getPizzaDuoUnitPriceCents, pizzaDuoCartKey, isValidPizzaDuoProduct } from "@/lib/pizza-duo";
 import { mergeCartItems, takeGuestCheckoutIntent } from "@/lib/guest-checkout-intent";
 
 const LEGACY_STORAGE_KEYS = ["delizza_cart", "cart", "basket", "panier"];
@@ -377,18 +377,21 @@ function CartStateProvider({
     });
   }, [catalogAvailability]);
 
-  const makePizzaDuoItem = useCallback((product: Product, duo: PizzaDuoComposition, quantity: number): CartItem => ({
-    catalogItemId: product.id,
-    categoryId: product.category,
-    nameSnapshot: product.name,
-    quantity,
-    unitPriceCents: PIZZA_DUO_FIXED_PRICE_CENTS,
-    totalCents: PIZZA_DUO_FIXED_PRICE_CENTS * quantity,
-    taxRateBps: product.tax_rate_bps,
-    cartKey: pizzaDuoCartKey(product.id, duo),
-    catalogKind: "pizza_duo",
-    duo,
-  }), []);
+  const makePizzaDuoItem = useCallback((product: Product, duo: PizzaDuoComposition, quantity: number): CartItem => {
+    const unitPriceCents = getPizzaDuoUnitPriceCents(duo);
+    return {
+      catalogItemId: product.id,
+      categoryId: product.category,
+      nameSnapshot: product.name,
+      quantity,
+      unitPriceCents,
+      totalCents: unitPriceCents * quantity,
+      taxRateBps: product.tax_rate_bps,
+      cartKey: pizzaDuoCartKey(product.id, duo),
+      catalogKind: "pizza_duo",
+      duo,
+    };
+  }, []);
 
   const addPizzaDuo = useCallback((product: Product, duo: PizzaDuoComposition, quantity: number) => {
     if (!isValidPizzaDuoProduct(product) || !Number.isInteger(quantity) || quantity <= 0 || isProductUnavailable(product)) return;
@@ -399,7 +402,7 @@ function CartStateProvider({
       if (!existing) return [...previous, nextItem];
       const nextQuantity = existing.quantity + quantity;
       return previous.map((item) => item.cartKey === nextItem.cartKey
-        ? { ...item, quantity: nextQuantity, totalCents: item.unitPriceCents * nextQuantity }
+        ? { ...nextItem, quantity: nextQuantity, totalCents: nextItem.unitPriceCents * nextQuantity }
         : item);
     });
   }, [catalogAvailability, makePizzaDuoItem]);
@@ -414,7 +417,7 @@ function CartStateProvider({
       const duplicate = withoutCurrent.find((item) => item.cartKey === nextItem.cartKey);
       if (!duplicate) return previous.map((item) => item.cartKey === cartKey ? nextItem : item);
       return withoutCurrent.map((item) => item.cartKey === nextItem.cartKey
-        ? { ...item, quantity: item.quantity + quantity, totalCents: item.unitPriceCents * (item.quantity + quantity) }
+        ? { ...nextItem, quantity: item.quantity + quantity, totalCents: nextItem.unitPriceCents * (item.quantity + quantity) }
         : item);
     });
   }, [catalogAvailability, makePizzaDuoItem]);

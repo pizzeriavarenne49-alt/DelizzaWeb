@@ -9,6 +9,7 @@
 import { httpsCallable } from "firebase/functions";
 import { getClientFunctions } from "@/config/firebase-client";
 import type { FulfillmentData } from "@/types/order";
+import type { PizzaDuoOrderSelection } from "@/types/cart";
 
 export interface CreateOrderItem {
   catalogItemId: string;
@@ -20,10 +21,7 @@ export interface CreateOrderItem {
   addedSupplements?: string[];
   removedIngredients?: string[];
   /** One physical Pizza Duo. Its recipes are validated and snapshotted server-side. */
-  duo?: {
-    leftRecipeId: string;
-    rightRecipeId: string;
-  };
+  duo?: PizzaDuoOrderSelection;
 }
 
 export interface CreateOrderParams {

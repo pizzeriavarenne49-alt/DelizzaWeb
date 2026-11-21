@@ -1,3 +1,5 @@
+import { isPizzaDuoSupplementTarget, pizzaDuoSupplementTargetLabel } from "@/lib/pizza-duo";
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
@@ -47,6 +49,13 @@ function itemLabels(item: Record<string, unknown>): CustomerOrderItemLabelGroup 
     const base = typeof half.base === "string" && half.base.trim() ? ` · base ${half.base === "creme" ? "crème" : half.base}` : "";
     const ingredients = ingredientNames(half.ingredients);
     details.push(`${position} · ${half.name}${base}${ingredients.length ? ` · ${ingredients.join(", ")}` : ""}`);
+  }
+  for (const extra of Array.isArray(duo?.supplements) ? duo.supplements : []) {
+    const supplement = record(extra);
+    if (!supplement || !isPizzaDuoSupplementTarget(supplement.target) ||
+        typeof supplement.ingredientName !== "string" || !supplement.ingredientName.trim()) continue;
+    const savedPrice = price(supplement.priceDeltaCents);
+    details.push(`${pizzaDuoSupplementTargetLabel(supplement.target)} · + ${supplement.ingredientName}${savedPrice ? ` · +${savedPrice}` : ""}`);
   }
   for (const extra of Array.isArray(customizations?.addedSupplements) ? customizations.addedSupplements : []) {
     const supplement = record(extra);

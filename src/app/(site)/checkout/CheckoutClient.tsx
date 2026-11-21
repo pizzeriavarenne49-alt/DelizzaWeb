@@ -39,6 +39,7 @@ import {
 } from "@/lib/client-error-message";
 import { completeDemoPayment, createDemoPaymentIntent, createOrder, createPaymentIntent, type CreateOrderItem } from "@/services/order-service";
 import { isDemoPaymentEnabled, isLocalStripeTestEnabled } from "@/lib/demo-payment";
+import { pizzaDuoOrderSelection, pizzaDuoSupplementTargetLabel } from "@/lib/pizza-duo";
 import { saveGuestCheckoutIntent } from "@/lib/guest-checkout-intent";
 import { customerOrderItemLabelGroups, customerOrderItemLabels, type CustomerOrderItemLabelGroup } from "@/lib/customer-order-item-labels";
 import {
@@ -107,12 +108,7 @@ function toCreateOrderItem(item: CartItem): CreateOrderItem {
     ...(selectedLegacyOptions ? { selectedLegacyOptions } : {}),
     ...(addedSupplements ? { addedSupplements } : {}),
     ...(removedIngredients ? { removedIngredients } : {}),
-    ...(item.duo ? {
-      duo: {
-        leftRecipeId: item.duo.leftRecipeId,
-        rightRecipeId: item.duo.rightRecipeId,
-      },
-    } : {}),
+    ...(item.duo ? { duo: pizzaDuoOrderSelection(item.duo) } : {}),
   };
 }
 
@@ -1108,6 +1104,9 @@ function Step2Summary({
                   {item.duo.leftRecipe.ingredients?.length ? <span>· {item.duo.leftRecipe.ingredients.join(", ")}</span> : null}
                   <span>Moitié 2 · {item.duo.rightRecipe.recipeName} (base {item.duo.rightRecipe.base === "creme" ? "crème" : "tomate"})</span>
                   {item.duo.rightRecipe.ingredients?.length ? <span>· {item.duo.rightRecipe.ingredients.join(", ")}</span> : null}
+                  {item.duo.supplements?.map((extra) => (
+                    <span key={extra.ingredientId}>{pizzaDuoSupplementTargetLabel(extra.target)} · + {extra.ingredientName} (+{formatPrice(extra.priceDeltaCents)} €)</span>
+                  ))}
                 </div>
               )}
               {((item.removedIngredientSnapshots?.length ?? 0) > 0 || (item.addedSupplementSnapshots?.length ?? 0) > 0) && (

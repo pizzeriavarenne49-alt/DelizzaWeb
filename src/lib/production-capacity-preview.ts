@@ -1,5 +1,6 @@
-import type { CartItem } from "@/types/cart";
+import type { CartItem, PizzaDuoOrderSelection } from "@/types/cart";
 import type { FulfillmentData, TimeSlotInfo } from "@/types/order";
+import { pizzaDuoOrderSelection } from "@/lib/pizza-duo";
 
 export const PICKUP_SLOT_UNAVAILABLE_MESSAGE =
   "Ce créneau vient d'être réservé par un autre client. Choisissez un nouvel horaire.";
@@ -14,7 +15,7 @@ export interface PreviewCartItem {
   quantity: number;
   formulaId?: string;
   formulaStepChoices?: Record<string, string[]>;
-  duo?: { leftRecipeId: string; rightRecipeId: string };
+  duo?: PizzaDuoOrderSelection;
 }
 
 export interface ProductionAllocationPreview {
@@ -101,10 +102,7 @@ export function buildPreviewCartItems(items: CartItem[]): PreviewCartItem[] {
       }
     }
     if (item.duo) {
-      previewItem.duo = {
-        leftRecipeId: item.duo.leftRecipeId,
-        rightRecipeId: item.duo.rightRecipeId,
-      };
+      previewItem.duo = pizzaDuoOrderSelection(item.duo);
     }
 
     return previewItem;

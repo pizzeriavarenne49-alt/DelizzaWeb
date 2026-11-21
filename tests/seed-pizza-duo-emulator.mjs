@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
 const projectId = process.env.FIREBASE_PROJECT_ID;
 const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
@@ -13,6 +13,27 @@ db.settings({ host: emulatorHost, ssl: false });
 const stripeBrowser = process.argv.includes("--stripe-test");
 const tomatoCategory = "3LPzBegYvk8oA8rSVjkc";
 const creamCategory = "PxEZOWgUxAHxedwWHOSp";
+
+if (process.argv.includes("--duo-supplements-only")) {
+  const tenant = await db.collection("wl_apps").doc("d_lizza").get();
+  if (tenant.get("fixtureOnly") !== true) throw new Error("Run the local catalogue fixture first.");
+
+  const supplement = await db.collection("wl_ingredient_library").doc("extra-mozza-local").get();
+  if (supplement.get("appId") !== "d_lizza" || supplement.get("defaultPriceModifier.amountCents") !== 125) {
+    throw new Error("The local 125-cent mozzarella fixture is missing.");
+  }
+
+  const recipes = db.collection("wl_catalog_items");
+  const documents = await db.getAll(...["reine-local", "orientale-demo", "public-chevre-miel-demo"].map((id) => recipes.doc(id)));
+  const batch = db.batch();
+  for (const document of documents) {
+    if (document.get("appId") !== "d_lizza") throw new Error(`Local recipe fixture is missing: ${document.id}`);
+    batch.update(document.ref, { availableSupplementIds: FieldValue.arrayUnion(supplement.id) });
+  }
+  await batch.commit();
+  console.log("Local Duo fixtures now offer the 125-cent mozzarella supplement.");
+  process.exit(0);
+}
 
 const commonPizza = {
   appId: "d_lizza",

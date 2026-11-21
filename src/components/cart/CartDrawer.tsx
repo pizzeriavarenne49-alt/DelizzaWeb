@@ -19,7 +19,7 @@ import { loadEditableCartProduct, loadEditablePizzaDuoRecipes } from "@/lib/edit
 import type { CartItem } from "@/types/cart";
 import type { Product } from "@/types";
 import PizzaDuoCustomizeModal from "@/components/ui/PizzaDuoCustomizeModal";
-import { isPizzaDuoRecipe } from "@/lib/pizza-duo";
+import { isPizzaDuoRecipe, pizzaDuoSupplementTargetLabel } from "@/lib/pizza-duo";
 
 interface CartDrawerProps {
   open: boolean;
@@ -227,6 +227,9 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                                 {item.duo.leftRecipe.ingredients?.length ? <span>· {item.duo.leftRecipe.ingredients.join(", ")}</span> : null}
                                 <span>Moitié 2 · {item.duo.rightRecipe.recipeName} (base {item.duo.rightRecipe.base === "creme" ? "crème" : "tomate"})</span>
                                 {item.duo.rightRecipe.ingredients?.length ? <span>· {item.duo.rightRecipe.ingredients.join(", ")}</span> : null}
+                                {item.duo.supplements?.map((extra) => (
+                                  <span key={extra.ingredientId}>{pizzaDuoSupplementTargetLabel(extra.target)} · + {extra.ingredientName} (+{formatPrice(extra.priceDeltaCents)} €)</span>
+                                ))}
                               </div>
                             )}
                             {editError?.cartKey === item.cartKey && (

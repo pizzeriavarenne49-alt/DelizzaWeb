@@ -2,6 +2,7 @@
 
 import type { FulfillmentData } from "@/types/order";
 import type { CartItem } from "@/types/cart";
+import { pizzaDuoOrderSelection } from "@/lib/pizza-duo";
 
 const STORAGE_KEY = "delizza_checkout_attempt_v1";
 
@@ -110,8 +111,7 @@ export function buildCheckoutAttemptFingerprint(input: CheckoutAttemptInput): st
         formulaStepChoices: canonicalFormulaChoices,
         duo: item.duo ? {
           kind: item.duo.kind,
-          leftRecipeId: item.duo.leftRecipeId,
-          rightRecipeId: item.duo.rightRecipeId,
+          ...pizzaDuoOrderSelection(item.duo),
         } : null,
       });
     })
