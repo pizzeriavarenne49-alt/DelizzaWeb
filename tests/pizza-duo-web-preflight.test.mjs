@@ -53,6 +53,40 @@ assert.deepEqual(buildPreviewCartItems([{ catalogItemId: "duo", quantity: 2, duo
 assert.match(customerOrderItemLabels({ items: [{ nameSnapshot: "Pizza Duo", customizations: { duo: { supplements: half.supplements } } }] }).join("\n"),
   /Moitié 1 · \+ Mozzarella · \+0,63 €/);
 
+// Reopening a Duo from an old menu tab gets the latest parent and its
+// currently selectable recipes from one catalogue read, including in its
+// dedicated category. Plain Product reads for cart/edit remain compatible.
+const parent = { ...commonPolicy, id: PIZZA_DUO_CATALOG_ID, category: "d_lizza_pizza_duo", kind: "pizza_duo" };
+let catalogueReads = 0;
+const { GET: readEditableProduct } = loadTsModule(
+  path.resolve("src/app/api/catalog/editable-product/[catalogItemId]/route.ts"),
+  {
+    "next/server": { NextResponse: Response },
+    "@/data/repository": { repo: {
+      async getProducts() {
+        catalogueReads += 1;
+        return [parent, tomato, cream, { ...cream, id: "sold-out", manualOutOfStock: true }];
+      },
+    } },
+  },
+);
+const previousTenant = process.env.WL_APP_ID;
+process.env.WL_APP_ID = "d_lizza";
+try {
+  const params = { params: Promise.resolve({ catalogItemId: parent.id }) };
+  const url = `https://example.invalid/api/catalog/editable-product/${parent.id}`;
+  const detail = await readEditableProduct(new Request(`${url}?includeDuoRecipes=1`), params);
+  assert.equal(detail.headers.get("cache-control"), "no-store");
+  const refreshed = await detail.json();
+  assert.deepEqual(refreshed.product.pizzaCommonSupplementIds, ["mozza"]);
+  assert.deepEqual(refreshed.recipes.map((recipe) => recipe.id), [tomato.id, cream.id]);
+  assert.equal(catalogueReads, 1);
+  assert.equal((await (await readEditableProduct(new Request(url), params)).json()).id, parent.id);
+} finally {
+  if (previousTenant === undefined) delete process.env.WL_APP_ID;
+  else process.env.WL_APP_ID = previousTenant;
+}
+
 const documents = new Map([tomato, cream].map((product) => [product.id, {
   appId: "d_lizza", categoryId: product.category, name: product.name, isActive: true, visible: true,
   pizzaUnits: 1, price: { amountCents: product.price_cents, currency: "EUR" },
@@ -77,14 +111,32 @@ const originalFetch = globalThis.fetch;
 let webEnabled = true;
 let duoPolicyIds;
 let commonPolicyIds;
+let tenantCommonPolicyIds;
 try {
   globalThis.fetch = async (target) => {
-    assert.equal(target, "/api/catalog/editable-product/" + PIZZA_DUO_CATALOG_ID);
-    return webEnabled ? Response.json({
-      name: "Pizza Duo", kind: "pizza_duo", active: true, pizzaUnits: 1, price_cents: 1490,
-      ...(duoPolicyIds === undefined ? {} : { pizzaDuoSupplementIds: duoPolicyIds }),
-      ...(commonPolicyIds === undefined ? {} : { pizzaCommonSupplementIds: commonPolicyIds }),
-    }) : new Response(null, { status: 404 });
+    if (target === "/api/catalog/pizza-common-supplements") {
+      return Response.json(tenantCommonPolicyIds === undefined
+        ? { configured: false }
+        : { configured: true, ids: tenantCommonPolicyIds });
+    }
+    const id = String(target).split("/").pop();
+    if (id === PIZZA_DUO_CATALOG_ID) {
+      return webEnabled ? Response.json({
+        name: "Pizza Duo", kind: "pizza_duo", active: true, pizzaUnits: 1, price_cents: 1490,
+        ...(duoPolicyIds === undefined ? {} : { pizzaDuoSupplementIds: duoPolicyIds }),
+        ...(commonPolicyIds === undefined ? {} : { pizzaCommonSupplementIds: commonPolicyIds }),
+      }) : new Response(null, { status: 404 });
+    }
+    const product = documents.get(id);
+    if (!product) return new Response(null, { status: 404 });
+    return Response.json({
+      name: product.name, category: product.categoryId, active: product.isActive,
+      visible: product.visible, kind: product.kind, pizzaUnits: product.pizzaUnits,
+      price_cents: product.price?.amountCents ?? product.priceCents,
+      baseIngredientIds: product.baseIngredientIds ?? [],
+      availableSupplementIds: product.availableSupplementIds ?? [],
+      allowIngredientRemoval: product.allowIngredientRemoval,
+    });
   };
   assert.equal((await assessCartAvailability(cart)).ok, true);
   assert.equal(reads.includes(PIZZA_DUO_CATALOG_ID), false);
@@ -106,6 +158,18 @@ try {
   commonPolicyIds = [];
   assert.equal((await assessCartAvailability(halfCart)).ok, false);
   commonPolicyIds = undefined;
+  // Classic pizzas must also revalidate against the server-projected common
+  // list. Their raw Firestore document can still hold an older recipe list.
+  documents.get(tomato.id).availableSupplementIds = [];
+  tenantCommonPolicyIds = ["mozza"];
+  const classicWithCommonExtra = [{ catalogItemId: tomato.id, nameSnapshot: tomato.name, quantity: 1, addedSupplements: ["mozza"] }];
+  assert.equal((await assessCartAvailability(classicWithCommonExtra)).ok, true);
+  documents.get(tomato.id).usePizzaCommonSupplements = false;
+  assert.equal((await assessCartAvailability(classicWithCommonExtra)).ok, false);
+  delete documents.get(tomato.id).usePizzaCommonSupplements;
+  tenantCommonPolicyIds = [];
+  assert.equal((await assessCartAvailability(classicWithCommonExtra)).ok, false);
+  tenantCommonPolicyIds = undefined;
   documents.get(tomato.id).availableSupplementIds = ["mozza"];
   documents.set("mozza", { ...mozza, defaultPriceModifier: { amountCents: 150, currency: "EUR" } });
   assert.match((await assessCartAvailability(halfCart)).issues[0].message, /prix.*changé/);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
@@ -42,6 +42,9 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
   const onlineOrdering = useOnlineOrderingStatus();
   const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(initiallyOpen);
+  const [configuratorProduct, setConfiguratorProduct] = useState<Product | null>(null);
+  const [configuratorDuoRecipes, setConfiguratorDuoRecipes] = useState<Product[] | null>(null);
+  const configuratorRequest = useRef(0);
   const isUnavailable = isProductUnavailable(product);
   const orderingDisabled = !onlineOrdering.canStartOrder;
   const stockLimitReached = !canAddProductQuantity(product.id, 1, product);
@@ -52,6 +55,45 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
   const duoCover = isDuo ? getPizzaDuoCoverRecipes(pizzaDuoRecipes) : undefined;
   const cannotOrder = isUnavailable || orderingDisabled || stockLimitReached || !hasValidDuoConfiguration;
   if (isDuo && !pizzaDuoWebEnabled && !isPizzaDuoDevelopmentEnabled()) return null;
+
+  const closeModal = () => {
+    configuratorRequest.current += 1;
+    setModalOpen(false);
+    setConfiguratorProduct(null);
+    setConfiguratorDuoRecipes(null);
+  };
+
+  const openConfigurator = () => {
+    setConfiguratorProduct(null);
+    setConfiguratorDuoRecipes(null);
+    setModalOpen(true);
+
+    // Do not turn the stock SSE into a catalogue fetch: refresh only after the
+    // customer explicitly opens a pizza configurator, never for drinks.
+    if (!isDuo && !isClassicPizza) return;
+    const requestId = ++configuratorRequest.current;
+    const url = `/api/catalog/editable-product/${encodeURIComponent(product.id)}${
+      isDuo ? "?includeDuoRecipes=1" : ""
+    }`;
+    void fetch(url, { cache: "no-store", credentials: "same-origin" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<Product | { product: Product; recipes: Product[] }>;
+      })
+      .then((payload) => {
+        if (requestId !== configuratorRequest.current || !payload) return;
+        if ("product" in payload) {
+          if (payload.product.id !== product.id || !Array.isArray(payload.recipes)) return;
+          setConfiguratorProduct(payload.product);
+          setConfiguratorDuoRecipes(payload.recipes);
+          return;
+        }
+        if (payload.id === product.id) setConfiguratorProduct(payload);
+      })
+      // A transient request failure preserves the menu payload as the editor's
+      // fallback; availability and checkout continue to revalidate separately.
+      .catch(() => undefined);
+  };
 
   const handleAdd = () => {
     if (orderingDisabled) {
@@ -65,7 +107,7 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
 
     track({ name: "click_add_product", payload: { productId: product.id } });
     if (hasCustomizations || isDuo || isClassicPizza) {
-      setModalOpen(true);
+      openConfigurator();
     } else {
       addItem(product);
       showToast(`${product.name} ajouté au panier ✓`);
@@ -76,29 +118,33 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
     // A product view represents an explicit product-detail consultation. This
     // is intentionally not tied to initial card visibility before consent.
     recordMarketingEvent("product_view", { productId: product.id, path: window.location.pathname });
-    setModalOpen(true);
+    openConfigurator();
   };
 
   const handleModalConfirm = (
+    configuredProduct: Product,
     customizations: CartItemCustomizations,
     quantity: number,
     selectedOptions: SelectedOption[],
   ) => {
     if (orderingDisabled) {
       showToast(onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.");
-      setModalOpen(false);
+      closeModal();
       return;
     }
-    if (isUnavailable || !canAddProductQuantity(product.id, quantity, product)) {
+    if (isUnavailable || !canAddProductQuantity(configuredProduct.id, quantity, configuredProduct)) {
       showToast(`${product.name} est indisponible`);
-      setModalOpen(false);
+      closeModal();
       return;
     }
 
-    addItemWithOptions(product, customizations, quantity, selectedOptions);
-    showToast(`${product.name} ajouté au panier ✓`);
-    setModalOpen(false);
+    addItemWithOptions(configuredProduct, customizations, quantity, selectedOptions);
+    showToast(`${configuredProduct.name} ajouté au panier ✓`);
+    closeModal();
   };
+
+  const modalProduct = configuratorProduct ?? product;
+  const modalDuoRecipes = configuratorDuoRecipes ?? pizzaDuoRecipes;
 
   return (
     <>
@@ -181,21 +227,23 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
 
       {modalOpen && !isDuo && (
         <ProductCustomizeModal
-          product={product}
-          onClose={() => setModalOpen(false)}
-          onConfirm={handleModalConfirm}
+          product={modalProduct}
+          onClose={closeModal}
+          onConfirm={(customizations, quantity, selectedOptions) =>
+            handleModalConfirm(modalProduct, customizations, quantity, selectedOptions)
+          }
         />
       )}
       {modalOpen && isDuo && (
         <PizzaDuoCustomizeModal
-          product={product}
-          recipes={pizzaDuoRecipes}
-          onClose={() => setModalOpen(false)}
+          product={modalProduct}
+          recipes={modalDuoRecipes}
+          onClose={closeModal}
           onConfirm={(duo, quantity) => {
-            if (!hasValidDuoConfiguration || orderingDisabled || isUnavailable || !canAddProductQuantity(product.id, quantity, product)) return;
-            addPizzaDuo(product, duo, quantity);
-            showToast(`${product.name} ajouté au panier ✓`);
-            setModalOpen(false);
+            if (!isValidPizzaDuoProduct(modalProduct) || orderingDisabled || isUnavailable || !canAddProductQuantity(modalProduct.id, quantity, modalProduct)) return;
+            addPizzaDuo(modalProduct, duo, quantity);
+            showToast(`${modalProduct.name} ajouté au panier ✓`);
+            closeModal();
           }}
         />
       )}

@@ -5,7 +5,7 @@ import { getClientFirestore } from "@/config/firebase-client";
 import type { CartItem, SelectedOption } from "@/types/cart";
 import { stockDemandByProduct } from "@/lib/product-availability";
 import {
-  getPizzaDuoRecipeBase, getPizzaDuoSupplementPriceCents, isPizzaDuoSupplementTarget,
+  getPizzaDuoRecipeBase, getPizzaDuoSupplementPriceCents, isDelizzaPizzaCategory, isPizzaDuoSupplementTarget,
   PIZZA_DUO_CATALOG_ID,
 } from "@/lib/pizza-duo";
 
@@ -190,7 +190,7 @@ async function loadLiveOptions(data: Record<string, unknown>): Promise<LiveOptio
   ];
 }
 
-async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | null> {
+async function loadLiveProduct(catalogItemId: string, commonPizzaSupplementIds: string[] | undefined): Promise<LiveProduct | null> {
   let data: Record<string, unknown> | null = null;
   if (catalogItemId === PIZZA_DUO_CATALOG_ID) {
     const response = await fetch(`/api/catalog/editable-product/${catalogItemId}`, { cache: "no-store", credentials: "same-origin" });
@@ -211,10 +211,16 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
   }
   if (!data) return null;
 
+  const categoryId = stringOrEmpty(data.categoryId);
+  const pizzaUnits = numberOrNull(data.pizzaUnits);
+  const usesCommonPizzaSupplements = commonPizzaSupplementIds !== undefined &&
+    data.usePizzaCommonSupplements !== false && data.kind !== "pizza_duo" &&
+    pizzaUnits === 1 && isDelizzaPizzaCategory(categoryId);
+
   return {
     appId: stringOrEmpty(data.appId),
     name: stringOrEmpty(data.name),
-    categoryId: stringOrEmpty(data.categoryId),
+    categoryId,
     isActive: typeof data.isActive === "boolean" ? data.isActive : true,
     visible: boolOrNull(data.visible),
     published: boolOrNull(data.published),
@@ -228,14 +234,34 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
     priceCents: priceCentsFromData(data),
     options: await loadLiveOptions(data),
     baseIngredientIds: stringArray(data.baseIngredientIds),
-    availableSupplementIds: stringArray(data.availableSupplementIds),
+    availableSupplementIds: usesCommonPizzaSupplements ? commonPizzaSupplementIds : stringArray(data.availableSupplementIds),
     pizzaDuoSupplementIds: optionalStringArray(data.pizzaDuoSupplementIds),
     pizzaCommonSupplementIds: optionalStringArray(data.pizzaCommonSupplementIds),
     allowIngredientRemoval: typeof data.allowIngredientRemoval === "boolean" ? data.allowIngredientRemoval : false,
     kind: stringOrEmpty(data.kind),
     recipeBase: stringOrEmpty(data.recipeBase),
-    pizzaUnits: numberOrNull(data.pizzaUnits),
+    pizzaUnits,
   };
+}
+
+/**
+ * One narrow server read for cart validation. `undefined` deliberately keeps
+ * the legacy per-product contract; an explicit empty list disables extras.
+ */
+async function loadCommonPizzaSupplementIds(): Promise<string[] | undefined> {
+  if (WL_APP_ID !== "d_lizza") return undefined;
+  try {
+    const response = await fetch("/api/catalog/pizza-common-supplements", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (!response.ok) return undefined;
+    const payload = await response.json() as { configured?: unknown; ids?: unknown };
+    if (payload.configured !== true) return undefined;
+    return stringArray(payload.ids);
+  } catch {
+    return undefined;
+  }
 }
 
 async function loadLiveFormula(formulaId: string): Promise<LiveFormula | null> {
@@ -431,6 +457,8 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
     )) };
   }
   const stockDemand = stockDemandByProduct(items);
+  const needsCommonPolicy = items.some((item) => !item.duo && !item.formulaId && !!item.addedSupplements?.length);
+  const commonPizzaSupplementIds = needsCommonPolicy ? await loadCommonPizzaSupplementIds() : undefined;
   const formulaIds = [...new Set(items.map((item) => item.formulaId).filter((id): id is string => typeof id === "string" && id.length > 0))];
   const productCache = new Map<string, LiveProduct | null>();
   const formulaCache = new Map<string, LiveFormula | null>();
@@ -440,7 +468,7 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
       ...items.flatMap((item) => item.duo ? [item.duo.leftRecipeId, item.duo.rightRecipeId] : []),
       ...stockDemand.keys(),
     ])].map(async (catalogItemId) => {
-      productCache.set(catalogItemId, await loadLiveProduct(catalogItemId));
+      productCache.set(catalogItemId, await loadLiveProduct(catalogItemId, commonPizzaSupplementIds));
     }),
   );
   await Promise.all(formulaIds.map(async (formulaId) => formulaCache.set(formulaId, await loadLiveFormula(formulaId))));
