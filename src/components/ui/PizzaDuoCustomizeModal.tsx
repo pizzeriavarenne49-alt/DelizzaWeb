@@ -109,7 +109,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
     onConfirm(createPizzaDuoComposition(left, right), quantity);
   }
   return (
-    <div ref={dialog} className="fixed inset-0 z-[9991] flex items-end justify-center bg-black/70 backdrop-blur-sm md:items-center" role="dialog" aria-modal="true" aria-labelledby="pizza-duo-title"
+    <div ref={dialog} className="fixed inset-0 z-[10001] flex items-end justify-center bg-black/70 backdrop-blur-sm md:items-center" role="dialog" aria-modal="true" aria-labelledby="pizza-duo-title"
       onKeyDown={(event) => {
         if (event.key === "Escape") { event.stopPropagation(); onClose(); return; }
         if (event.key !== "Tab") return;

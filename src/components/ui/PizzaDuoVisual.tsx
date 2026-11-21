@@ -17,13 +17,12 @@ const recipeTransforms: Record<string, PizzaDuoVisualTransform> = {
   "chevre-miel": { scale: 1.14, translateX: 1, translateY: -1 },
 };
 
-/** A stable crop fallback makes every catalogue photograph sit naturally in its half. */
+/** Unknown catalogue photos use a neutral centred crop rather than arbitrary offsets. */
 export function pizzaDuoVisualTransform(recipe?: Product): PizzaDuoVisualTransform {
   if (!recipe) return { scale: 1, translateX: 0, translateY: 0 };
   const known = recipeTransforms[recipe.slug] ?? recipeTransforms[recipe.id];
   if (known) return known;
-  const seed = [...recipe.id].reduce((value, character) => value + character.charCodeAt(0), 0);
-  return { scale: 1.1 + (seed % 5) / 100, translateX: (seed % 7) - 3, translateY: ((seed >> 3) % 7) - 3 };
+  return { scale: 1.1, translateX: 0, translateY: 0 };
 }
 
 function Half({ recipe, side, single }: { recipe?: Product; side: "left" | "right"; single: boolean }) {
@@ -47,7 +46,7 @@ function Half({ recipe, side, single }: { recipe?: Product; side: "left" | "righ
 /** Fixed plate composition used only by the Duo configuration flow. */
 export default function PizzaDuoVisual({ left, right, variant = "duo" }: { left?: Product; right?: Product; variant?: "duo" | "single" }) {
   const single = variant === "single";
-  return <div className="mx-auto w-full max-w-[340px]" aria-label="Aperçu de votre Pizza Duo">
+  return <div className="mx-auto w-full max-w-[340px]" role="img" aria-label={single ? `Aperçu de ${left?.name ?? "votre pizza"}` : "Aperçu de votre Pizza Duo"}>
     <div className="relative aspect-square overflow-hidden rounded-full border-[7px] border-[#c79b52] bg-[#130f0a] shadow-[0_18px_44px_rgba(0,0,0,.5),inset_0_0_0_3px_rgba(255,230,178,.35)]">
       <Half recipe={left} side="left" single={single} />
       {!single && <Half recipe={right} side="right" single={single} />}
