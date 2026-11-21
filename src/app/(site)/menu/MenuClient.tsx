@@ -16,6 +16,7 @@ interface MenuClientProps {
   categories: Category[];
   products: Product[];
   pizzaDuoWebEnabled: boolean;
+  requestedProductId?: string;
 }
 
 type MenuSection = {
@@ -54,7 +55,7 @@ function withLiveAvailability(product: Product, availability: Record<string, Sto
 const subscribeToFixedEnvironment = () => () => {};
 const hideDuoDuringServerRender = () => false;
 
-export default function MenuClient({ categories, products, pizzaDuoWebEnabled }: MenuClientProps) {
+export default function MenuClient({ categories, products, pizzaDuoWebEnabled, requestedProductId }: MenuClientProps) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const onlineOrdering = useOnlineOrderingStatus();
@@ -66,6 +67,15 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled }:
   const liveProducts = useMemo(() => products.map((product) => withLiveAvailability(product, catalogAvailability)), [products, catalogAvailability]);
   const pizzaDuoRecipes = liveProducts.filter(isPizzaDuoRecipe);
   const visibleCatalogProducts = liveProducts.filter((product) => !isPizzaDuoProduct(product) || pizzaDuoEnabled);
+  const renderProduct = (product: Product) => (
+    <ProductCard
+      key={product.id}
+      product={product}
+      pizzaDuoRecipes={pizzaDuoRecipes}
+      pizzaDuoWebEnabled={pizzaDuoEnabled}
+      initiallyOpen={product.id === requestedProductId}
+    />
+  );
 
   useEffect(() => {
     track({ name: "view_menu" });
@@ -226,9 +236,7 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled }:
         <div className="flex flex-col gap-4">
           <SectionHeader title={`Résultats pour "${search.trim()}"`} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-            {searchFilteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} pizzaDuoWebEnabled={pizzaDuoEnabled} />
-            ))}
+            {searchFilteredProducts.map(renderProduct)}
             {searchFilteredProducts.length === 0 && (
               <p className="col-span-2 py-10 text-center text-[#6B6B6B]">
                 Aucun résultat trouvé
@@ -242,9 +250,7 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled }:
             <div key={section.id} className="flex flex-col gap-3">
               <SectionHeader title={section.title} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                {section.products.map((product) => (
-                  <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} pizzaDuoWebEnabled={pizzaDuoEnabled} />
-                ))}
+                {section.products.map(renderProduct)}
               </div>
             </div>
           ))}
@@ -258,9 +264,7 @@ export default function MenuClient({ categories, products, pizzaDuoWebEnabled }:
         <div className="flex flex-col gap-4">
           <SectionHeader title={activeCategoryName} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-            {visibleProducts.map((product) => (
-              <ProductCard key={product.id} product={product} pizzaDuoRecipes={pizzaDuoRecipes} pizzaDuoWebEnabled={pizzaDuoEnabled} />
-            ))}
+            {visibleProducts.map(renderProduct)}
             {visibleProducts.length === 0 && (
               <p className="col-span-2 py-10 text-center text-[#6B6B6B]">
                 Aucun résultat trouvé

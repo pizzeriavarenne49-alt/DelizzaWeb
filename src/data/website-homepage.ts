@@ -27,16 +27,18 @@ export async function getPublishedHomepagePromotion(products: Product[]): Promis
   const privateDuo = requestedProductId === "d_lizza_pizza_duo_comptoir"
     ? await getDb().collection("wl_catalog_items").doc(requestedProductId).get()
     : null;
-  const privatePrice = privateDuo?.data()?.price as { amountCents?: unknown } | undefined;
-  const duoAvailableAtCounter = appDoc.data()?.pizzaDuoPosEnabled === true && privateDuo?.data()?.posDuoActive === true;
+  const duo = privateDuo?.data();
+  const privatePrice = duo?.price as { amountCents?: unknown } | undefined;
+  const duoAvailableAtCounter = appDoc.data()?.pizzaDuoPosEnabled === true &&
+    duo?.posDuoActive === true && duo.manualOutOfStock !== true;
   const normalized = normalizePublishedHomepagePromotion(
     published,
     products,
     typeof privatePrice?.amountCents === "number" ? privatePrice.amountCents : null,
     duoAvailableAtCounter,
   );
-  if (!normalized) return null;
-  const file = getStorageBucket().file(normalized.imageVersion);
+  if (!normalized || normalized.visual.kind === "duo") return normalized;
+  const file = getStorageBucket().file(normalized.visual.imageVersion);
   const [exists] = await file.exists();
   if (!exists) return null;
   const [metadata] = await file.getMetadata();
@@ -54,5 +56,5 @@ export async function isCurrentPublishedPromotionImage(path: string): Promise<bo
   if (!isSafeHomepagePromotionImage(path) || WL_APP_ID !== "d_lizza") return false;
   const doc = await getDb().collection("wl_website_homepages").doc(WL_APP_ID).get();
   const published = doc.data()?.published as PublishedPromotionInput | null | undefined;
-  return Boolean(published && isCurrentHomepagePromotion(published) && published.imagePath === path);
+  return Boolean(published && published.useDuoCover !== true && isCurrentHomepagePromotion(published) && published.imagePath === path);
 }

@@ -38,10 +38,11 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function MenuPage() {
-  const [cats, prods] = await Promise.all([
+export default async function MenuPage({ searchParams }: { searchParams: Promise<{ product?: string | string[] }> }) {
+  const [cats, prods, params] = await Promise.all([
     withFallback(() => repo.getCategories(), () => mockRepo.getCategories()),
     withFallback(() => repo.getProducts(), () => mockRepo.getProducts()),
+    searchParams,
   ]);
   let pizzaDuoWebEnabled = false;
   try {
@@ -55,6 +56,7 @@ export default async function MenuPage() {
       categories={[POPULAR_CATEGORY, ...cats]}
       products={prods}
       pizzaDuoWebEnabled={pizzaDuoWebEnabled}
+      requestedProductId={typeof params.product === "string" ? params.product : undefined}
     />
   );
 }

@@ -72,6 +72,20 @@ export function isPizzaDuoRecipe(product: Product): boolean {
     (!product.stockManaged || (typeof product.stockQty === "number" && Number.isSafeInteger(product.stockQty) && product.stockQty > 0));
 }
 
+export function getPizzaDuoCoverRecipes(recipes: readonly Product[]): [Product, Product] | undefined {
+  const pictured = recipes.filter((recipe) => isPizzaDuoRecipe(recipe) &&
+    recipe.image.trim() && !/(?:\/|%2f)placeholder\.[a-z]+(?:[?#]|$)/i.test(recipe.image));
+  const base = (recipe: Product) => getPizzaDuoRecipeBase(recipe.category, recipe.recipeBase);
+  const left = pictured.find((recipe) => recipe.slug === "chorizo") ??
+    pictured.find((recipe) => base(recipe) === "tomate") ?? pictured[0];
+  if (!left) return undefined;
+
+  const alternatives = pictured.filter((recipe) => recipe.id !== left.id && recipe.image !== left.image);
+  const right = alternatives.find((recipe) => recipe.slug === "imperiale") ??
+    alternatives.find((recipe) => base(recipe) !== base(left)) ?? alternatives[0];
+  return right ? [left, right] : undefined;
+}
+
 function snapshotRecipe(product: Product): PizzaDuoRecipeSnapshot {
   return {
     recipeId: product.id,

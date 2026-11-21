@@ -51,4 +51,19 @@ assert.equal(webDuo?.action, "product");
 assert.equal(webDuo?.counterOnly, false);
 assert.equal(promotion.normalizePublishedHomepagePromotion(published({ productId: "d_lizza_pizza_duo_comptoir" }), [], 1490, false), null);
 
+const chorizo = product("chorizo", 0, { slug: "chorizo", ingredients: ["Chorizo"], baseIngredientIds: [], image: "/pizzas/chorizo.jpg" });
+const imperial = product("imperiale", 0, { slug: "imperiale", category: "PxEZOWgUxAHxedwWHOSp", ingredients: ["Poulet"], baseIngredientIds: [], image: "/pizzas/imperiale.jpg" });
+const coverPromo = published({ productId: "d_lizza_pizza_duo_comptoir", imagePath: null, useDuoCover: true });
+const cover = promotion.normalizePublishedHomepagePromotion(coverPromo, [chorizo, imperial], 1490, true);
+assert.equal(cover?.isDuo, true);
+assert.equal(cover?.action, "counter");
+assert.deepEqual(cover?.visual, { kind: "duo", recipes: [chorizo, imperial] });
+assert.equal(cover?.priceCents, 1490);
+assert.equal(promotion.normalizePublishedHomepagePromotion(coverPromo, [chorizo], 1490, true), null);
+assert.equal(promotion.normalizePublishedHomepagePromotion(coverPromo, [chorizo, imperial], 1490, false), null);
+assert.equal(promotion.normalizePublishedHomepagePromotion({ ...coverPromo, imagePath: photo }, [chorizo, imperial], 1490, true), null);
+assert.equal(promotion.normalizePublishedHomepagePromotion({ ...coverPromo, action: "menu" }, [chorizo, imperial], 1490, true), null);
+assert.equal(promotion.normalizePublishedHomepagePromotion({ ...coverPromo, productId: "chorizo" }, [chorizo, imperial], 1490, true), null);
+assert.equal(promotion.normalizePublishedHomepagePromotion({ ...coverPromo, useDuoCover: "true" }, [chorizo, imperial], 1490, true), null);
+
 console.log("homepage promotion contract passed");

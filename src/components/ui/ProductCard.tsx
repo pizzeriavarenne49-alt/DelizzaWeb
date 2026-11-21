@@ -11,7 +11,8 @@ import { formatPrice } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
 import PizzaDuoCustomizeModal from "@/components/ui/PizzaDuoCustomizeModal";
-import { isDelizzaPizzaCategory, isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isValidPizzaDuoProduct } from "@/lib/pizza-duo";
+import PizzaDuoVisual from "@/components/ui/PizzaDuoVisual";
+import { getPizzaDuoCoverRecipes, isDelizzaPizzaCategory, isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isValidPizzaDuoProduct } from "@/lib/pizza-duo";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import { useToast } from "@/contexts/ToastContext";
 const ProductCustomizeModal = dynamic(() => import("@/components/ui/ProductCustomizeModal"), { ssr: false });
@@ -23,6 +24,7 @@ interface ProductCardProps {
   product: Product;
   pizzaDuoRecipes?: Product[];
   pizzaDuoWebEnabled?: boolean;
+  initiallyOpen?: boolean;
 }
 
 function hasProductCustomizations(product: Product): boolean {
@@ -34,12 +36,12 @@ function hasProductCustomizations(product: Product): boolean {
   );
 }
 
-export default function ProductCard({ product: initialProduct, pizzaDuoRecipes = [], pizzaDuoWebEnabled = false }: ProductCardProps) {
+export default function ProductCard({ product: initialProduct, pizzaDuoRecipes = [], pizzaDuoWebEnabled = false, initiallyOpen = false }: ProductCardProps) {
   const product = useLiveProduct(initialProduct);
   const { addItem, addItemWithOptions, addPizzaDuo, canAddProductQuantity } = useCart();
   const onlineOrdering = useOnlineOrderingStatus();
   const { showToast } = useToast();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(initiallyOpen);
   const isUnavailable = isProductUnavailable(product);
   const orderingDisabled = !onlineOrdering.canStartOrder;
   const stockLimitReached = !canAddProductQuantity(product.id, 1, product);
@@ -47,7 +49,7 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
   const isDuo = isPizzaDuoProduct(product);
   const isClassicPizza = !isDuo && product.pizzaUnits === 1 && isDelizzaPizzaCategory(product.category);
   const hasValidDuoConfiguration = !isDuo || isValidPizzaDuoProduct(product);
-  const duoIllustrations = isDuo ? pizzaDuoRecipes.filter((recipe) => !isProductUnavailable(recipe)).slice(0, 2) : [];
+  const duoCover = isDuo ? getPizzaDuoCoverRecipes(pizzaDuoRecipes) : undefined;
   const cannotOrder = isUnavailable || orderingDisabled || stockLimitReached || !hasValidDuoConfiguration;
   if (isDuo && !pizzaDuoWebEnabled && !isPizzaDuoDevelopmentEnabled()) return null;
 
@@ -106,10 +108,12 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
         className={cn("relative rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col transition-colors hover:bg-[#202020]", isDuo && "col-span-full sm:flex-row")}
       >
         {/* Image */}
-        <div data-seasonal-product-image="" className={cn("relative aspect-[4/3] bg-[#252525]", isDuo && "sm:w-[46%] sm:shrink-0")}>
-          {isDuo && duoIllustrations.length === 2 ? (
-            <div className="grid h-full grid-cols-2 gap-px bg-[#0D0D0D]" aria-label="Illustration des deux moitiés disponibles">
-              {duoIllustrations.map((recipe, index) => <div key={recipe.id} className="relative overflow-hidden"><Image src={recipe.image} alt={`Moitié ${index + 1} : ${recipe.name}`} fill sizes="(max-width: 768px) 50vw, 260px" className="object-cover" loading="lazy" /></div>)}
+        <div data-seasonal-product-image="" className={cn("relative bg-[#252525]", duoCover ? "aspect-[16/10] sm:aspect-[4/3]" : "aspect-[4/3]", isDuo && "sm:w-[46%] sm:shrink-0")}>
+          {duoCover ? (
+            <div className="absolute inset-0 grid place-items-center bg-[#251a12] p-3 [background-image:radial-gradient(ellipse_at_center,#654327_0%,#322317_47%,#1b1511_100%)] sm:p-4">
+              <div className="w-[60%] max-w-[226px] sm:w-[66%]">
+                <PizzaDuoVisual left={duoCover[0]} right={duoCover[1]} variant="cover" />
+              </div>
             </div>
           ) : <Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover" loading="lazy" />}
           {product.badge && (

@@ -85,6 +85,17 @@ body {
 .home-promotion-copy > p:not(.home-eyebrow):not(.home-promotion-note) { max-width: 60ch; color: #ded4c7; line-height: 1.55; }
 .home-promotion-price { color: #e8c078; font: 500 27px/1 Georgia, serif; }
 .home-promotion-note { color: #ecd3aa; font-size: 13px; }
+.home-promotion-order { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; }
+.home-promotion--duo { grid-template-areas: "copy" "visual"; margin-top: 0; border-color: #735637; background: linear-gradient(130deg, #2c2015, #17110d 72%); }
+.home-promotion--duo + .home-hero { margin-top: 40px; }
+.home-promotion--duo .home-promotion-copy { grid-area: copy; padding: clamp(24px, 4vw, 54px); gap: 12px; }
+.home-promotion--duo .home-promotion-copy h2 { max-width: 16ch; font-size: clamp(39px, 5vw, 56px); line-height: 1; letter-spacing: -.055em; text-wrap: balance; }
+.home-promotion--duo .home-promotion-copy > p:not(.home-eyebrow):not(.home-promotion-note) { max-width: 37ch; }
+.home-promotion--duo .home-eyebrow { padding: 7px 12px; border: 1px solid #84603e; border-radius: 999px; color: #ffe1ae; font-size: 12px; }
+.home-promotion--duo .home-promotion-order { margin-top: 6px; }
+.home-promotion--duo .home-promotion-image { grid-area: visual; }
+.home-promotion-cover { display: grid; place-items: center; aspect-ratio: auto; padding: 20px 34px 24px; background: radial-gradient(ellipse at 50% 48%, #704727 0%, #3b2719 47%, #1b140f 80%); }
+.home-promotion-cover-plate { width: min(100%, 330px); }
 .home-section h2 { margin-top: 12px; font: 500 clamp(28px, 5vw, 40px)/1.14 Georgia, serif; letter-spacing: -.025em; }
 .home-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 14px; margin-bottom: 24px; }
 .home-text-link { display: inline-flex; align-items: center; min-height: 44px; gap: 10px; color: #e8c078; font-size: 13px; text-underline-offset: 5px; }
@@ -114,6 +125,9 @@ body {
   .home-section { margin-top: 72px; }
   .home-promotion { grid-template-columns: minmax(0, .95fr) minmax(330px, 1.05fr); margin-top: 56px; }
   .home-promotion-image { height: 100%; min-height: 330px; aspect-ratio: auto; }
+  .home-promotion--duo { grid-template-areas: "copy visual"; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); margin-top: 0; }
+  .home-promotion--duo + .home-hero { margin-top: 64px; }
+  .home-promotion-cover { padding: 32px 36px; }
   .home-craft { padding: 32px; }
   .home-products { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .home-products > :last-child { display: none; }

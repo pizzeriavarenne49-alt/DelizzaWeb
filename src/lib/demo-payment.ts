@@ -12,7 +12,7 @@ function isIsolatedLocalCheckout(): boolean {
 export function isLocalStripeTestEnabled(): boolean {
   return isIsolatedLocalCheckout() &&
     process.env.NEXT_PUBLIC_DELIZZA_LOCAL_STRIPE_TEST === "true" &&
-    window.location.origin === "http://127.0.0.1:3007";
+    window.location.origin === "http://127.0.0.1:3307";
 }
 
 export function isDemoPaymentEnabled(): boolean {

@@ -442,9 +442,17 @@ run("Pizza Duo only proposes complete, available recipes", () => {
   assert.equal(pizzaDuo.isPizzaDuoRecipeCandidate({ ...mixed, stockManaged: true, stockQty: 0 }), true);
 });
 
-run("Pizza Duo card presents two recipe illustrations and a composer action", () => {
+run("Pizza Duo card uses two distinct photos and keeps its composer action", () => {
+  const recipe = { category: "pizzas", pizzaUnits: 1, active: true, price_cents: 1490, ingredients: ["Mozzarella"], baseIngredientIds: [] };
+  const chorizo = { ...recipe, id: "c", slug: "chorizo", recipeBase: "tomate", image: "/pizzas/chorizo.jpg" };
+  const imperiale = { ...recipe, id: "i", slug: "imperiale", recipeBase: "creme", image: "/pizzas/imperiale.jpg" };
+  const reine = { ...recipe, id: "r", slug: "reine", recipeBase: "creme", image: "/pizzas/reine.jpg" };
+  const neutral = { ...recipe, id: "m", slug: "margherita", recipeBase: "tomate", image: "/images/placeholder.svg" };
+  assert.deepEqual(pizzaDuo.getPizzaDuoCoverRecipes([neutral, reine, chorizo, imperiale]), [chorizo, imperiale]);
+  assert.deepEqual(pizzaDuo.getPizzaDuoCoverRecipes([neutral, reine, chorizo, { ...imperiale, manualOutOfStock: true }]), [chorizo, reine]);
+  assert.equal(pizzaDuo.getPizzaDuoCoverRecipes([neutral, chorizo, { ...imperiale, image: chorizo.image }]), undefined);
   const cardSource = readFileSync(path.resolve("src/components/ui/ProductCard.tsx"), "utf8");
-  assert.equal(cardSource.includes("duoIllustrations.length === 2"), true);
+  assert.equal(cardSource.includes('variant="cover"'), true);
   assert.equal(cardSource.includes("Composer ${product.name}"), true);
 });
 

@@ -37,13 +37,14 @@ function usesIsolatedMarketingFirestoreEmulator(): boolean {
 
 export function usesIsolatedPizzaDuoFirestoreEmulator(): boolean {
   if (process.env.NEXT_PUBLIC_PIZZA_DUO_LOCAL_EMULATOR !== "true") return false;
+  const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST ?? "";
   const valid = process.env.NODE_ENV === "development" &&
     process.env.NEXT_PUBLIC_ENABLE_PIZZA_DUO === "true" &&
     process.env.NEXT_PUBLIC_MARKETING_TEST_MODE !== "true" && process.env.NEXT_PUBLIC_HALLOWEEN_LOCAL !== "true" &&
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === ISOLATED_PIZZA_DUO_PROJECT &&
     process.env.FIREBASE_PROJECT_ID === ISOLATED_PIZZA_DUO_PROJECT &&
     process.env.WL_APP_ID === "d_lizza" && process.env.NEXT_PUBLIC_WL_APP_ID === "d_lizza" &&
-    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:18787";
+    /^127\.0\.0\.1:[1-9]\d{0,4}$/.test(emulatorHost);
   if (!valid) throw new Error("Pizza Duo local requires the demo-web-duo project on the local Firestore emulator.");
   return true;
 }
@@ -159,7 +160,7 @@ export function getDb(): Firestore {
   // Firestore Admin settings are immutable after first use. In Next dev HMR
   // this module can reload while the Firebase Admin app remains global.
   if (isolatedEmulator && initializedHere) {
-    _db.settings({ host: halloweenLocal ? "127.0.0.1:18880" : pizzaDuoLocal ? "127.0.0.1:18787" : homepageLocal ? "127.0.0.1:18291" : "127.0.0.1:9808", ssl: false });
+    _db.settings({ host: halloweenLocal ? "127.0.0.1:18880" : pizzaDuoLocal ? (process.env.FIRESTORE_EMULATOR_HOST as string) : homepageLocal ? "127.0.0.1:18291" : "127.0.0.1:9808", ssl: false });
   }
   return _db;
 }

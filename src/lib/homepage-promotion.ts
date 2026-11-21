@@ -1,5 +1,5 @@
 import type { Product } from "@/types";
-import { isDelizzaPizzaCategory } from "@/lib/pizza-duo";
+import { getPizzaDuoCoverRecipes, isDelizzaPizzaCategory, PIZZA_DUO_CATALOG_ID } from "@/lib/pizza-duo";
 
 export type HomepagePromotionAction = "menu" | "product" | "counter";
 
@@ -10,6 +10,7 @@ export type PublishedPromotionInput = {
   action?: unknown;
   productId?: unknown;
   imagePath?: unknown;
+  useDuoCover?: unknown;
   startsAt?: unknown;
   endsAt?: unknown;
 };
@@ -20,7 +21,8 @@ export type HomepagePromotion = {
   buttonLabel: string;
   action: HomepagePromotionAction;
   productId: string | null;
-  imageVersion: string;
+  visual: { kind: "photo"; imageVersion: string } | { kind: "duo"; recipes: [Product, Product] };
+  isDuo: boolean;
   priceCents: number | null;
   counterOnly: boolean;
   endsAt: string | null;
@@ -67,25 +69,37 @@ export function normalizePublishedHomepagePromotion(
   const buttonLabel = string(record.buttonLabel);
   const imagePath = string(record.imagePath);
   const action = record.action;
-  if (!title || !description || !buttonLabel || !isSafeHomepagePromotionImage(imagePath) ||
+  if (!title || !description || !buttonLabel ||
     (action !== "menu" && action !== "product" && action !== "counter")) return null;
+  if (record.useDuoCover != null && typeof record.useDuoCover !== "boolean") return null;
 
   const productId = typeof record.productId === "string" ? record.productId : null;
   const selected = productId ? products.find((product) => product.id === productId) : undefined;
   // A selected regular product must still be public and sellable. The private
   // canonical Duo is allowed only as a counter-only promotion while web sales
   // are closed.
-  const isDuo = productId === "d_lizza_pizza_duo_comptoir";
+  const isDuo = productId === PIZZA_DUO_CATALOG_ID;
   if (action === "product" && !selected && !isDuo) return null;
   const webDuo = Boolean(isDuo && selected);
   if (isDuo && !webDuo && !duoAvailableAtCounter) return null;
+  let visual: HomepagePromotion["visual"];
+  if (record.useDuoCover === true) {
+    if (!isDuo || action !== "product" || record.imagePath != null) return null;
+    const recipes = getPizzaDuoCoverRecipes(products);
+    if (!recipes) return null;
+    visual = { kind: "duo", recipes };
+  } else {
+    if (!isSafeHomepagePromotionImage(imagePath)) return null;
+    visual = { kind: "photo", imageVersion: imagePath };
+  }
   return {
     title,
     description,
     buttonLabel: isDuo && !webDuo && action === "product" ? "Commander par téléphone" : buttonLabel,
     action: isDuo && !webDuo ? "counter" : action,
     productId: selected?.id ?? null,
-    imageVersion: imagePath,
+    visual,
+    isDuo,
     priceCents: selected?.price_cents ?? (isDuo ? privateDuoPriceCents : null),
     counterOnly: isDuo && !webDuo,
     endsAt: date(record.endsAt)?.toISOString() ?? null,

@@ -995,8 +995,6 @@ interface Step2Props {
   onUseRewardChange: (enabled: boolean) => void;
   onBack: () => void;
   onNext: () => void;
-  pendingOrderId: string | null;
-  onResumePendingPayment: () => void;
   loading: boolean;
   error: string | null;
   customerProfile: CustomerProfile | null;
@@ -1020,8 +1018,6 @@ function Step2Summary({
   onUseRewardChange,
   onBack,
   onNext,
-  pendingOrderId,
-  onResumePendingPayment,
   loading,
   error,
   customerProfile,
@@ -1244,25 +1240,6 @@ function Step2Summary({
       {error && (
         <div className="rounded-[14px] bg-[#E74C3C]/10 border border-[#E74C3C]/30 px-4 py-3 text-[13px] text-[#E74C3C]">
           {error}
-        </div>
-      )}
-
-      {pendingOrderId && (
-        <div className="rounded-[18px] border border-[#D4A053]/30 bg-[#D4A053]/10 p-5">
-          <p className="text-[14px] font-semibold text-[#F5F5F5]">
-            Une commande réservée attend encore son paiement.
-          </p>
-          <p className="mt-1 text-[13px] leading-relaxed text-[#A0A0A0]">
-            Reprenez son paiement sans modifier votre panier actuel.
-          </p>
-          <button
-            type="button"
-            onClick={onResumePendingPayment}
-            disabled={loading}
-            className="mt-4 w-full rounded-[14px] border border-[#D4A053]/60 py-3 text-[14px] font-semibold text-[#E8C078] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Reprendre le paiement de la commande réservée
-          </button>
         </div>
       )}
 
@@ -1812,6 +1789,25 @@ export default function CheckoutClient() {
 
           <StepIndicator current={step} />
 
+          {step < 3 && pendingOrderId && (
+            <div className="mb-5 rounded-[18px] border border-[#D4A053]/30 bg-[#D4A053]/10 p-5">
+              <p className="text-[14px] font-semibold text-[#F5F5F5]">
+                Une commande réservée attend encore son paiement.
+              </p>
+              <p className="mt-1 text-[13px] leading-relaxed text-[#A0A0A0]">
+                Reprenez son paiement sans modifier votre panier actuel.
+              </p>
+              <button
+                type="button"
+                onClick={handleResumePendingPayment}
+                disabled={loading}
+                className="mt-4 w-full rounded-[14px] border border-[#D4A053]/60 py-3 text-[14px] font-semibold text-[#E8C078] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Reprendre le paiement de la commande réservée
+              </button>
+            </div>
+          )}
+
           {step === 1 && (
             <Step1Fulfillment
               state={fulfillment}
@@ -1842,8 +1838,6 @@ export default function CheckoutClient() {
               onUseRewardChange={setUseReward}
               onBack={() => setStep(1)}
               onNext={handleProceedToPayment}
-              pendingOrderId={pendingOrderId}
-              onResumePendingPayment={handleResumePendingPayment}
               loading={loading}
               error={error}
               customerProfile={profile}
@@ -1900,7 +1894,7 @@ export default function CheckoutClient() {
 
               {isDemoPaymentEnabled() ? (
                 <DemoPaymentCheckout amountCents={paymentAmountCents} onComplete={handleDemoPayment} disabled={onlineOrderingBlocked} />
-              ) : isLocalStripeTestEnabled() && orderId && paymentIntentId ? (
+              ) : isLocalStripeTestEnabled() && process.env.NEXT_PUBLIC_DELIZZA_RECIPE_ELEMENTS !== "true" && orderId && paymentIntentId ? (
                 <StripeTestRelayCheckout
                   amountCents={paymentAmountCents}
                   appId={WL_APP_ID}

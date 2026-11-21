@@ -20,6 +20,7 @@ export default function HomeLanding({ products, promotion }: { products: Product
   const address = `${BUSINESS.address.streetAddress}, La Varenne, ${BUSINESS.address.postalCode} ${BUSINESS.address.addressLocality}`;
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
   return <div className="premium-home">
+    {promotion?.isDuo && <HomepagePromotion promotion={promotion} />}
     <section className="home-hero" data-seasonal-hero="" aria-labelledby="home-title">
       <div className="home-hero-copy">
         <div className="home-eyebrow"><span aria-hidden="true">✦</span> Deli&apos;Zza · La Varenne</div>
@@ -35,7 +36,7 @@ export default function HomeLanding({ products, promotion }: { products: Product
       </figure> : <div className="home-hero-note"><span>À chaque envie,</span><strong>sa pizza.</strong><Link href="/menu" className="home-text-link">Découvrir notre carte ↗</Link></div>}
     </section>
 
-    {promotion && <HomepagePromotion promotion={promotion} />}
+    {promotion && !promotion.isDuo && <HomepagePromotion promotion={promotion} />}
 
     {products.length > 0 && <section className="home-section" aria-labelledby="selection-title">
       <div className="home-section-heading"><div><p className="home-eyebrow">À partager. Ou pas.</p><h2 id="selection-title">La carte donne envie.</h2></div><Link href="/menu" className="home-text-link">Toute la carte <span aria-hidden="true">↗</span></Link></div>

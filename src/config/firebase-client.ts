@@ -94,6 +94,14 @@ let authEmulatorConnected = false;
 let firestoreEmulatorConnected = false;
 let functionsEmulatorConnected = false;
 
+function pizzaDuoLocalPort(variable: "NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT" | "NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT" | "NEXT_PUBLIC_FUNCTIONS_EMULATOR_PORT", fallback: number): number {
+  const raw = process.env[variable] ?? String(fallback);
+  if (!/^[1-9]\d{0,4}$/.test(raw)) throw new Error(`${variable} must be a loopback emulator port.`);
+  const port = Number(raw);
+  if (!Number.isSafeInteger(port) || port > 65535) throw new Error(`${variable} must be a valid emulator port.`);
+  return port;
+}
+
 export function getClientAuth(): Auth {
   const auth = getAuth(getClientApp());
   if (halloweenLocalMode() && !authEmulatorConnected) {
@@ -106,7 +114,7 @@ export function getClientAuth(): Auth {
   }
   if (pizzaDuoLocalMode() && !authEmulatorConnected) {
     assertPizzaDuoLocal();
-    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true }); authEmulatorConnected = true;
+    connectAuthEmulator(auth, `http://127.0.0.1:${pizzaDuoLocalPort("NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT", 19099)}`, { disableWarnings: true }); authEmulatorConnected = true;
   }
   return auth;
 }
@@ -127,7 +135,7 @@ export function getClientFirestore(): Firestore {
   }
   if (pizzaDuoLocalMode() && !firestoreEmulatorConnected) {
     assertPizzaDuoLocal();
-    connectFirestoreEmulator(firestore, "127.0.0.1", 18787); firestoreEmulatorConnected = true;
+    connectFirestoreEmulator(firestore, "127.0.0.1", pizzaDuoLocalPort("NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT", 18887)); firestoreEmulatorConnected = true;
   }
   return firestore;
 }
@@ -149,7 +157,7 @@ export function getClientFunctions(): Functions {
   }
   if (pizzaDuoLocalMode() && !functionsEmulatorConnected) {
     assertPizzaDuoLocal();
-    connectFunctionsEmulator(functions, "127.0.0.1", 5001); functionsEmulatorConnected = true;
+    connectFunctionsEmulator(functions, "127.0.0.1", pizzaDuoLocalPort("NEXT_PUBLIC_FUNCTIONS_EMULATOR_PORT", 15501)); functionsEmulatorConnected = true;
   }
   return functions;
 }
