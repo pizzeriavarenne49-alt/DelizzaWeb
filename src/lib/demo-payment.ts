@@ -1,5 +1,18 @@
 /** Strictly local capture-mode payment guard. It is intentionally independent
  * from a catalog flag so it cannot be enabled by production data. */
+const configuredLocalStripeOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://127.0.0.1:3307";
+
+function isExplicitLoopbackHttpOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && Boolean(url.port) &&
+      ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) &&
+      url.origin === value.replace(/\/$/, "");
+  } catch {
+    return false;
+  }
+}
+
 function isIsolatedLocalCheckout(): boolean {
   if (process.env.NODE_ENV !== "development" ||
       process.env.NEXT_PUBLIC_PIZZA_DUO_LOCAL_EMULATOR !== "true" ||
@@ -12,7 +25,8 @@ function isIsolatedLocalCheckout(): boolean {
 export function isLocalStripeTestEnabled(): boolean {
   return isIsolatedLocalCheckout() &&
     process.env.NEXT_PUBLIC_DELIZZA_LOCAL_STRIPE_TEST === "true" &&
-    window.location.origin === "http://127.0.0.1:3307";
+    isExplicitLoopbackHttpOrigin(configuredLocalStripeOrigin) &&
+    window.location.origin === configuredLocalStripeOrigin.replace(/\/$/, "");
 }
 
 export function isDemoPaymentEnabled(): boolean {
