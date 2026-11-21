@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import PizzaPlate from "@/components/ui/PizzaPlate";
+import { isDelizzaPizzaCategory } from "@/lib/pizza-duo";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import type { Product, ProductIngredient } from "@/types";
 import type { CartItemCustomizations, SelectedOption } from "@/types/cart";
@@ -123,10 +125,11 @@ export default function ProductCustomizeModal({
   initialSelectedOptions = [],
   initialQuantity = 1,
   initialCartKey,
-  confirmLabel = "Ajouter",
+  confirmLabel = "Ajouter au panier",
 }: ProductCustomizeModalProps) {
   const onlineOrdering = useOnlineOrderingStatus();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const confirmed = useRef(false);
   const { canAddProductQuantity, canReplaceProductQuantity } = useCart();
   const legacyOptionIds = useMemo(
     () => new Set(product.legacyOptionIds ?? []),
@@ -186,17 +189,27 @@ export default function ProductCustomizeModal({
     supplementDeltasCents;
   const unitPriceCents = product.price_cents + deltasCents;
   const totalTtcCents = unitPriceCents * quantity;
-  const canAdd = areRequiredOptionsFilled(sortedOptions, selections) &&
+  const hasRequiredSelections = areRequiredOptionsFilled(sortedOptions, selections);
+  const canAdd = hasRequiredSelections &&
     !isProductUnavailable(product) && (initialCartKey
       ? canReplaceProductQuantity(initialCartKey, product.id, quantity, product)
       : canAddProductQuantity(product.id, quantity, product));
   const orderingBlocked = !onlineOrdering.canStartOrder;
   const hasOptions = sortedOptions.length > 0;
   const hasIngredients = product.ingredients.length > 0;
-  const hasRemovableIngredients = baseIngredients.length > 0;
+  const hasRemovableIngredients = product.allowIngredientRemoval && baseIngredients.length > 0;
+  const isPizza = isDelizzaPizzaCategory(product.category) && product.pizzaUnits === 1;
   const hasSupplements = supplementIngredients.length > 0;
   const hasCustomizations = hasOptions || hasRemovableIngredients || hasSupplements;
   const hasTags = product.tags.length > 0;
+  const effectiveRemovals = hasRemovableIngredients
+    ? baseIngredients.filter((ingredient) => removedIngredients.includes(ingredient.id))
+    : [];
+  const summaryDetails = [
+    ...buildSelectedOptions(product, sortedOptions, selections).flatMap((option) => option.choiceNames),
+    ...effectiveRemovals.map((ingredient) => `Sans ${ingredient.name}`),
+    ...selectedSupplementIngredients.map((ingredient) => `+ ${ingredient.name}`),
+  ];
 
   function toggleRemovedIngredient(ingredientId: string) {
     setRemovedIngredients((prev) =>
@@ -215,7 +228,8 @@ export default function ProductCustomizeModal({
   }
 
   const handleConfirm = () => {
-    if (!canAdd || orderingBlocked) return;
+    if (!canAdd || orderingBlocked || confirmed.current) return;
+    confirmed.current = true;
     const selectedOptions = [
       ...initialSelectedOptions.filter((option) => !sortedOptions.some((current) => current.id === option.optionId)),
       ...buildSelectedOptions(product, sortedOptions, selections),
@@ -230,19 +244,17 @@ export default function ProductCustomizeModal({
     const customizations: CartItemCustomizations = {
       selectedTemplateOptions,
       selectedLegacyOptions,
-      addedSupplements,
-      removedIngredients,
+      addedSupplements: selectedSupplementIngredients.map((ingredient) => ingredient.id),
+      removedIngredients: effectiveRemovals.map((ingredient) => ingredient.id),
       addedSupplementSnapshots: selectedSupplementIngredients.map((ingredient) => ({
         ingredientId: ingredient.id,
         ingredientName: ingredient.name,
         priceDeltaCents: ingredient.defaultPriceModifier.amountCents,
       })),
-      removedIngredientSnapshots: baseIngredients
-        .filter((ingredient) => removedIngredients.includes(ingredient.id))
-        .map((ingredient) => ({
-          ingredientId: ingredient.id,
-          ingredientName: ingredient.name,
-        })),
+      removedIngredientSnapshots: effectiveRemovals.map((ingredient) => ({
+        ingredientId: ingredient.id,
+        ingredientName: ingredient.name,
+      })),
     };
     onConfirm(customizations, quantity, selectedOptions);
   };
@@ -290,12 +302,12 @@ export default function ProductCustomizeModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9990] bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm"
           aria-hidden="true"
         />
 
         {/* Product detail sheet */}
-        <div className="fixed inset-0 z-[9991] flex items-end justify-center px-0 md:items-center md:px-4 pointer-events-none">
+        <div className="fixed inset-0 z-[10001] flex items-end justify-center px-0 md:items-center md:px-4 pointer-events-none">
         <motion.div
           key="modal-sheet"
           ref={dialogRef}
@@ -303,7 +315,7 @@ export default function ProductCustomizeModal({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 32, scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="pointer-events-auto flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[24px] bg-[#1A1A1A] shadow-[0_-8px_40px_rgba(0,0,0,0.6)] md:max-h-[88dvh] md:max-w-[720px] md:rounded-[22px] md:shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
+          className="pointer-events-auto flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-[#D4A053]/20 bg-[#13110F] shadow-[0_-8px_40px_rgba(0,0,0,0.6)] md:max-h-[88dvh] md:max-w-[720px] md:rounded-[22px] md:shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
           aria-modal="true"
           role="dialog"
           aria-label={`Détail de ${product.name}`}
@@ -318,7 +330,7 @@ export default function ProductCustomizeModal({
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#252525] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors"
+            className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-[#252525] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4" aria-hidden="true">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -327,28 +339,31 @@ export default function ProductCustomizeModal({
 
           {/* Scrollable content */}
           <div className="overflow-y-auto overscroll-contain flex-1 px-5 pb-4 md:px-6">
-            {/* Product header */}
-            <div className="border-b border-white/5 py-4">
-              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[18px] bg-[#252525]">
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 680px"
-                  className="object-cover"
-                  priority
-                />
-              </div>
-              <div className="mt-4 flex flex-col gap-2">
-                <h2 className="pr-10 text-[22px] font-bold leading-tight text-[#F5F5F5] md:text-[24px]">
+            {/* The selected recipe stays visible while the customer edits its toppings. */}
+            <div className="grid items-center gap-4 border-b border-[#D4A053]/15 py-4 sm:grid-cols-[minmax(0,220px)_1fr] sm:gap-7">
+              {isPizza ? (
+                <div className="mx-auto w-full max-w-[184px] sm:max-w-[220px]">
+                  <PizzaPlate product={product} />
+                </div>
+              ) : (
+                <div className="relative mx-auto aspect-[4/3] w-full max-w-[260px] overflow-hidden rounded-[18px] bg-[#252525]">
+                  <Image src={product.image} alt={product.name} fill sizes="260px" className="object-cover" />
+                </div>
+              )}
+              <div className="flex min-w-0 flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#E6BB72]">
+                  {isPizza ? "Personnalisation classique" : "À la carte"}
+                </p>
+                <h2 className="text-[24px] font-bold leading-tight text-[#FFF5E1] md:text-[30px]">
                   {product.name}
                 </h2>
-                <p className="text-[16px] font-semibold text-[#D4A053]">
+                <p className="text-[14px] font-semibold text-[#E6BB72]">
+                  {product.recipeBase && <>Base {product.recipeBase === "creme" ? "crème" : "tomate"} · </>}
                   {hasCustomizations ? "À partir de " : ""}
                   {formatPrice(product.price_cents)}&nbsp;€
                 </p>
                 {product.description_short && (
-                  <p className="text-[14px] leading-relaxed text-[#CFCFCF]">
+                  <p className="max-w-[44ch] text-[14px] leading-relaxed text-[#CFC4B2]">
                     {product.description_short}
                   </p>
                 )}
@@ -489,6 +504,8 @@ export default function ProductCustomizeModal({
                         key={ingredient.id}
                         type="button"
                         disabled={orderingBlocked}
+                        aria-pressed={isKept}
+                        aria-label={`${isRemoved ? "Remettre" : "Retirer"} ${ingredient.name}`}
                         onClick={() => toggleRemovedIngredient(ingredient.id)}
                         className={`flex items-center justify-between rounded-[14px] border px-4 py-3 transition-colors ${
                           isRemoved
@@ -570,7 +587,9 @@ export default function ProductCustomizeModal({
                 </span>
                 <button
                   type="button"
-                  disabled={orderingBlocked || !canAddProductQuantity(product.id, quantity + 1, product)}
+                  disabled={orderingBlocked || quantity >= 99 || !(initialCartKey
+                    ? canReplaceProductQuantity(initialCartKey, product.id, quantity + 1, product)
+                    : canAddProductQuantity(product.id, quantity + 1, product))}
                   onClick={() => setQuantity((q) => q + 1)}
                   aria-label="Augmenter la quantité"
                   className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#D4A053] to-[#E8C078] text-[#0D0D0D] text-[18px] font-bold leading-none"
@@ -579,6 +598,17 @@ export default function ProductCustomizeModal({
                 </button>
               </div>
             </div>
+            <section aria-label="Récapitulatif" className="mt-6 rounded-[18px] border border-[#D4A053]/20 bg-[#D4A053]/5 p-4">
+              <div className="flex justify-between gap-3 text-[14px] font-bold text-[#FFF5E1]">
+                <span>{quantity} × {product.name}</span>
+                <span className="shrink-0 text-[#E6BB72]">{formatPrice(totalTtcCents)}&nbsp;€</span>
+              </div>
+              {summaryDetails.length > 0 && (
+                <ul className="mt-2 space-y-1 text-[13px] text-[#D8CEBD]">
+                  {summaryDetails.map((label, index) => <li key={index}>{label}</li>)}
+                </ul>
+              )}
+            </section>
           </div>
 
           {/* Sticky footer: Add button */}
@@ -598,7 +628,7 @@ export default function ProductCustomizeModal({
                 ? "Commande indisponible"
                 : canAdd
                 ? `${confirmLabel} — ${formatPrice(totalTtcCents)} €`
-                : "Veuillez compléter les options obligatoires"}
+                : hasRequiredSelections ? "Quantité indisponible" : "Veuillez compléter les options obligatoires"}
             </button>
           </div>
         </motion.div>

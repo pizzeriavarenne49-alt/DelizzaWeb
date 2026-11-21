@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type MouseEvent } from "react";
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/cn";
 import { motion } from "framer-motion";
@@ -11,7 +11,7 @@ import { formatPrice } from "@/types";
 import { track } from "@/analytics";
 import { useCart } from "@/contexts/CartContext";
 import PizzaDuoCustomizeModal from "@/components/ui/PizzaDuoCustomizeModal";
-import { isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isValidPizzaDuoProduct } from "@/lib/pizza-duo";
+import { isDelizzaPizzaCategory, isPizzaDuoDevelopmentEnabled, isPizzaDuoProduct, isValidPizzaDuoProduct } from "@/lib/pizza-duo";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import { useToast } from "@/contexts/ToastContext";
 const ProductCustomizeModal = dynamic(() => import("@/components/ui/ProductCustomizeModal"), { ssr: false });
@@ -45,6 +45,7 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
   const stockLimitReached = !canAddProductQuantity(product.id, 1, product);
   const hasCustomizations = hasProductCustomizations(product);
   const isDuo = isPizzaDuoProduct(product);
+  const isClassicPizza = !isDuo && product.pizzaUnits === 1 && isDelizzaPizzaCategory(product.category);
   const hasValidDuoConfiguration = !isDuo || isValidPizzaDuoProduct(product);
   const duoIllustrations = isDuo ? pizzaDuoRecipes.filter((recipe) => !isProductUnavailable(recipe)).slice(0, 2) : [];
   const cannotOrder = isUnavailable || orderingDisabled || stockLimitReached || !hasValidDuoConfiguration;
@@ -61,7 +62,7 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
     }
 
     track({ name: "click_add_product", payload: { productId: product.id } });
-    if (hasCustomizations || isDuo) {
+    if (hasCustomizations || isDuo || isClassicPizza) {
       setModalOpen(true);
     } else {
       addItem(product);
@@ -74,17 +75,6 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
     // is intentionally not tied to initial card visibility before consent.
     recordMarketingEvent("product_view", { productId: product.id, path: window.location.pathname });
     setModalOpen(true);
-  };
-
-  const handleAddClick = (event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    handleAdd();
-  };
-
-  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
-    event.preventDefault();
-    openDetails();
   };
 
   const handleModalConfirm = (
@@ -113,12 +103,7 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
       <motion.div
         data-seasonal-product=""
         whileTap={{ scale: 0.97 }}
-        role="button"
-        tabIndex={0}
-        onClick={openDetails}
-        onKeyDown={handleCardKeyDown}
-        aria-label={`Voir le détail de ${product.name}`}
-        className={cn("rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col cursor-pointer transition-colors hover:bg-[#202020] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4A053]", isDuo && "col-span-full sm:flex-row")}
+        className={cn("relative rounded-[18px] bg-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col transition-colors hover:bg-[#202020]", isDuo && "col-span-full sm:flex-row")}
       >
         {/* Image */}
         <div data-seasonal-product-image="" className={cn("relative aspect-[4/3] bg-[#252525]", isDuo && "sm:w-[46%] sm:shrink-0")}>
@@ -157,13 +142,10 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
               {hasCustomizations ? "dès " : ""}
               {formatPrice(product.price_cents)}&nbsp;€
             </span>
-            <div
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
+            <div className="relative z-20">
               <button
                 type="button"
-                onClick={handleAddClick}
+                onClick={handleAdd}
                 disabled={cannotOrder}
                 aria-label={
                   isUnavailable
@@ -172,7 +154,7 @@ export default function ProductCard({ product: initialProduct, pizzaDuoRecipes =
                       ? "Commandes en ligne indisponibles"
                       : stockLimitReached
                         ? `${product.name} : quantité maximale disponible atteinte`
-                      : isDuo ? `Composer ${product.name}` : `Ajouter ${product.name} au panier`
+                      : isDuo ? `Composer ${product.name}` : isClassicPizza ? `Personnaliser ${product.name}` : `Ajouter ${product.name} au panier`
                 }
                 className={cn(
                   "flex h-8 items-center justify-center rounded-full",
