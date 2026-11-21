@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -35,12 +35,13 @@ function StripeCheckoutForm({
 }: StripeCheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
+  const confirming = useRef(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stripe || !elements) return;
-    if (submitting) return;
+    if (confirming.current) return;
     if (disabled) {
       const error = new Error(disabledCode);
       Object.assign(error, {
@@ -51,21 +52,22 @@ function StripeCheckoutForm({
       return;
     }
 
+    confirming.current = true;
     setSubmitting(true);
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        // Return URL handled by redirect; we never trust client amount
-        return_url: `${window.location.origin}/order-confirmation?orderId=${encodeURIComponent(orderId)}`,
-      },
-      redirect: "if_required",
-    });
-
-    if (error) {
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/order-confirmation?orderId=${encodeURIComponent(orderId)}`,
+        },
+        redirect: "if_required",
+      });
+      if (error) throw error;
+      onSuccess();
+    } catch (error) {
+      confirming.current = false;
       onError(error);
       setSubmitting(false);
-    } else {
-      onSuccess();
     }
   };
 

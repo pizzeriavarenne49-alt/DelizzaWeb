@@ -7,6 +7,7 @@ const env = {
   NEXT_TELEMETRY_DISABLED: "1",
   NEXT_PUBLIC_ENABLE_PIZZA_DUO: "true",
   NEXT_PUBLIC_PIZZA_DUO_LOCAL_EMULATOR: "true",
+  NEXT_PUBLIC_DELIZZA_LOCAL_STRIPE_TEST: process.argv.includes("--stripe-test") ? "true" : "false",
   FIREBASE_PROJECT_ID: "demo-web-duo",
   GCLOUD_PROJECT: "demo-web-duo",
   GOOGLE_CLOUD_PROJECT: "demo-web-duo",

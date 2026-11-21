@@ -10,6 +10,9 @@ if (projectId !== "demo-web-duo" || emulatorHost !== "127.0.0.1:18787") {
 if (getApps().length === 0) initializeApp({ projectId });
 const db = getFirestore();
 db.settings({ host: emulatorHost, ssl: false });
+const stripeBrowser = process.argv.includes("--stripe-test");
+const tomatoCategory = "3LPzBegYvk8oA8rSVjkc";
+const creamCategory = "PxEZOWgUxAHxedwWHOSp";
 
 const commonPizza = {
   appId: "d_lizza",
@@ -56,6 +59,7 @@ await db.collection("wl_apps").doc("d_lizza").set({
   appId: "d_lizza",
   timeZone: "Europe/Paris",
   defaultDailyProductionUnits: 80,
+  ...(stripeBrowser ? { pizzaDuoWebEnabled: true, pizzaDuoPosEnabled: false } : {}),
   fixtureOnly: true,
 }, { merge: true });
 await db.collection("wl_time_slots_config").doc("d_lizza").set(capacityConfig, { merge: true });
@@ -77,8 +81,15 @@ for (let offset = 0; offset < 8; offset += 1) {
 }
 
 await db.collection("wl_catalog_categories").doc("pizzas").set({
-  appId: "d_lizza", isActive: true, visible: true, published: true, name: "Pizzas", order: 1,
+  appId: "d_lizza", isActive: !stripeBrowser, visible: !stripeBrowser, published: !stripeBrowser, name: "Pizzas", order: 1,
 });
+if (stripeBrowser) {
+  for (const [id, name, order] of [[tomatoCategory, "Base Tomate", 1], [creamCategory, "Base Crème", 2]]) {
+    await db.collection("wl_catalog_categories").doc(id).set({
+      appId: "d_lizza", isActive: true, visible: true, published: true, name, order,
+    });
+  }
+}
 await db.collection("wl_catalog_items").doc("duo-marg-reine").set({
   ...commonPizza,
   kind: "pizza_duo",
@@ -89,6 +100,7 @@ await db.collection("wl_catalog_items").doc("duo-marg-reine").set({
 });
 await db.collection("wl_catalog_items").doc("marg-local").set({
   ...commonPizza,
+  ...(stripeBrowser ? { categoryId: tomatoCategory, stockManaged: true, stockQty: 30 } : {}),
   name: "Margherita",
   description: "Sauce tomate, mozzarella et basilic.",
   imageUrl: "/api/demo-assets/margherita-demo.webp",
@@ -129,6 +141,7 @@ await db.collection("wl_ingredient_library").doc("mozzarella").set({
 });
 await db.collection("wl_catalog_items").doc("reine-local").set({
   ...commonPizza,
+  ...(stripeBrowser ? { categoryId: creamCategory, stockManaged: true, stockQty: 30 } : {}),
   name: "Reine",
   description: "Crème, jambon et champignons.",
   imageUrl: "/api/demo-assets/reine-demo.jpg",
@@ -138,13 +151,26 @@ await db.collection("wl_catalog_items").doc("reine-local").set({
 });
 await db.collection("wl_catalog_items").doc("orientale-demo").set({
   ...commonPizza, name: "Chorizo", recipeBase: "tomate", description: "Tomate, chorizo, poivrons et mozzarella.", imageUrl: "/api/demo-assets/chorizo-demo.jpg",
+  ...(stripeBrowser ? { categoryId: tomatoCategory } : {}),
   ingredients: ["Tomate", "Chorizo", "Poivrons", "Mozzarella"],
   price: { amountCents: 1450, currency: "EUR" },
 });
 await db.collection("wl_catalog_items").doc("quatre-fromages-demo").set({
   ...commonPizza, name: "Quatre Fromages", recipeBase: "creme", description: "Crème et quatre fromages.", imageUrl: "/api/demo-assets/quatre-fromages-demo.webp",
+  ...(stripeBrowser ? { categoryId: creamCategory } : {}),
   ingredients: ["Crème", "Mozzarella", "Bleu", "Chèvre"],
   price: { amountCents: 1490, currency: "EUR" },
 });
+
+if (stripeBrowser) {
+  await db.collection("wl_catalog_items").doc("d_lizza_pizza_duo_comptoir").set({
+    ...commonPizza, kind: "pizza_duo", categoryId: tomatoCategory, name: "Pizza Duo",
+    description: "Deux recettes, une pizza à partager.", isActive: false, visible: false, published: false,
+    posDuoActive: false, price: { amountCents: 1490, currency: "EUR" },
+  });
+  await db.collection("wl_online_ordering_status").doc("d_lizza").set({
+    appId: "d_lizza", status: "open", fixtureOnly: true,
+  }, { merge: true });
+}
 
 console.log("Seeded demo-web-duo fixture in Firestore emulator only.");

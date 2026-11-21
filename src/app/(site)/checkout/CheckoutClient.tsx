@@ -38,7 +38,7 @@ import {
   getClientErrorMessage,
 } from "@/lib/client-error-message";
 import { completeDemoPayment, createDemoPaymentIntent, createOrder, createPaymentIntent, type CreateOrderItem } from "@/services/order-service";
-import { isDemoPaymentEnabled } from "@/lib/demo-payment";
+import { isDemoPaymentEnabled, isLocalStripeTestEnabled } from "@/lib/demo-payment";
 import { saveGuestCheckoutIntent } from "@/lib/guest-checkout-intent";
 import { customerOrderItemLabelGroups, customerOrderItemLabels, type CustomerOrderItemLabelGroup } from "@/lib/customer-order-item-labels";
 import {
@@ -68,6 +68,10 @@ const StripeCheckout = dynamic(
 );
 const DemoPaymentCheckout = dynamic(
   () => import("@/components/checkout/DemoPaymentCheckout"),
+  { ssr: false },
+);
+const StripeTestRelayCheckout = dynamic(
+  () => import("@/components/checkout/StripeTestRelayCheckout"),
   { ssr: false },
 );
 
@@ -1890,6 +1894,16 @@ export default function CheckoutClient() {
 
               {isDemoPaymentEnabled() ? (
                 <DemoPaymentCheckout amountCents={paymentAmountCents} onComplete={handleDemoPayment} disabled={onlineOrderingBlocked} />
+              ) : isLocalStripeTestEnabled() && orderId && paymentIntentId ? (
+                <StripeTestRelayCheckout
+                  amountCents={paymentAmountCents}
+                  appId={WL_APP_ID}
+                  orderId={orderId}
+                  paymentIntentId={paymentIntentId}
+                  onSuccess={handlePaymentSuccess}
+                  onError={handlePaymentError}
+                  disabled={onlineOrderingBlocked}
+                />
               ) : clientSecret ? (
                 <StripeCheckout
                   clientSecret={clientSecret}

@@ -20,10 +20,12 @@ import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
 import {
+  CustomProvider,
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
   type AppCheck,
 } from "firebase/app-check";
+import { isLocalStripeTestEnabled } from "@/lib/demo-payment";
 
 declare global {
   interface Window {
@@ -188,6 +190,17 @@ export function initAppCheck(): void {
   }
   if (pizzaDuoLocalMode()) {
     assertPizzaDuoLocal();
+    if (isLocalStripeTestEnabled()) {
+      appCheckInstance = initializeAppCheck(getClientApp(), {
+        provider: new CustomProvider({
+          getToken: async () => ({
+            token: "delizza-loopback-recette-v1",
+            expireTimeMillis: Date.now() + 60 * 60 * 1000,
+          }),
+        }),
+        isTokenAutoRefreshEnabled: false,
+      });
+    }
     return;
   }
 
