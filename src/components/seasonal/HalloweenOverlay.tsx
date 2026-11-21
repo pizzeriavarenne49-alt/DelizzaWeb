@@ -43,6 +43,9 @@ export default function HalloweenOverlay({ settings, reducedMotion, appId, suspe
   const ambience = settings.ambience && !reducedMotion;
   const autoScreamer = settings.autoScreamer && !reducedMotion && canScream;
   useLayoutEffect(() => {
+    // The portal target belongs to the route DOM and must be refreshed after navigation.
+    // Keep this synchronous so the welcome overlay cannot flash in the document body.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWelcomeTarget(ambience && !suspended ? document.querySelector<HTMLElement>('[data-seasonal-welcome]') : null);
   }, [pathname, ambience, suspended]);
   useEffect(() => {

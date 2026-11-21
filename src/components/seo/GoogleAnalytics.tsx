@@ -19,10 +19,14 @@ function clearGaCookies(): void {
 }
 
 function gtag(..._args: unknown[]): void {
+  // Keep the rest parameter in the signature for typed calls while preserving
+  // GA's Arguments-object queue contract below.
+  void _args;
   const target = window as Window & { dataLayer?: unknown[] };
   target.dataLayer ??= [];
   // Match the official gtag queue: each call stores its Arguments object until
   // gtag.js consumes it, rather than an application-specific array shape.
+  // eslint-disable-next-line prefer-rest-params
   target.dataLayer.push(arguments as unknown);
 }
 
