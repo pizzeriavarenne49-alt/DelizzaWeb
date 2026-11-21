@@ -469,12 +469,15 @@ interface FulfillmentFormState {
   instructions: string;
 }
 
+type PickupSelection = { dateKey: SlotDateKey; slot: ScheduledPickupOption | null };
+
 interface Step1Props {
   state: FulfillmentFormState;
   onChange: (s: FulfillmentFormState) => void;
   onNext: () => void;
   isEmpty: boolean;
-  onSlotChange: (selection: { dateKey: SlotDateKey; slot: ScheduledPickupOption | null }) => void;
+  initialSelection: PickupSelection | null;
+  onSlotChange: (selection: PickupSelection) => void;
   refreshVersion: number;
   onlineOrderingBlocked: boolean;
   onlineOrderingMessage: string | null;
@@ -488,6 +491,7 @@ function Step1Fulfillment({
   onChange,
   onNext,
   isEmpty,
+  initialSelection,
   onSlotChange,
   refreshVersion,
   onlineOrderingBlocked,
@@ -497,8 +501,8 @@ function Step1Fulfillment({
   checkoutError,
 }: Step1Props) {
   const { items } = useCart();
-  const [selectedDate, setSelectedDate] = useState<SlotDateKey>("today");
-  const [selectedSlot, setSelectedSlot] = useState<ScheduledPickupOption | null>(null);
+  const [selectedDate, setSelectedDate] = useState<SlotDateKey>(initialSelection?.dateKey ?? "today");
+  const [selectedSlot, setSelectedSlot] = useState<ScheduledPickupOption | null>(initialSelection?.slot ?? null);
   const [slots, setSlots] = useState<ScheduledPickupOption[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
@@ -774,6 +778,9 @@ function Step1Fulfillment({
   };
 
   const isAsapBlocked = state.isAsap && (!nextAsapSlot || slotsLoading || !!slotsError);
+  const scheduledSlotConfirmed = Boolean(selectedSlot && slots.some(
+    (slot) => slot.status !== "full" && slot.remainingUnits > 0 && isSameScheduledPickupOption(slot, selectedSlot),
+  ));
 
   return (
     <div className="flex flex-col gap-5">
@@ -969,7 +976,7 @@ function Step1Fulfillment({
       <button
         type="button"
         onClick={onNext}
-        disabled={isEmpty || onlineOrderingBlocked || (!state.isAsap && !selectedSlot) || isAsapBlocked}
+        disabled={isEmpty || onlineOrderingBlocked || (!state.isAsap && !scheduledSlotConfirmed) || isAsapBlocked}
         className="w-full rounded-[18px] bg-gradient-to-br from-[#D4A053] to-[#E8C078] py-4 text-[16px] font-bold text-[#0D0D0D] shadow-[0_4px_20px_rgba(212,160,83,0.3)] disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continuer
@@ -1314,10 +1321,7 @@ export default function CheckoutClient() {
     scheduledTime: "",
     instructions: "",
   });
-  const [selectedSlotSelection, setSelectedSlotSelection] = useState<{
-    dateKey: SlotDateKey;
-    slot: ScheduledPickupOption | null;
-  } | null>(null);
+  const [selectedSlotSelection, setSelectedSlotSelection] = useState<PickupSelection | null>(null);
   const [pickupRefreshVersion, setPickupRefreshVersion] = useState(0);
 
   // Payment state
@@ -1813,6 +1817,7 @@ export default function CheckoutClient() {
               onChange={setFulfillment}
               onNext={() => setStep(2)}
               isEmpty={isEmpty}
+              initialSelection={selectedSlotSelection}
               onSlotChange={setSelectedSlotSelection}
               refreshVersion={pickupRefreshVersion}
               onlineOrderingBlocked={onlineOrderingBlocked}
