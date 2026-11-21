@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import type { Product } from "@/types";
 import type { CartItem, PizzaDuoComposition } from "@/types/cart";
 import { formatPrice } from "@/types";
@@ -9,6 +10,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useCatalogAvailability } from "@/contexts/CatalogAvailabilityContext";
 import { isCartItemStockAvailable } from "@/lib/product-availability";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
+import PizzaDuoVisual from "@/components/ui/PizzaDuoVisual";
 
 interface Props {
   product: Product; recipes: Product[]; initial?: PizzaDuoComposition;
@@ -111,8 +113,8 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
       }}>
-      <div className="flex max-h-[94dvh] w-full max-w-[720px] flex-col overflow-hidden rounded-t-[24px] bg-[#1A1A1A] md:rounded-[22px]">
-        <header className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+      <div className="flex max-h-[94dvh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[28px] border border-[#d4a053]/25 bg-[#15110d] shadow-2xl md:rounded-[28px]">
+        <header className="flex items-center justify-between border-b border-[#d4a053]/20 px-5 py-4">
           <div>
             <h2 id="pizza-duo-title" className="text-[20px] font-bold text-[#F5F5F5]">{product.name}</h2>
             <p className="text-[14px] text-[#D4A053]">{formatPrice(PIZZA_DUO_FIXED_PRICE_CENTS)} € la pizza</p>
@@ -120,11 +122,14 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
           <button type="button" onClick={onClose} className="size-11 shrink-0 rounded-full bg-[#252525] text-xl text-[#F5F5F5]" aria-label="Fermer le configurateur">×</button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-          <p className="mb-4 text-[13px] text-[#CFCFCF]">Choisissez une recette par moitié. Vous pouvez mélanger les bases ou choisir deux fois la même recette.</p>
+          <p className="mb-4 text-[13px] text-[#d8cfbf]">Choisissez une recette par moitié. Vous pouvez mélanger les bases ou choisir deux fois la même recette.</p>
+          <div className="mb-5 rounded-[22px] border border-[#d4a053]/20 bg-[#211911] px-5 py-5">
+            <PizzaDuoVisual left={left} right={right} />
+          </div>
           <div className="mb-4 grid grid-cols-2 gap-2" aria-label="Étapes de composition">
             {(["left", "right"] as const).map((item, index) => {
               const recipe = item === "left" ? left : right;
-              return <button key={item} type="button" onClick={() => edit(item)} aria-current={side === item ? "step" : undefined} className={`rounded-[14px] border px-3 py-3 text-left ${side === item ? "border-[#D4A053] bg-[#D4A053]/15" : "border-white/10 bg-[#252525]"}`}>
+              return <button key={item} type="button" onClick={() => edit(item)} aria-current={side === item ? "step" : undefined} className={`rounded-[14px] border px-3 py-3 text-left transition-colors ${side === item ? "border-[#D4A053] bg-[#D4A053]/15" : "border-[#d4a053]/15 bg-[#211a13] hover:border-[#d4a053]/45"}`}>
                 <span className="block text-[11px] font-bold uppercase text-[#D4A053]">Étape {index + 1}</span>
                 <span className="block text-[14px] font-semibold text-[#F5F5F5]">{recipe?.name ?? `Choisir ma ${index === 0 ? "première" : "deuxième"} moitié`}</span>
                 {recipe && <span className="block text-[12px] text-[#A0A0A0]">Base {baseLabel(recipe.recipeBase)} · Modifier</span>}
@@ -138,10 +143,11 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
             </div>
             {selectionRemoved && <p role="status" className="mb-3 rounded-lg bg-[#392825] px-3 py-2 text-sm text-[#FFC3B9]">Une recette sélectionnée n’est plus disponible. Choisissez-en une autre.</p>}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {visible.map((recipe) => <button key={recipe.id} type="button" onClick={() => choose(recipe)} aria-pressed={current?.id === recipe.id} className={`rounded-[14px] border px-3 py-3 text-left ${current?.id === recipe.id ? "border-[#D4A053] bg-[#D4A053]/15" : "border-white/10 bg-[#252525]"}`}>
-                <span className="block text-[14px] font-semibold text-[#F5F5F5]">{recipe.name}</span>
-                <span className="block text-[12px] text-[#A0A0A0]">Base {baseLabel(recipe.recipeBase)}</span>
-                <span className="mt-1 block text-[12px] text-[#CFCFCF]">{getPizzaDuoIngredientNames(recipe).join(", ")}</span>
+              {visible.map((recipe) => <button key={recipe.id} type="button" onClick={() => choose(recipe)} aria-pressed={current?.id === recipe.id} className={`group overflow-hidden rounded-[16px] border text-left transition-colors ${current?.id === recipe.id ? "border-[#D4A053] bg-[#D4A053]/15" : "border-[#d4a053]/15 bg-[#211a13] hover:border-[#d4a053]/45"}`}>
+                <div className="relative aspect-[2.6] overflow-hidden"><Image src={recipe.image} alt="" fill sizes="(max-width: 640px) 100vw, 300px" className="object-cover transition-transform duration-300 group-hover:scale-105" /></div>
+                <span className="block px-3 pt-3 text-[14px] font-semibold text-[#F5F5F5]">{recipe.name}</span>
+                <span className="block px-3 text-[12px] text-[#D4A053]">Base {baseLabel(recipe.recipeBase)}</span>
+                <span className="mt-1 block px-3 pb-3 text-[12px] text-[#CFCFCF]">{getPizzaDuoIngredientNames(recipe).join(", ")}</span>
               </button>)}
             </div>
             {noRecipes && <p className="mt-3 text-[13px] text-[#E8A0A0]">Aucune recette disponible pour une Pizza Duo.</p>}
