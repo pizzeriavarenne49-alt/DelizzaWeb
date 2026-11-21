@@ -147,6 +147,7 @@ export default function ProductCustomizeModal({
   );
   const [removedIngredients, setRemovedIngredients] = useState<string[]>(() => initialCustomizations?.removedIngredients ?? []);
   const [addedSupplements, setAddedSupplements] = useState<string[]>(() => initialCustomizations?.addedSupplements ?? []);
+  const [recipeBaseOverride, setRecipeBaseOverride] = useState<"tomate" | "crème" | undefined>(() => initialCustomizations?.recipeBaseOverride);
   const [quantity, setQuantity] = useState(initialQuantity);
   const [reviewing, setReviewing] = useState(false);
 
@@ -203,8 +204,10 @@ export default function ProductCustomizeModal({
   const hasIngredients = product.ingredients.length > 0;
   const hasRemovableIngredients = product.allowIngredientRemoval && baseIngredients.length > 0;
   const isPizza = isDelizzaPizzaCategory(product.category) && product.pizzaUnits === 1;
+  const defaultRecipeBase = product.recipeBase === "tomate" ? "tomate" : product.recipeBase === "creme" ? "crème" : undefined;
+  const canChangeRecipeBase = isPizza && defaultRecipeBase !== undefined;
   const hasSupplements = supplementIngredients.length > 0;
-  const hasCustomizations = hasOptions || hasRemovableIngredients || hasSupplements;
+  const hasCustomizations = hasOptions || canChangeRecipeBase || hasRemovableIngredients || hasSupplements;
   const hasTags = product.tags.length > 0;
   const showIngredientLabels = hasIngredients && (!isPizza || !hasRemovableIngredients);
   const effectiveRemovals = hasRemovableIngredients
@@ -213,6 +216,7 @@ export default function ProductCustomizeModal({
   const summaryDetails = [
     ...buildSelectedOptions(product, sortedOptions, selections).flatMap((option) => option.choiceNames),
     ...effectiveRemovals.map((ingredient) => `Sans ${ingredient.name}`),
+    ...(recipeBaseOverride ? [`Base ${recipeBaseOverride}`] : []),
     ...selectedSupplementIngredients.map((ingredient) => `+ ${ingredient.name}`),
   ];
 
@@ -251,6 +255,7 @@ export default function ProductCustomizeModal({
       selectedLegacyOptions,
       addedSupplements: selectedSupplementIngredients.map((ingredient) => ingredient.id),
       removedIngredients: effectiveRemovals.map((ingredient) => ingredient.id),
+      ...(recipeBaseOverride ? { recipeBaseOverride } : {}),
       addedSupplementSnapshots: selectedSupplementIngredients.map((ingredient) => ({
         ingredientId: ingredient.id,
         ingredientName: ingredient.name,
@@ -428,11 +433,20 @@ export default function ProductCustomizeModal({
               );
             })}
 
-            {(hasRemovableIngredients || hasSupplements) && (
+            {(canChangeRecipeBase || hasRemovableIngredients || hasSupplements) && (
               <section className="mt-5">
                 {!isPizza && <h3 className="text-[15px] font-bold text-[#F5F5F5]">Personnaliser</h3>}
+                {canChangeRecipeBase && <div className="rounded-2xl border border-[#493b2c] bg-[#211b16] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-bold text-[#F5F5F5]">Base de la pizza</h4><span className="text-xs text-[#C7B9A9]">Sans supplément</span></div>
+                  <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label="Choisir la base">
+                    {(["tomate", "crème"] as const).map((base) => {
+                      const selected = (recipeBaseOverride ?? defaultRecipeBase) === base;
+                      return <button key={base} type="button" disabled={orderingBlocked} onClick={() => setRecipeBaseOverride(base === defaultRecipeBase ? undefined : base)} aria-pressed={selected} className={`min-h-11 rounded-xl border px-3 text-sm font-bold ${selected ? "border-[#E8C078] bg-[#352817] text-[#F7DCA9]" : "border-[#5b4936] text-[#E7D8C5]"}`}>Base {base}</button>;
+                    })}
+                  </div>
+                </div>}
                 {hasRemovableIngredients && (
-                <div className={isPizza ? "rounded-2xl border border-[#493b2c] bg-[#211b16] p-4" : "mt-3 flex flex-col gap-2"}>
+                <div className={isPizza ? "mt-5 rounded-2xl border border-[#493b2c] bg-[#211b16] p-4" : "mt-3 flex flex-col gap-2"}>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-sm font-bold text-[#F5F5F5]">Ingrédients de la recette</h4>
                     {isPizza && <span className="text-xs text-[#C7B9A9]">Appuyez pour retirer</span>}

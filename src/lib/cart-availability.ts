@@ -49,6 +49,8 @@ type LiveProduct = {
   options: LiveOption[];
   baseIngredientIds: string[];
   availableSupplementIds: string[];
+  pizzaDuoSupplementIds: string[] | undefined;
+  pizzaCommonSupplementIds: string[] | undefined;
   allowIngredientRemoval: boolean;
   kind: string;
   recipeBase: string;
@@ -98,6 +100,10 @@ function stringOrEmpty(value: unknown): string {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function optionalStringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? stringArray(value) : undefined;
 }
 
 function priceCentsFromData(data: Record<string, unknown>): number {
@@ -189,11 +195,13 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
   if (catalogItemId === PIZZA_DUO_CATALOG_ID) {
     const response = await fetch(`/api/catalog/editable-product/${catalogItemId}`, { cache: "no-store", credentials: "same-origin" });
     if (response.ok) {
-      const product = await response.json() as { name?: string; category?: string; active?: boolean; manualOutOfStock?: boolean; stockManaged?: boolean; stockQty?: number; price_cents?: number; options?: LiveOption[]; baseIngredientIds?: string[]; availableSupplementIds?: string[]; allowIngredientRemoval?: boolean; kind?: string; recipeBase?: string; pizzaUnits?: number };
+      const product = await response.json() as { name?: string; category?: string; active?: boolean; manualOutOfStock?: boolean; stockManaged?: boolean; stockQty?: number; price_cents?: number; options?: LiveOption[]; baseIngredientIds?: string[]; availableSupplementIds?: string[]; pizzaDuoSupplementIds?: string[]; pizzaCommonSupplementIds?: string[]; allowIngredientRemoval?: boolean; kind?: string; recipeBase?: string; pizzaUnits?: number };
       data = { appId: WL_APP_ID, name: product.name, categoryId: product.category, isActive: product.active, visible: true,
         manualOutOfStock: product.manualOutOfStock, stockManaged: product.stockManaged, stockQty: product.stockQty,
         priceCents: product.price_cents, options: product.options, baseIngredientIds: product.baseIngredientIds,
         availableSupplementIds: product.availableSupplementIds, allowIngredientRemoval: product.allowIngredientRemoval,
+        pizzaDuoSupplementIds: product.pizzaDuoSupplementIds,
+        pizzaCommonSupplementIds: product.pizzaCommonSupplementIds,
         kind: product.kind, recipeBase: product.recipeBase, pizzaUnits: product.pizzaUnits };
     }
   } else {
@@ -221,6 +229,8 @@ async function loadLiveProduct(catalogItemId: string): Promise<LiveProduct | nul
     options: await loadLiveOptions(data),
     baseIngredientIds: stringArray(data.baseIngredientIds),
     availableSupplementIds: stringArray(data.availableSupplementIds),
+    pizzaDuoSupplementIds: optionalStringArray(data.pizzaDuoSupplementIds),
+    pizzaCommonSupplementIds: optionalStringArray(data.pizzaCommonSupplementIds),
     allowIngredientRemoval: typeof data.allowIngredientRemoval === "boolean" ? data.allowIngredientRemoval : false,
     kind: stringOrEmpty(data.kind),
     recipeBase: stringOrEmpty(data.recipeBase),
@@ -438,6 +448,8 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
   const ingredientIds = new Set<string>();
   for (const item of items) {
     for (const extra of item.duo?.supplements ?? []) ingredientIds.add(extra.ingredientId);
+    for (const ingredient of item.duo?.leftRecipe.removedIngredients ?? []) ingredientIds.add(ingredient.ingredientId);
+    for (const ingredient of item.duo?.rightRecipe.removedIngredients ?? []) ingredientIds.add(ingredient.ingredientId);
     for (const ingredientId of item.addedSupplements ?? []) {
       ingredientIds.add(ingredientId);
     }
@@ -513,12 +525,25 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
         issues.push(buildProductIssue(item, duoName, "product_unavailable", "Une recette de cette Pizza Duo n'est plus disponible.", "recette indisponible"));
         continue;
       }
+      const baseOverrides = {
+        left: item.duo.leftRecipe.baseOverride,
+        right: item.duo.rightRecipe.baseOverride,
+      };
+      if (Object.values(baseOverrides).some((base) => base !== undefined && base !== "tomate" && base !== "crème")) {
+        issues.push(buildProductIssue(item, duoName, "product_unavailable", "Une base de cette Pizza Duo doit être choisie à nouveau.", "base indisponible"));
+        continue;
+      }
       for (const extra of item.duo.supplements ?? []) {
         const ingredient = ingredientCache.get(extra.ingredientId);
         const chosenRecipeIds = extra.target === "whole" ? recipeIds : [extra.target === "left" ? recipeIds[0] : recipeIds[1]];
+        // The catalog projection carries the optional tenant common list only
+        // on the Duo parent. An explicit parent list, including [], wins.
+        const duoPolicy = duoProduct.pizzaDuoSupplementIds ?? duoProduct.pizzaCommonSupplementIds;
         const available = isPizzaDuoSupplementTarget(extra.target) && ingredient?.isActive &&
           ingredient.name.trim() && ingredient.priceModifierCurrency === "EUR" &&
-          chosenRecipeIds.every((id) => productCache.get(id)?.availableSupplementIds.includes(extra.ingredientId));
+          (duoPolicy !== undefined
+            ? duoPolicy.includes(extra.ingredientId)
+            : chosenRecipeIds.every((id) => productCache.get(id)?.availableSupplementIds.includes(extra.ingredientId)));
         if (!available || ingredient.priceModifierCents === null ||
             !Number.isSafeInteger(ingredient.priceModifierCents) || ingredient.priceModifierCents < 0) {
           issues.push(buildProductIssue(item, duoName, "ingredient_unavailable", "Un supplément de cette Pizza Duo n’est plus disponible. Modifiez sa composition.", "supplément indisponible"));
@@ -526,6 +551,19 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
         }
         if (getPizzaDuoSupplementPriceCents(ingredient.priceModifierCents, extra.target) !== extra.priceDeltaCents) {
           issues.push(buildProductIssue(item, duoName, "ingredient_unavailable", "Le prix d’un supplément de cette Pizza Duo a changé. Modifiez sa composition.", "prix du supplément modifié"));
+          break;
+        }
+      }
+      const removedBySide = [
+        { recipeId: recipeIds[0], removed: item.duo.leftRecipe.removedIngredients ?? [] },
+        { recipeId: recipeIds[1], removed: item.duo.rightRecipe.removedIngredients ?? [] },
+      ];
+      for (const { recipeId, removed } of removedBySide) {
+        if (removed.length === 0) continue;
+        const recipe = productCache.get(recipeId);
+        const allowedBaseIds = new Set(recipe?.baseIngredientIds ?? []);
+        if (!recipe?.allowIngredientRemoval || removed.some(({ ingredientId }) => !allowedBaseIds.has(ingredientId))) {
+          issues.push(buildProductIssue(item, duoName, "ingredient_unavailable", "Un ingrédient retiré de cette Pizza Duo n’est plus modifiable. Modifiez sa composition.", "personnalisation indisponible"));
           break;
         }
       }
@@ -584,6 +622,13 @@ export async function assessCartAvailability(items: CartItem[]): Promise<CartAva
           "en rupture",
         ),
       );
+      continue;
+    }
+
+    if (item.recipeBaseOverride &&
+        (item.recipeBaseOverride !== "tomate" && item.recipeBaseOverride !== "crème" ||
+          product.pizzaUnits !== 1 || !getPizzaDuoRecipeBase(product.categoryId, product.recipeBase))) {
+      issues.push(buildProductIssue(item, productName, "product_unavailable", "La base de cette pizza doit être choisie à nouveau.", "base indisponible"));
       continue;
     }
 

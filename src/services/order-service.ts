@@ -20,6 +20,7 @@ export interface CreateOrderItem {
   selectedLegacyOptions?: Record<string, string[]>;
   addedSupplements?: string[];
   removedIngredients?: string[];
+  recipeBaseOverride?: "tomate" | "crème";
   /** One physical Pizza Duo. Its recipes are validated and snapshotted server-side. */
   duo?: PizzaDuoOrderSelection;
 }

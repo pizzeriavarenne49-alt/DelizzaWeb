@@ -566,6 +566,34 @@ run("checkout attempt fingerprint changes with cart and pickup", () => {
   assert.notEqual(same, slotChanged);
 });
 
+run("free base omissions preserve legacy cart and payment-attempt keys", () => {
+  const legacyCartKey = JSON.stringify(["product", "pizza-1", [], [], [], []]);
+  assert.equal(buildCartKey("pizza-1", {}), legacyCartKey);
+  assert.equal(buildCartKey("pizza-1", { recipeBaseOverride: undefined }), legacyCartKey);
+  assert.notEqual(buildCartKey("pizza-1", { recipeBaseOverride: "crème" }), legacyCartKey);
+
+  const legacyInput = {
+    appId: "d_lizza",
+    userId: "uid_legacy",
+    items: [{ catalogItemId: "pizza-1", cartKey: legacyCartKey, quantity: 1, unitPriceCents: 1290, totalCents: 1290, taxRateBps: 1000 }],
+    fulfillmentData: { method: "clickAndCollect", isAsap: true, isPaid: false, source: "web", paymentTiming: "before" },
+    customerName: "Client historique",
+    customerPhone: "+33601020304",
+    useReward: false,
+  };
+  // Fixed against the pre-free-base v2 canonical shape: no null placeholder
+  // may invalidate an in-progress payment merely because the UI was updated.
+  assert.equal(checkoutAttempt.buildCheckoutAttemptFingerprint(legacyInput), "v2_c6e314f34ca6c488");
+  assert.equal(
+    checkoutAttempt.buildCheckoutAttemptFingerprint({ ...legacyInput, items: [{ ...legacyInput.items[0], recipeBaseOverride: undefined }] }),
+    "v2_c6e314f34ca6c488",
+  );
+  assert.notEqual(
+    checkoutAttempt.buildCheckoutAttemptFingerprint({ ...legacyInput, items: [{ ...legacyInput.items[0], recipeBaseOverride: "crème" }] }),
+    "v2_c6e314f34ca6c488",
+  );
+});
+
 run("checkout attempt fingerprint is canonical and pseudonymized", () => {
   const base = {
     appId: "d_lizza",

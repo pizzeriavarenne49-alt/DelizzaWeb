@@ -87,14 +87,30 @@ export function getPizzaDuoCoverRecipes(recipes: readonly Product[]): [Product, 
   return right ? [left, right] : undefined;
 }
 
-function snapshotRecipe(product: Product): PizzaDuoRecipeSnapshot {
+function snapshotRecipe(
+  product: Product,
+  removedIngredientIds: readonly string[] = [],
+  baseOverride?: "tomate" | "crème",
+): PizzaDuoRecipeSnapshot {
+  const baseIngredients = getPizzaDuoBaseIngredients(product);
+  const removedIds = new Set(product.allowIngredientRemoval ? removedIngredientIds : []);
+  const removedIngredients = baseIngredients
+    .filter((ingredient) => removedIds.has(ingredient.id))
+    .map((ingredient) => ({ ingredientId: ingredient.id, ingredientName: ingredient.name }));
   return {
     recipeId: product.id,
     recipeName: product.name,
     base: getPizzaDuoRecipeBase(product.category, product.recipeBase) ?? "tomate",
+    ...(baseOverride ? { baseOverride } : {}),
     description: product.description_short || undefined,
     ingredients: getPizzaDuoIngredientNames(product),
+    ...(removedIngredients.length ? { removedIngredients } : {}),
   };
+}
+
+export function getPizzaDuoBaseIngredients(product: Product): ProductIngredient[] {
+  const baseIds = new Set(product.baseIngredientIds);
+  return (product.ingredientLibrary ?? []).filter((ingredient) => baseIds.has(ingredient.id) && ingredient.name.trim());
 }
 
 /** Match the server snapshot when library references and editorial labels coexist. */
@@ -122,7 +138,28 @@ function validSupplements(product: Product): ProductIngredient[] {
     product.availableSupplementIds?.includes(ingredient.id));
 }
 
-export function getPizzaDuoSupplementOptions(left: Product, right: Product, target: PizzaDuoSupplementTarget): ProductIngredient[] {
+function duoPolicySupplements(duoProduct: Product, ids: readonly string[]): ProductIngredient[] {
+  const allowedIds = new Set(ids);
+  return (duoProduct.ingredientLibrary ?? []).filter((ingredient) =>
+    ingredient.appId === PIZZA_DUO_TENANT_ID && ingredient.isActive &&
+    ingredient.name.trim() && ingredient.defaultPriceModifier.currency.toUpperCase() === "EUR" &&
+    Number.isSafeInteger(ingredient.defaultPriceModifier.amountCents) &&
+    ingredient.defaultPriceModifier.amountCents >= 0 && allowedIds.has(ingredient.id));
+}
+
+/**
+ * A saved Duo policy belongs to the parent product and applies to either half
+ * and the whole pizza. Older parents have no field and retain the recipe
+ * policy, preserving existing carts and catalogue entries.
+ */
+export function getPizzaDuoSupplementOptions(
+  left: Product,
+  right: Product,
+  target: PizzaDuoSupplementTarget,
+  duoProduct?: Product,
+): ProductIngredient[] {
+  if (duoProduct?.pizzaDuoSupplementIds !== undefined) return duoPolicySupplements(duoProduct, duoProduct.pizzaDuoSupplementIds);
+  if (duoProduct?.pizzaCommonSupplementIds !== undefined) return duoPolicySupplements(duoProduct, duoProduct.pizzaCommonSupplementIds);
   if (target === "left") return validSupplements(left);
   if (target === "right") return validSupplements(right);
   const rightIds = new Set(validSupplements(right).map(({ id }) => id));
@@ -160,12 +197,17 @@ export function normalizePizzaDuoSupplementSelections(selections: readonly Pizza
 }
 
 export function createPizzaDuoComposition(
-  leftRecipe: Product, rightRecipe: Product, selections: readonly PizzaDuoSupplementSelection[] = [],
+  leftRecipe: Product,
+  rightRecipe: Product,
+  selections: readonly PizzaDuoSupplementSelection[] = [],
+  duoProduct?: Product,
+  removedIngredients: { left: readonly string[]; right: readonly string[] } = { left: [], right: [] },
+  baseOverrides: { left?: "tomate" | "crème"; right?: "tomate" | "crème" } = {},
 ): PizzaDuoComposition {
   const options = {
-    left: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "left"),
-    right: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "right"),
-    whole: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "whole"),
+    left: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "left", duoProduct),
+    right: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "right", duoProduct),
+    whole: getPizzaDuoSupplementOptions(leftRecipe, rightRecipe, "whole", duoProduct),
   };
   const allowed = selections.filter(({ ingredientId, target }) =>
     isPizzaDuoSupplementTarget(target) && options[target].some(({ id }) => id === ingredientId));
@@ -181,8 +223,8 @@ export function createPizzaDuoComposition(
     kind: "pizza_duo",
     leftRecipeId: leftRecipe.id,
     rightRecipeId: rightRecipe.id,
-    leftRecipe: snapshotRecipe(leftRecipe),
-    rightRecipe: snapshotRecipe(rightRecipe),
+    leftRecipe: snapshotRecipe(leftRecipe, removedIngredients.left, baseOverrides.left),
+    rightRecipe: snapshotRecipe(rightRecipe, removedIngredients.right, baseOverrides.right),
     ...(supplements.length ? { supplements } : {}),
   };
 }
@@ -197,11 +239,26 @@ export function pizzaDuoOrderSelection(duo: PizzaDuoComposition): PizzaDuoOrderS
     leftRecipeId: duo.leftRecipeId,
     rightRecipeId: duo.rightRecipeId,
     ...(supplements.length ? { supplements } : {}),
+    ...((duo.leftRecipe.removedIngredients?.length || duo.rightRecipe.removedIngredients?.length)
+      ? { removedIngredients: {
+          left: duo.leftRecipe.removedIngredients?.map(({ ingredientId }) => ingredientId) ?? [],
+          right: duo.rightRecipe.removedIngredients?.map(({ ingredientId }) => ingredientId) ?? [],
+        } }
+      : {}),
+    ...((duo.leftRecipe.baseOverride || duo.rightRecipe.baseOverride)
+      ? { baseOverrides: {
+          ...(duo.leftRecipe.baseOverride ? { left: duo.leftRecipe.baseOverride } : {}),
+          ...(duo.rightRecipe.baseOverride ? { right: duo.rightRecipe.baseOverride } : {}),
+        } }
+      : {}),
   };
 }
 
 export function pizzaDuoCartKey(productId: string, duo: PizzaDuoComposition): string {
   // Left/right ordering is intentionally preserved for kitchen readability.
-  const { leftRecipeId, rightRecipeId, supplements } = pizzaDuoOrderSelection(duo);
-  return `${productId}__duo:${JSON.stringify(supplements ? [leftRecipeId, rightRecipeId, supplements] : [leftRecipeId, rightRecipeId])}`;
+  const { leftRecipeId, rightRecipeId, supplements, removedIngredients, baseOverrides } = pizzaDuoOrderSelection(duo);
+  if (!removedIngredients && !baseOverrides) {
+    return `${productId}__duo:${JSON.stringify(supplements ? [leftRecipeId, rightRecipeId, supplements] : [leftRecipeId, rightRecipeId])}`;
+  }
+  return `${productId}__duo:${JSON.stringify([leftRecipeId, rightRecipeId, supplements ?? [], removedIngredients ?? {}, baseOverrides ?? {}])}`;
 }

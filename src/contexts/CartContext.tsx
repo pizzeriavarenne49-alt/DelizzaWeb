@@ -118,6 +118,7 @@ function customizedItem(
     selectedLegacyOptions: customizations.selectedLegacyOptions,
     addedSupplements: customizations.addedSupplements,
     removedIngredients: customizations.removedIngredients,
+    recipeBaseOverride: customizations.recipeBaseOverride,
     addedSupplementSnapshots: customizations.addedSupplementSnapshots,
     removedIngredientSnapshots: customizations.removedIngredientSnapshots,
     catalogKind: product.kind === "pizza_duo" ? "pizza_duo" : undefined,
@@ -140,6 +141,7 @@ function migrateLegacyItems(items: CartItem[]): CartItem[] {
     selectedLegacyOptions: item.selectedLegacyOptions,
     addedSupplements: item.addedSupplements ?? [],
     removedIngredients: item.removedIngredients ?? [],
+    recipeBaseOverride: item.recipeBaseOverride,
     addedSupplementSnapshots: item.addedSupplementSnapshots ?? [],
     removedIngredientSnapshots: item.removedIngredientSnapshots ?? [],
     catalogKind: item.catalogKind ?? (item.duo ? "pizza_duo" : undefined),
@@ -284,6 +286,7 @@ function CartStateProvider({
       selectedLegacyOptions: {},
       addedSupplements: [],
       removedIngredients: [],
+      recipeBaseOverride: undefined,
     });
     setItems((prev) => {
       if (!isAdditionalProductQuantityAvailable(prev, product.id, 1, catalogAvailability, product)) return prev;

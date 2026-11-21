@@ -13,7 +13,7 @@
 
 import { FieldPath } from "firebase-admin/firestore";
 import { isPublicProductDoc } from "@/lib/catalog-publication";
-import { getPizzaDuoRecipeBase, PIZZA_DUO_CATALOG_ID, PIZZA_DUO_CATEGORY_ID } from "@/lib/pizza-duo";
+import { getPizzaDuoRecipeBase, isDelizzaPizzaCategory, PIZZA_DUO_CATALOG_ID, PIZZA_DUO_CATEGORY_ID } from "@/lib/pizza-duo";
 import { INGREDIENT_CATEGORY_LABELS } from "@/types";
 import type { Product, Category, HeroSlide, Offer, ProductIngredient, IngredientCategory } from "@/types";
 import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
@@ -427,6 +427,12 @@ function mapProduct(id: string, data: FirestoreDoc): Product & { appliedTemplate
     legacyOptionIds: parseOptions(data.options).map((option) => option.id),
     baseIngredientIds: arr(data.baseIngredientIds),
     availableSupplementIds: arr(data.availableSupplementIds),
+    ...(Array.isArray(data.pizzaDuoSupplementIds)
+      ? { pizzaDuoSupplementIds: arr(data.pizzaDuoSupplementIds) }
+      : {}),
+    ...(typeof data.usePizzaCommonSupplements === "boolean"
+      ? { usePizzaCommonSupplements: data.usePizzaCommonSupplements }
+      : {}),
     allowIngredientRemoval: bool(data.allowIngredientRemoval, false),
     appliedTemplateIds: parseTemplateIds(data.appliedTemplateIds),
     templatePriceOverrides: parseTemplatePriceOverrides(data.templatePriceOverrides),
@@ -478,6 +484,19 @@ export class FirebaseRepository implements DataRepository {
   }
 
   async getProducts(): Promise<Product[]> {
+    let pizzaCommonSupplementIds: string[] | undefined;
+    let tenantAppData: Record<string, unknown> | undefined;
+    if (WL_APP_ID === "d_lizza") {
+      try {
+        const appDoc = await getDb().collection("wl_apps").doc(WL_APP_ID).get();
+        tenantAppData = appDoc.data();
+        if (Array.isArray(tenantAppData?.pizzaCommonSupplementIds)) {
+          pizzaCommonSupplementIds = arr(tenantAppData.pizzaCommonSupplementIds);
+        }
+      } catch (error) {
+        console.warn("[CMS] Pizza supplement policy unavailable; keeping per-product policy.", error);
+      }
+    }
     const snap = await getDb()
       .collection("wl_catalog_items")
       .where("appId", "==", WL_APP_ID)
@@ -496,10 +515,7 @@ export class FirebaseRepository implements DataRepository {
     // expose the private parent document.
     if (WL_APP_ID === "d_lizza") {
       try {
-        const [appDoc, duoDoc] = await Promise.all([
-          getDb().collection("wl_apps").doc(WL_APP_ID).get(),
-          getDb().collection("wl_catalog_items").doc(PIZZA_DUO_CATALOG_ID).get(),
-        ]);
+        const duoDoc = await getDb().collection("wl_catalog_items").doc(PIZZA_DUO_CATALOG_ID).get();
         const duo = duoDoc.data();
         const categoryDoc = typeof duo?.categoryId === "string"
           ? await getDb().collection("wl_catalog_categories").doc(duo.categoryId).get()
@@ -509,7 +525,7 @@ export class FirebaseRepository implements DataRepository {
           (categoryDoc?.id === PIZZA_DUO_CATEGORY_ID
             ? isPublicCategoryDoc(category)
             : ["base tomate", "base crème", "base creme"].includes(str(category.name).trim().toLocaleLowerCase("fr")));
-        if (appDoc.data()?.pizzaDuoWebEnabled === true && duoDoc.exists && duo &&
+        if (tenantAppData?.pizzaDuoWebEnabled === true && duoDoc.exists && duo &&
           duo.appId === WL_APP_ID && duo.kind === "pizza_duo" && duo.isActive === false && duo.visible === false &&
           duo.price?.amountCents === 1490 && String(duo.price?.currency ?? "EUR").toUpperCase() === "EUR" &&
           duo.pizzaUnits === 1 && duo.manualOutOfStock !== true && validDuoCategory &&
@@ -554,6 +570,8 @@ export class FirebaseRepository implements DataRepository {
       ...new Set(rawProducts.flatMap((p) => [
         ...p.baseIngredientIds,
         ...p.availableSupplementIds,
+        ...(p.pizzaDuoSupplementIds ?? []),
+        ...(pizzaCommonSupplementIds ?? []),
       ])),
     ];
 
@@ -583,19 +601,31 @@ export class FirebaseRepository implements DataRepository {
 
     // Merge template-derived options (first) with inline options and resolved ingredients.
     return rawProducts.map((product) => {
+      const usesCommonPizzaSupplements = pizzaCommonSupplementIds !== undefined &&
+        product.usePizzaCommonSupplements !== false && product.pizzaUnits === 1 &&
+        product.kind !== "pizza_duo" && isDelizzaPizzaCategory(product.category);
+      const effectiveSupplementIds = usesCommonPizzaSupplements
+        ? pizzaCommonSupplementIds!
+        : product.availableSupplementIds;
       const templateOptions = product.appliedTemplateIds
         .map((id) => templateMap.get(id))
         .filter((opt): opt is ProductOption => opt !== undefined);
       const ingredientLibrary = [
         ...new Set([
           ...product.baseIngredientIds,
-          ...product.availableSupplementIds,
+          ...effectiveSupplementIds,
+          ...(product.pizzaDuoSupplementIds ?? []),
+          ...(product.kind === "pizza_duo" ? pizzaCommonSupplementIds ?? [] : []),
         ]),
       ]
         .map((id) => ingredientMap.get(id))
         .filter((ingredient): ingredient is ProductIngredient => ingredient !== undefined);
       return {
         ...product,
+        availableSupplementIds: effectiveSupplementIds,
+        ...(product.kind === "pizza_duo" && pizzaCommonSupplementIds !== undefined
+          ? { pizzaCommonSupplementIds }
+          : {}),
         options: [...templateOptions, ...product.options],
         ingredientLibrary,
       };

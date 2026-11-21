@@ -221,12 +221,15 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
                                 ))}
                               </div>
                             )}
+                            {item.recipeBaseOverride && <span className="text-[12px] leading-snug text-[#A0A0A0]">Base {item.recipeBaseOverride}</span>}
                             {item.duo && (
                               <div className="mt-1 flex flex-col gap-0.5 text-[12px] leading-snug text-[#A0A0A0]">
-                                <span>Moitié 1 · {item.duo.leftRecipe.recipeName} (base {item.duo.leftRecipe.base === "creme" ? "crème" : "tomate"})</span>
+                                <span>Moitié 1 · {item.duo.leftRecipe.recipeName} (base {item.duo.leftRecipe.baseOverride ?? (item.duo.leftRecipe.base === "creme" ? "crème" : "tomate")})</span>
                                 {item.duo.leftRecipe.ingredients?.length ? <span>· {item.duo.leftRecipe.ingredients.join(", ")}</span> : null}
-                                <span>Moitié 2 · {item.duo.rightRecipe.recipeName} (base {item.duo.rightRecipe.base === "creme" ? "crème" : "tomate"})</span>
+                                {item.duo.leftRecipe.removedIngredients?.length ? <span>· sans {item.duo.leftRecipe.removedIngredients.map(({ ingredientName }) => ingredientName).join(", ")}</span> : null}
+                                <span>Moitié 2 · {item.duo.rightRecipe.recipeName} (base {item.duo.rightRecipe.baseOverride ?? (item.duo.rightRecipe.base === "creme" ? "crème" : "tomate")})</span>
                                 {item.duo.rightRecipe.ingredients?.length ? <span>· {item.duo.rightRecipe.ingredients.join(", ")}</span> : null}
+                                {item.duo.rightRecipe.removedIngredients?.length ? <span>· sans {item.duo.rightRecipe.removedIngredients.map(({ ingredientName }) => ingredientName).join(", ")}</span> : null}
                                 {item.duo.supplements?.map((extra) => (
                                   <span key={extra.ingredientId}>{pizzaDuoSupplementTargetLabel(extra.target)} · + {extra.ingredientName} (+{formatPrice(extra.priceDeltaCents)} €)</span>
                                 ))}
@@ -401,6 +404,7 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
             selectedLegacyOptions: editingItem.selectedLegacyOptions ?? {},
             addedSupplements: editingItem.addedSupplements ?? [],
             removedIngredients: editingItem.removedIngredients ?? [],
+            recipeBaseOverride: editingItem.recipeBaseOverride,
           }}
           confirmLabel="Mettre à jour"
           onClose={() => { setEditingItem(null); setEditingProduct(null); }}

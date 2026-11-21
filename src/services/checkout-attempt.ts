@@ -96,7 +96,9 @@ export function buildCheckoutAttemptFingerprint(input: CheckoutAttemptInput): st
             )
           : {};
 
-      return stableValue({
+      // Do not add null placeholders for newly introduced choices. The
+      // fingerprint is also the key used to resume a prior Stripe attempt.
+      const itemFingerprint = {
         catalogItemId: item.catalogItemId,
         cartKey: item.cartKey,
         quantity: Number(item.quantity),
@@ -113,7 +115,9 @@ export function buildCheckoutAttemptFingerprint(input: CheckoutAttemptInput): st
           kind: item.duo.kind,
           ...pizzaDuoOrderSelection(item.duo),
         } : null,
-      });
+        ...(item.recipeBaseOverride ? { recipeBaseOverride: item.recipeBaseOverride } : {}),
+      };
+      return stableValue(itemFingerprint);
     })
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
 

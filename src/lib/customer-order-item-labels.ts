@@ -46,9 +46,18 @@ function itemLabels(item: Record<string, unknown>): CustomerOrderItemLabelGroup 
   for (const [position, side] of [["Moitié 1", "left"], ["Moitié 2", "right"]] as const) {
     const half = record(duo?.[side]);
     if (!half || typeof half.name !== "string" || !half.name.trim()) continue;
-    const base = typeof half.base === "string" && half.base.trim() ? ` · base ${half.base === "creme" ? "crème" : half.base}` : "";
+    const override = typeof half.baseOverride === "string" && ["tomate", "crème"].includes(half.baseOverride) ? half.baseOverride : null;
+    const base = override ? ` · base ${override}` : typeof half.base === "string" && half.base.trim() ? ` · base ${half.base === "creme" ? "crème" : half.base}` : "";
     const ingredients = ingredientNames(half.ingredients);
     details.push(`${position} · ${half.name}${base}${ingredients.length ? ` · ${ingredients.join(", ")}` : ""}`);
+    const removed = Array.isArray(half.removedIngredients)
+      ? half.removedIngredients.flatMap((entry) => {
+          const ingredient = record(entry);
+          return ingredient && typeof ingredient.ingredientName === "string" && ingredient.ingredientName.trim()
+            ? [ingredient.ingredientName] : [];
+        })
+      : [];
+    if (removed.length) details.push(`${position} · sans ${removed.join(", ")}`);
   }
   for (const extra of Array.isArray(duo?.supplements) ? duo.supplements : []) {
     const supplement = record(extra);

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { formatPrice, type Product } from "@/types";
 import type { CartItem, PizzaDuoComposition, PizzaDuoSupplementSelection, PizzaDuoSupplementTarget } from "@/types/cart";
-import { PIZZA_DUO_FIXED_PRICE_CENTS, createPizzaDuoComposition, getPizzaDuoIngredientNames, isPizzaDuoRecipe } from "@/lib/pizza-duo";
+import { PIZZA_DUO_FIXED_PRICE_CENTS, createPizzaDuoComposition, getPizzaDuoBaseIngredients, getPizzaDuoIngredientNames, isPizzaDuoRecipe } from "@/lib/pizza-duo";
 import { getPizzaDuoSupplementOptions, getPizzaDuoSupplementPriceCents, getPizzaDuoUnitPriceCents, normalizePizzaDuoSupplementSelections, pizzaDuoSupplementTargetLabel } from "@/lib/pizza-duo";
 import { useCart } from "@/contexts/CartContext";
 import { useCatalogAvailability } from "@/contexts/CatalogAvailabilityContext";
@@ -46,6 +46,14 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   const [supplementSelections, setSupplementSelections] = useState<PizzaDuoSupplementSelection[]>(() =>
     normalizePizzaDuoSupplementSelections((initial?.supplements ?? []).map(({ ingredientId, target }) => ({ ingredientId, target }))),
   );
+  const [removedIngredientIds, setRemovedIngredientIds] = useState<{ left: string[]; right: string[] }>(() => ({
+    left: initial?.leftRecipe.removedIngredients?.map(({ ingredientId }) => ingredientId) ?? [],
+    right: initial?.rightRecipe.removedIngredients?.map(({ ingredientId }) => ingredientId) ?? [],
+  }));
+  const [baseOverrides, setBaseOverrides] = useState<{ left?: "tomate" | "crème"; right?: "tomate" | "crème" }>(() => ({
+    ...(initial?.leftRecipe.baseOverride ? { left: initial.leftRecipe.baseOverride } : {}),
+    ...(initial?.rightRecipe.baseOverride ? { right: initial.rightRecipe.baseOverride } : {}),
+  }));
   const dialog = useRef<HTMLDivElement>(null);
   const summary = useRef<HTMLElement>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
@@ -63,9 +71,9 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   // that became ineligible after a recipe revision are never displayed, priced
   // or serialized back into the cart.
   const validSupplementSelections = useMemo(() => left && right
-    ? createPizzaDuoComposition(left, right, supplementSelections).supplements?.map(({ ingredientId, target }) => ({ ingredientId, target })) ?? []
-    : normalizePizzaDuoSupplementSelections(supplementSelections), [left, right, supplementSelections]);
-  const composition = useMemo(() => left && right ? createPizzaDuoComposition(left, right, validSupplementSelections) : undefined, [left, right, validSupplementSelections]);
+    ? createPizzaDuoComposition(left, right, supplementSelections, product, removedIngredientIds, baseOverrides).supplements?.map(({ ingredientId, target }) => ({ ingredientId, target })) ?? []
+    : normalizePizzaDuoSupplementSelections(supplementSelections), [left, right, product, removedIngredientIds, baseOverrides, supplementSelections]);
+  const composition = useMemo(() => left && right ? createPizzaDuoComposition(left, right, validSupplementSelections, product, removedIngredientIds, baseOverrides) : undefined, [left, right, product, removedIngredientIds, baseOverrides, validSupplementSelections]);
   const unitPriceCents = composition ? getPizzaDuoUnitPriceCents(composition) : PIZZA_DUO_FIXED_PRICE_CENTS;
   const showSupplements = step === "supplements" && hasCompleteSelection;
   const showReview = step === "review" && hasCompleteSelection;
@@ -73,7 +81,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
     if (!left || !right) return false;
     const candidate: CartItem = {
       catalogItemId: product.id, catalogKind: "pizza_duo", quantity: nextQuantity,
-      duo: composition ?? createPizzaDuoComposition(left, right), nameSnapshot: product.name,
+      duo: composition ?? createPizzaDuoComposition(left, right, [], product, removedIngredientIds, baseOverrides), nameSnapshot: product.name,
       unitPriceCents, totalCents: unitPriceCents * nextQuantity,
       taxRateBps: product.tax_rate_bps, cartKey: "modal-candidate",
     };
@@ -108,12 +116,14 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   function retainEligibleSupplements(nextLeft?: Product, nextRight?: Product) {
     if (!nextLeft || !nextRight) return;
     setSupplementSelections((previous) =>
-      createPizzaDuoComposition(nextLeft, nextRight, previous).supplements?.map(({ ingredientId, target }) => ({ ingredientId, target })) ?? [],
+      createPizzaDuoComposition(nextLeft, nextRight, previous, product, removedIngredientIds, baseOverrides).supplements?.map(({ ingredientId, target }) => ({ ingredientId, target })) ?? [],
     );
   }
   function choose(recipe: Product) {
     if (side === "left") {
       setLeftId(recipe.id);
+      setRemovedIngredientIds((previous) => ({ ...previous, left: [] }));
+      setBaseOverrides((previous) => ({ ...previous, left: undefined }));
       retainEligibleSupplements(recipe, right);
       // Do not carry a first-half base filter into the second step: mixed
       // tomato/cream pizzas must be immediately discoverable on mobile.
@@ -123,6 +133,8 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
     }
     else {
       setRightId(recipe.id);
+      setRemovedIngredientIds((previous) => ({ ...previous, right: [] }));
+      setBaseOverrides((previous) => ({ ...previous, right: undefined }));
       retainEligibleSupplements(left, recipe);
       requestAnimationFrame(() => {
         dialog.current?.querySelector<HTMLButtonElement>('[data-testid="pizza-duo-next-supplements"]')?.focus({ preventScroll: true });
@@ -165,16 +177,37 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
       return next.length <= 40 ? next : previous;
     });
   }
+  function toggleRemovedIngredient(target: Side, ingredientId: string) {
+    setRemovedIngredientIds((previous) => ({
+      ...previous,
+      [target]: previous[target].includes(ingredientId)
+        ? previous[target].filter((id) => id !== ingredientId)
+        : previous[target].concat(ingredientId),
+    }));
+  }
+  function selectBaseOverride(target: Side, selectedBase: "tomate" | "crème", defaultBase: "tomate" | "crème") {
+    setBaseOverrides((previous) => ({ ...previous, [target]: selectedBase === defaultBase ? undefined : selectedBase }));
+  }
   const previewTitle = left && right ? `${left.name} × ${right.name}` : product.name;
   const warning = !onlineOrdering.canStartOrder
     ? (onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.")
     : !stockAvailable && hasCompleteSelection
       ? "Stock insuffisant pour cette composition ou cette quantité."
       : undefined;
-  const supplementOptions = left && right ? getPizzaDuoSupplementOptions(left, right, supplementTarget) : [];
+  const supplementOptions = left && right ? getPizzaDuoSupplementOptions(left, right, supplementTarget, product) : [];
   const selectedSupplementIds = new Set((composition?.supplements ?? [])
     .filter(({ target }) => target === supplementTarget || target === "whole")
     .map(({ ingredientId }) => ingredientId));
+  const removableBases = (["left", "right"] as const).flatMap((target) => {
+    const recipe = target === "left" ? left : right;
+    if (!recipe?.allowIngredientRemoval) return [];
+    return [{ target, recipe, ingredients: getPizzaDuoBaseIngredients(recipe) }].filter(({ ingredients }) => ingredients.length > 0);
+  });
+  const editableBases = (["left", "right"] as const).flatMap((target) => {
+    const recipe = target === "left" ? left : right;
+    const defaultBase = recipe?.recipeBase === "tomate" ? "tomate" : recipe?.recipeBase === "creme" ? "crème" : undefined;
+    return recipe && defaultBase ? [{ target, recipe, defaultBase: defaultBase as "tomate" | "crème" }] : [];
+  });
   return (
     <div ref={dialog} className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="pizza-duo-title"
       onKeyDown={(event) => {
@@ -246,6 +279,36 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
             <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-[#E8C078]">02 / Personnaliser</p>
             <h3 id="duo-supplements-step" ref={stepHeading} tabIndex={-1} className="mt-2 text-[clamp(1.7rem,3vw,2.4rem)] font-extrabold leading-tight tracking-[-.045em] text-[#FFF5E1] outline-none">Vos suppléments</h3>
             <p className="mt-2 text-sm leading-relaxed text-[#C8BDAE]">Choisissez où ajouter chaque supplément. Sur une moitié, son prix est divisé par deux et arrondi au centime.</p>
+            {editableBases.length ? <section className="mt-5 rounded-[16px] border border-[#5b4630] bg-[#211a14] p-4" aria-labelledby="duo-bases-title">
+              <h4 id="duo-bases-title" className="text-sm font-bold text-[#F6EEE1]">Base de chaque moitié</h4>
+              <p className="mt-1 text-xs leading-relaxed text-[#C7B498]">Le changement de base est inclus dans le prix.</p>
+              <div className="mt-3 space-y-3">
+                {editableBases.map(({ target, recipe, defaultBase }) => <div key={target}>
+                  <p className="text-xs font-bold text-[#E8C078]">{target === "left" ? "Moitié 1" : "Moitié 2"} · {recipe.name}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {(["tomate", "crème"] as const).map((base) => {
+                      const selected = (baseOverrides[target] ?? defaultBase) === base;
+                      return <button key={base} type="button" onClick={() => selectBaseOverride(target, base, defaultBase)} aria-pressed={selected} className={`min-h-10 rounded-xl border px-3 text-xs font-bold ${selected ? "border-[#E8C078] bg-[#352817] text-[#F7DCA9]" : "border-[#5b4936] text-[#E7D8C5]"}`}>Base {base}</button>;
+                    })}
+                  </div>
+                </div>)}
+              </div>
+            </section> : null}
+            {removableBases.length ? <section className="mt-5 rounded-[16px] border border-[#5b4630] bg-[#211a14] p-4" aria-labelledby="duo-removals-title">
+              <h4 id="duo-removals-title" className="text-sm font-bold text-[#F6EEE1]">Retirer un ingrédient</h4>
+              <p className="mt-1 text-xs leading-relaxed text-[#C7B498]">Choisissez séparément les ingrédients à retirer de chaque moitié.</p>
+              <div className="mt-3 space-y-3">
+                {removableBases.map(({ target, recipe, ingredients }) => <div key={target}>
+                  <p className="text-xs font-bold text-[#E8C078]">{target === "left" ? "Moitié 1" : "Moitié 2"} · {recipe.name}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {ingredients.map((ingredient) => {
+                      const removed = removedIngredientIds[target].includes(ingredient.id);
+                      return <button key={ingredient.id} type="button" onClick={() => toggleRemovedIngredient(target, ingredient.id)} aria-pressed={removed} className={`min-h-10 rounded-full border px-3 text-xs font-bold ${removed ? "border-[#D99175] bg-[#3b2420] text-[#FFD0C1] line-through" : "border-[#5b4936] text-[#E7D8C5] hover:border-[#89623a]"}`}>{removed ? "Remettre" : "Retirer"} {ingredient.name}</button>;
+                    })}
+                  </div>
+                </div>)}
+              </div>
+            </section> : null}
             <div className="mt-5 grid grid-cols-3 gap-2" role="group" aria-label="Appliquer les suppléments à">
               {(["whole", "left", "right"] as const).map((target) => <button key={target} type="button" onClick={() => setSupplementTarget(target)} aria-pressed={supplementTarget === target} className={`min-h-12 rounded-xl border px-2 text-xs font-bold ${supplementTarget === target ? "border-[#E8C078] bg-[#352817] text-[#F7DCA9]" : "border-[#4b3b2d] bg-[#211a14] text-[#D8C8B4]"}`}>{pizzaDuoSupplementTargetLabel(target)}</button>)}
             </div>
@@ -269,10 +332,14 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
           </section> : <section ref={summary} tabIndex={-1} className="outline-none" aria-label="Résumé de votre Pizza Duo">
             <h3 className="text-[clamp(1.7rem,3vw,2.4rem)] font-extrabold leading-tight tracking-[-.045em] text-[#FFF5E1]">Vérifiez votre pizza</h3>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-[#E7D8C5]">
-              <button type="button" onClick={() => edit("left")} className="rounded-xl border border-[#45362a] bg-[#191511] p-3 text-left hover:border-[#89623a]"><span className="block text-[10px] font-bold uppercase tracking-[.1em] text-[#D9AF6B]">Moitié 1</span><span className="mt-1 block truncate font-semibold">{left?.name}</span><span className="text-xs text-[#C7B498]">Base {baseLabel(left?.recipeBase)}</span></button>
-              <button type="button" onClick={() => edit("right")} className="rounded-xl border border-[#45362a] bg-[#191511] p-3 text-left hover:border-[#89623a]"><span className="block text-[10px] font-bold uppercase tracking-[.1em] text-[#D9AF6B]">Moitié 2</span><span className="mt-1 block truncate font-semibold">{right?.name}</span><span className="text-xs text-[#C7B498]">Base {baseLabel(right?.recipeBase)}</span></button>
+              <button type="button" onClick={() => edit("left")} className="rounded-xl border border-[#45362a] bg-[#191511] p-3 text-left hover:border-[#89623a]"><span className="block text-[10px] font-bold uppercase tracking-[.1em] text-[#D9AF6B]">Moitié 1</span><span className="mt-1 block truncate font-semibold">{left?.name}</span><span className="text-xs text-[#C7B498]">Base {baseOverrides.left ?? baseLabel(left?.recipeBase)}</span></button>
+              <button type="button" onClick={() => edit("right")} className="rounded-xl border border-[#45362a] bg-[#191511] p-3 text-left hover:border-[#89623a]"><span className="block text-[10px] font-bold uppercase tracking-[.1em] text-[#D9AF6B]">Moitié 2</span><span className="mt-1 block truncate font-semibold">{right?.name}</span><span className="text-xs text-[#C7B498]">Base {baseOverrides.right ?? baseLabel(right?.recipeBase)}</span></button>
             </div>
             <div className="mt-4 rounded-xl border border-[#45362a] bg-[#191511] p-3"><div className="flex items-center justify-between gap-3"><h4 className="text-sm font-bold text-[#F6EEE1]">Suppléments</h4><button type="button" onClick={() => setStep("supplements")} className="text-xs font-bold text-[#E8C078] hover:underline">Modifier</button></div>{composition?.supplements?.length ? <ul className="mt-2 space-y-1 text-sm text-[#DCCBB6]">{composition.supplements.map((item) => <li key={`${item.ingredientId}-${item.target}`} className="flex justify-between gap-3"><span>{item.ingredientName} · {pizzaDuoSupplementTargetLabel(item.target)}</span><span className="shrink-0 text-[#E8C078]">+ {formatPrice(item.priceDeltaCents)} €</span></li>)}</ul> : <p className="mt-1 text-sm text-[#C7B498]">Aucun supplément ajouté.</p>}</div>
+            {(composition?.leftRecipe.removedIngredients?.length || composition?.rightRecipe.removedIngredients?.length) ? <div className="mt-4 rounded-xl border border-[#45362a] bg-[#191511] p-3"><h4 className="text-sm font-bold text-[#F6EEE1]">Ingrédients retirés</h4>{(["left", "right"] as const).map((target) => {
+              const values = target === "left" ? composition?.leftRecipe.removedIngredients : composition?.rightRecipe.removedIngredients;
+              return values?.length ? <p key={target} className="mt-1 text-sm text-[#DCCBB6]">{target === "left" ? "Moitié 1" : "Moitié 2"} · sans {values.map(({ ingredientName }) => ingredientName).join(", ")}</p> : null;
+            })}</div> : null}
             <div className="mt-4 flex items-center justify-between"><span className="text-sm font-semibold text-[#F6EEE1]">Quantité</span><div className="flex items-center gap-2"><button type="button" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))} className="size-11 rounded-full bg-[#17130f] text-lg text-[#F6EEE1] disabled:opacity-40" aria-label="Retirer une Pizza Duo">−</button><span className="w-5 text-center font-bold text-[#F6EEE1]" aria-live="polite">{quantity}</span><button type="button" disabled={quantity >= 99 || !isQuantityAvailable(quantity + 1)} onClick={() => setQuantity((value) => value < 99 && isQuantityAvailable(value + 1) ? value + 1 : value)} className="size-11 rounded-full bg-[#E8C078] text-lg font-bold text-[#21150a] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Ajouter une Pizza Duo">+</button></div></div>
           </section>}
       </PizzaWorkshop>

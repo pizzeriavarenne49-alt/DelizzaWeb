@@ -31,6 +31,16 @@ export interface Product {
   /** WLHORIZON canonical ingredient customization fields. */
   baseIngredientIds: string[];
   availableSupplementIds: string[];
+  /**
+   * Optional policy owned by the Pizza Duo parent. An omitted value keeps the
+   * legacy per-recipe policy. An explicit empty list deliberately disables
+   * extras for every Duo composition.
+   */
+  pizzaDuoSupplementIds?: string[];
+  /** Tenant-level pizza extras are used unless this pizza opts out. */
+  usePizzaCommonSupplements?: boolean;
+  /** Enriched from wl_apps for the web catalogue only. */
+  pizzaCommonSupplementIds?: string[];
   allowIngredientRemoval: boolean;
   appliedTemplateIds: string[];
   templatePriceOverrides: Record<string, Record<string, number>>;

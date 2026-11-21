@@ -26,8 +26,12 @@ export interface PizzaDuoRecipeSnapshot {
   recipeName: string;
   /** Explicit catalog base retained for customer and kitchen readability. */
   base: "tomate" | "creme";
+  /** Customer-selected free base substitution. Default recipe base remains above. */
+  baseOverride?: "tomate" | "crème";
   description?: string;
   ingredients?: string[];
+  /** Ingredients removed from this half, retained for kitchen readability. */
+  removedIngredients?: IngredientSnapshot[];
 }
 
 export type PizzaDuoSupplementTarget = "whole" | "left" | "right";
@@ -46,6 +50,8 @@ export interface PizzaDuoOrderSelection {
   leftRecipeId: string;
   rightRecipeId: string;
   supplements?: PizzaDuoSupplementSelection[];
+  removedIngredients?: { left: string[]; right: string[] };
+  baseOverrides?: { left?: "tomate" | "crème"; right?: "tomate" | "crème" };
 }
 
 /**
@@ -71,6 +77,8 @@ export interface CartItemCustomizations {
   addedSupplements: string[];
   /** Ingredient IDs, canonical createOrder contract */
   removedIngredients: string[];
+  /** Free base substitution on a standard pizza. */
+  recipeBaseOverride?: "tomate" | "crème";
   /** Display snapshots to avoid lookups while rendering the cart. */
   addedSupplementSnapshots?: IngredientSnapshot[];
   removedIngredientSnapshots?: IngredientSnapshot[];
@@ -98,6 +106,7 @@ export interface CartItem {
   selectedLegacyOptions?: Record<string, string[]>;
   addedSupplements?: string[];
   removedIngredients?: string[];
+  recipeBaseOverride?: "tomate" | "crème";
   addedSupplementSnapshots?: IngredientSnapshot[];
   removedIngredientSnapshots?: IngredientSnapshot[];
   /** Optional composed menu identifier for formula items */
