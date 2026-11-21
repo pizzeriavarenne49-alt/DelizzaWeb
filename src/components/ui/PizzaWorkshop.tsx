@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { formatPrice } from "@/types";
 
 interface Props {
@@ -20,6 +20,8 @@ interface Props {
   actionTestId?: string;
   onAction: () => void;
   warning?: ReactNode;
+  compact?: boolean;
+  scrollRef?: Ref<HTMLDivElement>;
   children: ReactNode;
 }
 
@@ -42,10 +44,12 @@ export default function PizzaWorkshop({
   actionTestId,
   onAction,
   warning,
+  compact = false,
+  scrollRef,
   children,
 }: Props) {
   return (
-    <div className="h-full w-full overflow-y-auto overscroll-contain bg-[#0D0D0D] text-[#F6EEE1] [background-image:radial-gradient(ellipse_at_50%_0%,#211912_0%,transparent_65%)]">
+    <div ref={scrollRef} className="h-full w-full overflow-y-auto overscroll-contain bg-[#0D0D0D] text-[#F6EEE1] [background-image:radial-gradient(ellipse_at_50%_0%,#211912_0%,transparent_65%)]">
       <div className="mx-auto max-w-[1260px] px-4 pb-32 pt-3 sm:px-7 lg:px-10 lg:pb-12 lg:pt-6">
         <div className="flex items-center justify-between gap-3 border-b border-[#3b3024] pb-3">
           <button type="button" onClick={onClose} aria-label="Fermer le configurateur" className="min-h-11 shrink-0 rounded-xl px-2 text-sm font-semibold text-[#E8C078] hover:bg-[#31251b] focus-visible:outline-2 focus-visible:outline-[#E8C078]">
@@ -54,17 +58,17 @@ export default function PizzaWorkshop({
           <span id={titleId} className="rounded-full border border-[#6d5132] bg-[#272016] px-3 py-1.5 text-right text-[10px] font-bold uppercase tracking-[.12em] text-[#EBD0A1] sm:text-xs">{title}</span>
         </div>
 
-        <header className="max-w-2xl py-4 sm:py-8">
+        <header className={`max-w-2xl py-4 sm:py-8 ${compact ? "hidden lg:block" : ""}`}>
           <h2 className="text-[clamp(2.1rem,5.6vw,4.15rem)] font-extrabold leading-[1.03] tracking-[-.055em]">Votre pizza,<br /> <span className="text-[#E8C078]">vos envies.</span></h2>
           <p className="mt-3 max-w-[57ch] text-sm leading-relaxed text-[#C8BDAE]">{description}</p>
         </header>
 
-        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(310px,0.86fr)_minmax(0,1.14fr)] lg:gap-7">
-          <aside className="relative min-w-0 overflow-hidden rounded-[24px] border border-[#60492e] bg-[#211811] px-4 py-4 shadow-[0_20px_45px_#0005] [background-image:radial-gradient(ellipse_at_50%_35%,#52371d80_0%,#251b13_63%,#19130f_100%)] sm:p-6 lg:sticky lg:top-4" aria-label="Aperçu de votre pizza">
-            <div className="mx-auto max-w-[184px] sm:max-w-[320px] lg:max-w-[370px]">{preview}</div>
-            <div className="mt-4 flex items-end justify-between gap-3 border-t border-[#6a5134]/60 pt-3">
+        <div className={`grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(310px,0.86fr)_minmax(0,1.14fr)] lg:gap-7 ${compact ? "mt-3 lg:mt-0" : ""}`}>
+          <aside className={`relative min-w-0 overflow-hidden rounded-[24px] border border-[#60492e] bg-[#211811] px-4 py-4 shadow-[0_20px_45px_#0005] [background-image:radial-gradient(ellipse_at_50%_35%,#52371d80_0%,#251b13_63%,#19130f_100%)] sm:p-6 lg:sticky lg:top-4 ${compact ? "flex items-center gap-3 max-lg:py-2 lg:block" : ""}`} aria-label="Aperçu de votre pizza">
+            <div className={compact ? "w-[76px] shrink-0 sm:w-[112px] lg:mx-auto lg:w-auto lg:max-w-[370px]" : "mx-auto max-w-[184px] sm:max-w-[320px] lg:max-w-[370px]"}>{preview}</div>
+            <div className={`flex min-w-0 items-end justify-between gap-3 ${compact ? "flex-1 max-lg:items-center lg:mt-4 lg:border-t lg:border-[#6a5134]/60 lg:pt-3" : "mt-4 border-t border-[#6a5134]/60 pt-3"}`}>
               <div className="min-w-0">
-                <h3 className="break-words text-lg font-bold leading-tight sm:text-[23px]">{previewTitle}</h3>
+                <h3 className={`break-words font-bold leading-tight ${compact ? "text-base sm:text-lg lg:text-[23px]" : "text-lg sm:text-[23px]"}`}>{previewTitle}</h3>
                 {previewDetails && <div className="mt-1.5 text-xs leading-relaxed text-[#D7C0A2]">{previewDetails}</div>}
               </div>
               <span className="shrink-0 whitespace-nowrap text-lg font-bold text-[#E8C078] sm:text-2xl">{formatPrice(unitPriceCents)}&nbsp;€</span>

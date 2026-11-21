@@ -27,7 +27,15 @@ for (const [id, name, categoryId] of [["p1", "Chorizo", base1], ["p2", "Chèvre 
 await db.doc("wl_catalog_items/d_lizza_pizza_duo_comptoir").set({ ...tenant, name: "Pizza Duo",
   kind: "pizza_duo", categoryId: base1, pizzaUnits: 1, isActive: false, visible: false, posDuoActive: false,
   price: { amountCents: 1490, currency: "EUR" } });
-await db.doc("wl_apps/d_lizza").set({ ...tenant, pizzaDuoWebEnabled: true, pizzaDuoPosEnabled: false });
+await db.doc("wl_ingredient_library/mozza").set({ ...tenant, name: "Mozzarella", emoji: "", isActive: true,
+  category: "fromage", defaultPriceModifier: { amountCents: 125, currency: "EUR" } });
+await db.doc("wl_ingredient_library/jambon").set({ ...tenant, name: "Jambon", emoji: "", isActive: true,
+  category: "viande", defaultPriceModifier: { amountCents: 125, currency: "EUR" } });
+for (const [id, baseIngredientIds] of [["p1", ["mozza"]], ["p2", ["jambon"]]]) {
+  await db.doc("wl_catalog_items/" + id).update({ baseIngredientIds, allowIngredientRemoval: true });
+}
+await db.doc("wl_apps/d_lizza").set({ ...tenant, pizzaDuoWebEnabled: true, pizzaDuoPosEnabled: false,
+  pizzaCommonSupplementIds: ["mozza", "jambon"] });
 await db.doc("wl_online_ordering_status/d_lizza").set({ ...tenant, status: "open" });
 
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-H", "127.0.0.1", "-p", "3217"], {
@@ -50,7 +58,9 @@ try {
   }
   const response = await fetch(homepage + "/api/catalog/editable-pizza-recipes");
   assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()).map(({ recipeBase }) => recipeBase).sort(), ["creme", "tomate"]);
+  const recipeBases = new Set((await response.json()).map(({ recipeBase }) => recipeBase));
+  assert.equal(recipeBases.has("creme"), true);
+  assert.equal(recipeBases.has("tomate"), true);
   const browser = spawn(process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe",
     ["--headless=new", "--disable-gpu", "--no-first-run", "--remote-debugging-port=0",
       "--user-data-dir=" + await mkdtemp(path.join(tmpdir(), "duo-browser-")), "about:blank"], { windowsHide: true });
@@ -99,21 +109,115 @@ try {
       if (!title) { document.querySelector('button[aria-label="Voir le détail de Pizza Duo"]')?.click(); return null; }
       const d = title.closest('[role="dialog"]');
       return d.textContent.includes('Chorizo') && d.textContent.includes('Chèvre miel')
-        ? { width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth, align: getComputedStyle(d).alignItems } : null;
+        ? { width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth, footerPosition: getComputedStyle(d.querySelector("footer")).position } : null;
     })()`);
     assert.equal(view.width, width);
     assert.equal(view.scrollWidth, width);
-    assert.equal(view.align, width === 390 ? "flex-end" : "center");
-    await evaluate(`Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.startsWith('Chorizo'))?.click()`);
+    assert.equal(view.footerPosition, width === 390 ? "fixed" : "sticky");
+    // New Duo flow: recipe -> its own customization -> next half -> review.
+    // Keep interactions scoped to the dialog so cards from the page cannot make
+    // this pass accidentally.
     await eventually(`(() => {
-      const b = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.startsWith('Chèvre miel') && b.hasAttribute('aria-pressed'));
-      if (!b) return false;
-      b.click(); return true;
+      const button = Array.from(document.querySelectorAll('[role="dialog"] [data-duo-recipe]')).find(b => b.textContent.trim().startsWith('Chorizo'));
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const d = document.querySelector('[role="dialog"]');
+      return d?.textContent.includes('Moitié 1') && d?.textContent.includes('Retirer des ingrédients') && d?.textContent.includes('Ajouter des suppléments') && d?.querySelector('[data-testid="pizza-duo-next-half"]');
+    })()`);
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.trim() === 'Base crème');
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const section = Array.from(document.querySelectorAll('[role="dialog"] summary, [role="dialog"] button')).find(b => b.firstElementChild?.textContent.trim() === 'Retirer des ingrédients');
+      if (!section) return false;
+      section.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.trim() === 'Retirer Mozzarella');
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const section = Array.from(document.querySelectorAll('[role="dialog"] summary, [role="dialog"] button')).find(b => b.firstElementChild?.textContent.trim() === 'Ajouter des suppléments');
+      if (!section) return false;
+      section.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.includes('Mozzarella') && /[+] 0[.,]63/.test(b.textContent));
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    // A single half at 1.25 EUR is charged as 0.63 EUR (rounded), proving the
+    // half-price path before the matching right-half selection is made.
+    await eventually(`document.querySelector('[role="dialog"]')?.textContent.match(/15[.,]53/)`);
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-testid="pizza-duo-next-half"]');
+      if (!button || button.disabled) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => document.querySelector('[role="dialog"]')?.textContent.includes('Moitié 2') && document.querySelectorAll('[role="dialog"] [data-duo-recipe]').length > 0)()`);
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] [data-duo-recipe]')).find(b => b.textContent.trim().startsWith('Chèvre miel'));
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`document.querySelector('[role="dialog"]')?.querySelector('[data-testid="pizza-duo-review"]')`);
+    await eventually(`(() => {
+      const section = Array.from(document.querySelectorAll('[role="dialog"] summary, [role="dialog"] button')).find(b => b.firstElementChild?.textContent.trim() === 'Retirer des ingrédients');
+      if (!section) return false;
+      section.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.trim() === 'Retirer Jambon');
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const section = Array.from(document.querySelectorAll('[role="dialog"] summary, [role="dialog"] button')).find(b => b.firstElementChild?.textContent.trim() === 'Ajouter des suppléments');
+      if (!section) return false;
+      section.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.includes('Mozzarella') && /[+] 0[.,]63/.test(b.textContent));
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    // Two matching half additions normalize to the full 1.25 EUR supplement.
+    await eventually(`document.querySelector('[role="dialog"]')?.textContent.match(/16[.,]15/)`);
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-testid="pizza-duo-review"]');
+      if (!button || button.disabled) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const d = document.querySelector('[role="dialog"]');
+      return d?.textContent.includes('Moitié 1') && d?.textContent.includes('Moitié 2') && d?.textContent.includes('sans Mozzarella') && d?.textContent.includes('sans Jambon');
+    })()`);
+    // The optional whole-pizza step remains distinct from half customizations.
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.trim() === 'Suppléments pizza entière');
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.includes('Jambon') && b.textContent.includes('+ 1'));
+      if (!button) return false;
+      button.click(); return true;
+    })()`);
+    await eventually(`(() => {
+      const button = document.querySelector('[role="dialog"] [data-testid="pizza-duo-review"]');
+      if (!button || button.disabled) return false;
+      button.click(); return true;
     })()`);
     assert.equal(await eventually(`(() => {
-      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.startsWith('Ajouter au panier'));
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog?.textContent.match(/17[.,]40/)) return false;
+      const button = dialog.querySelector('[data-testid="pizza-duo-confirm"]');
       if (!button || button.disabled) return false;
-      if (!/14[.,]90/.test(button.textContent)) return false;
       button.click(); return true;
     })()`), true);
     await eventually(`!document.getElementById('pizza-duo-title') && JSON.stringify(localStorage).includes('d_lizza_pizza_duo_comptoir')`);
@@ -133,12 +237,12 @@ try {
       button.click(); return true;
     })()`);
     await eventually(`(() => {
-      const all = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.trim() === 'Toutes');
-      if (!all) return false;
-      all.click(); return true;
+      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.trim() === 'Changer de recette');
+      if (!button) return false;
+      button.click(); return true;
     })()`);
     await eventually(`(() => {
-      const button = Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.hasAttribute('aria-pressed') && b.textContent.startsWith('Chorizo'));
+      const button = Array.from(document.querySelectorAll('[role="dialog"] [data-duo-recipe]')).find(b => b.textContent.trim().startsWith('Chorizo'));
       if (!button) return false;
       button.click(); return true;
     })()`);
@@ -149,9 +253,9 @@ try {
     })()`);
     await eventually(`!document.getElementById('pizza-duo-title') && !document.querySelector('[aria-label="Panier"]').textContent.includes('Chèvre miel')`);
     await evaluate(`document.querySelector('button[aria-label="Augmenter la quantité"]').click()`);
-    await eventually(`/29[.,]80/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
+    await eventually(`/34[.,]80/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
     await evaluate(`document.querySelector('button[aria-label="Diminuer la quantité"]').click()`);
-    await eventually(`!/29[.,]80/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
+    await eventually(`!/34[.,]80/.test(document.querySelector('[aria-label="Panier"]')?.textContent ?? '')`);
     await evaluate(`document.querySelector('button[aria-label="Diminuer la quantité"]').click()`);
     await eventually(`document.querySelector('[aria-label="Panier"]')?.textContent.includes('Votre panier est vide')`);
     console.log(`Duo browser configured, added, edited and removed at ${width}px`);

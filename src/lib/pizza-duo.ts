@@ -129,7 +129,8 @@ export function getPizzaDuoIngredientNames(product: Product): string[] {
   return names;
 }
 
-function validSupplements(product: Product): ProductIngredient[] {
+function validSupplements(product?: Product): ProductIngredient[] {
+  if (!product) return [];
   return (product.ingredientLibrary ?? []).filter((ingredient) =>
     ingredient.appId === PIZZA_DUO_TENANT_ID && ingredient.isActive &&
     ingredient.name.trim() && ingredient.defaultPriceModifier.currency.toUpperCase() === "EUR" &&
@@ -153,11 +154,12 @@ function duoPolicySupplements(duoProduct: Product, ids: readonly string[]): Prod
  * policy, preserving existing carts and catalogue entries.
  */
 export function getPizzaDuoSupplementOptions(
-  left: Product,
-  right: Product,
+  left: Product | undefined,
+  right: Product | undefined,
   target: PizzaDuoSupplementTarget,
   duoProduct?: Product,
 ): ProductIngredient[] {
+  if (target === "whole" ? !left || !right : !(target === "left" ? left : right)) return [];
   if (duoProduct?.pizzaDuoSupplementIds !== undefined) return duoPolicySupplements(duoProduct, duoProduct.pizzaDuoSupplementIds);
   if (duoProduct?.pizzaCommonSupplementIds !== undefined) return duoPolicySupplements(duoProduct, duoProduct.pizzaCommonSupplementIds);
   if (target === "left") return validSupplements(left);

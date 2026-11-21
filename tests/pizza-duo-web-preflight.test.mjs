@@ -4,7 +4,7 @@ import { loadTsModule } from "./support/load-ts-module.mjs";
 
 const {
   PIZZA_DUO_CATALOG_ID, createPizzaDuoComposition, getPizzaDuoRecipeBase, isPizzaDuoRecipe,
-  getPizzaDuoUnitPriceCents, pizzaDuoOrderSelection, pizzaDuoCartKey,
+  getPizzaDuoSupplementOptions, getPizzaDuoUnitPriceCents, pizzaDuoOrderSelection, pizzaDuoCartKey,
 } = loadTsModule(path.resolve("src/lib/pizza-duo.ts"));
 const { buildPreviewCartItems } = loadTsModule(path.resolve("src/lib/production-capacity-preview.ts"));
 const { customerOrderItemLabels } = loadTsModule(path.resolve("src/lib/customer-order-item-labels.ts"));
@@ -35,6 +35,10 @@ const duoPolicy = { id: "pizza-duo", pizzaDuoSupplementIds: ["mozza"], ingredien
 const configuredHalf = createPizzaDuoComposition(tomato, cream, [leftSelection], duoPolicy);
 const disabledDuoPolicy = { ...duoPolicy, pizzaDuoSupplementIds: [] };
 const commonPolicy = { id: "pizza-duo", pizzaCommonSupplementIds: ["mozza"], ingredientLibrary: [mozza] };
+assert.deepEqual(getPizzaDuoSupplementOptions(leftWithExtra, undefined, "left"), [mozza]);
+assert.deepEqual(getPizzaDuoSupplementOptions(tomato, undefined, "left", commonPolicy), [mozza]);
+assert.deepEqual(getPizzaDuoSupplementOptions(tomato, undefined, "whole", commonPolicy), []);
+assert.deepEqual(getPizzaDuoSupplementOptions(tomato, undefined, "right", commonPolicy), []);
 assert.equal(getPizzaDuoUnitPriceCents(duo), 1490);
 assert.equal(getPizzaDuoUnitPriceCents(half), 1553);
 assert.equal(getPizzaDuoUnitPriceCents(whole), 1615);
@@ -48,6 +52,11 @@ const removableTomato = { ...leftWithExtra, allowIngredientRemoval: true, baseIn
 const removedHalf = createPizzaDuoComposition(removableTomato, rightWithExtra, [], duoPolicy, { left: ["mozza"], right: [] }, { left: "crème" });
 assert.deepEqual(pizzaDuoOrderSelection(removedHalf).removedIngredients, { left: ["mozza"], right: [] });
 assert.deepEqual(pizzaDuoOrderSelection(removedHalf).baseOverrides, { left: "crème" });
+const identicalHalves = createPizzaDuoComposition(removableTomato, removableTomato, [leftSelection], duoPolicy, { left: [], right: ["mozza"] }, { right: "crème" });
+assert.deepEqual(pizzaDuoOrderSelection(identicalHalves), {
+  leftRecipeId: tomato.id, rightRecipeId: tomato.id, supplements: [leftSelection],
+  removedIngredients: { left: [], right: ["mozza"] }, baseOverrides: { right: "crème" },
+});
 assert.match(pizzaDuoCartKey("duo", removedHalf), /crème/);
 assert.deepEqual(buildPreviewCartItems([{ catalogItemId: "duo", quantity: 2, duo: half }])[0].duo.supplements, [leftSelection]);
 assert.match(customerOrderItemLabels({ items: [{ nameSnapshot: "Pizza Duo", customizations: { duo: { supplements: half.supplements } } }] }).join("\n"),
