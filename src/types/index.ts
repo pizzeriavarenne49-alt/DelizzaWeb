@@ -48,6 +48,16 @@ export interface Product {
   isNew?: boolean;
 }
 
+export const INGREDIENT_CATEGORY_LABELS = {
+  fromage: "Fromages",
+  viande: "Viandes",
+  legume: "Légumes",
+  sauce: "Sauces",
+  autre: "Autres",
+} as const;
+
+export type IngredientCategory = keyof typeof INGREDIENT_CATEGORY_LABELS;
+
 export interface ProductIngredient {
   id: string;
   appId: string;
@@ -55,6 +65,7 @@ export interface ProductIngredient {
   emoji: string;
   defaultPriceModifier: { amountCents: number; currency: string };
   isActive: boolean;
+  category?: IngredientCategory;
 }
 
 export interface Category {

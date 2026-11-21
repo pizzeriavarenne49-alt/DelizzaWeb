@@ -14,7 +14,8 @@
 import { FieldPath } from "firebase-admin/firestore";
 import { isPublicProductDoc } from "@/lib/catalog-publication";
 import { getPizzaDuoRecipeBase, PIZZA_DUO_CATALOG_ID, PIZZA_DUO_CATEGORY_ID } from "@/lib/pizza-duo";
-import type { Product, Category, HeroSlide, Offer, ProductIngredient } from "@/types";
+import { INGREDIENT_CATEGORY_LABELS } from "@/types";
+import type { Product, Category, HeroSlide, Offer, ProductIngredient, IngredientCategory } from "@/types";
 import type { ProductOption, OptionChoice, OptionType } from "@/types/product-options";
 import type { DataRepository } from "@/data/repository";
 import { sortHomepageFeaturedProducts } from "@/lib/homepage-promotion";
@@ -306,6 +307,7 @@ function mapTemplateToOption(id: string, data: FirestoreDoc, order: number): Pro
 }
 
 function mapIngredient(id: string, data: FirestoreDoc): ProductIngredient {
+  const category = str(data.category);
   return {
     id,
     appId: str(data.appId),
@@ -313,6 +315,7 @@ function mapIngredient(id: string, data: FirestoreDoc): ProductIngredient {
     emoji: str(data.emoji),
     defaultPriceModifier: money(data.defaultPriceModifier),
     isActive: bool(data.isActive, true),
+    category: Object.hasOwn(INGREDIENT_CATEGORY_LABELS, category) ? category as IngredientCategory : "autre",
   };
 }
 

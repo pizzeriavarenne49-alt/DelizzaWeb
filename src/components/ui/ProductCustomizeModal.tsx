@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import PizzaPlate from "@/components/ui/PizzaPlate";
 import PizzaWorkshop from "@/components/ui/PizzaWorkshop";
+import SupplementPicker from "@/components/ui/SupplementPicker";
 import { isDelizzaPizzaCategory } from "@/lib/pizza-duo";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import type { Product, ProductIngredient } from "@/types";
@@ -480,8 +481,10 @@ export default function ProductCustomizeModal({
                 {hasSupplements && (
                 <div className="mt-5">
                   <h4 className="mb-2 text-sm font-bold text-[#F5F5F5]">{isPizza ? "Un petit supplément ?" : "Suppléments"}</h4>
-                  <div className={isPizza ? "grid grid-cols-1 gap-2 sm:grid-cols-2" : "flex flex-col gap-2"}>
-                  {supplementIngredients.map((ingredient) => {
+                  <SupplementPicker
+                    ingredients={supplementIngredients}
+                    itemsClassName={isPizza ? "grid grid-cols-1 gap-2 sm:grid-cols-2" : "flex flex-col gap-2"}
+                    renderIngredient={(ingredient) => {
                     const isAdded = addedSupplements.includes(ingredient.id);
                     const priceCents = ingredient.defaultPriceModifier.amountCents;
                     return (
@@ -506,8 +509,8 @@ export default function ProductCustomizeModal({
                         {isPizza && <span aria-hidden="true" className={`grid size-6 shrink-0 place-items-center rounded-full border font-bold ${isAdded ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#6D5842] text-[#E8C078]"}`}>{isAdded ? "✓" : "+"}</span>}
                       </button>
                     );
-                  })}
-                  </div>
+                    }}
+                  />
                 </div>
                 )}
               </section>

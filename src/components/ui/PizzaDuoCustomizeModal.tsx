@@ -12,6 +12,7 @@ import { isCartItemStockAvailable } from "@/lib/product-availability";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import PizzaDuoVisual from "@/components/ui/PizzaDuoVisual";
 import PizzaWorkshop from "@/components/ui/PizzaWorkshop";
+import SupplementPicker from "@/components/ui/SupplementPicker";
 
 interface Props {
   product: Product; recipes: Product[]; initial?: PizzaDuoComposition;
@@ -179,9 +180,9 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
       onKeyDown={(event) => {
         if (event.key === "Escape") { event.stopPropagation(); onClose(); return; }
         if (event.key !== "Tab") return;
-        const buttons = dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
-        if (!buttons?.length) return;
-        const first = buttons[0], last = buttons[buttons.length - 1];
+        const controls = dialog.current?.querySelectorAll<HTMLElement>("button:not(:disabled),input:not(:disabled),summary");
+        if (!controls?.length) return;
+        const first = controls[0], last = controls[controls.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
       }}>
@@ -249,17 +250,22 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
               {(["whole", "left", "right"] as const).map((target) => <button key={target} type="button" onClick={() => setSupplementTarget(target)} aria-pressed={supplementTarget === target} className={`min-h-12 rounded-xl border px-2 text-xs font-bold ${supplementTarget === target ? "border-[#E8C078] bg-[#352817] text-[#F7DCA9]" : "border-[#4b3b2d] bg-[#211a14] text-[#D8C8B4]"}`}>{pizzaDuoSupplementTargetLabel(target)}</button>)}
             </div>
             <div className="mt-4 flex items-center justify-between gap-3"><h4 className="text-sm font-bold text-[#F6EEE1]">Disponibles pour {pizzaDuoSupplementTargetLabel(supplementTarget).toLowerCase()}</h4><span className="text-[11px] text-[#C7B498]">{supplementOptions.length} choix</span></div>
-            {supplementOptions.length ? <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {supplementOptions.map((ingredient) => {
+            {supplementOptions.length ? <div className="mt-3">
+              <SupplementPicker
+                key={supplementTarget}
+                ingredients={supplementOptions}
+                itemsClassName="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                renderIngredient={(ingredient) => {
                 const priceDeltaCents = getPizzaDuoSupplementPriceCents(ingredient.defaultPriceModifier.amountCents, supplementTarget);
                 const selected = selectedSupplementIds.has(ingredient.id);
                 return <button key={ingredient.id} type="button" onClick={() => toggleSupplement(ingredient.id)} aria-pressed={selected} className={`flex min-h-[64px] items-center gap-3 rounded-[15px] border p-3 text-left ${selected ? "border-[#E8C078] bg-[#352817]" : "border-[#493a2c] bg-[#211a14] hover:border-[#89623a]"}`}>
                   <span className={`grid size-6 shrink-0 place-items-center rounded-full border text-xs ${selected ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#806646] text-transparent"}`}>✓</span>
-                  <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[#F6EEE1]">{ingredient.name}</span><span className="block text-xs text-[#C7B498]">+ {formatPrice(priceDeltaCents)} € · {pizzaDuoSupplementTargetLabel(supplementTarget)}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block break-words text-sm font-bold text-[#F6EEE1]">{ingredient.name}</span><span className="block text-xs text-[#C7B498]">+ {formatPrice(priceDeltaCents)} € · {pizzaDuoSupplementTargetLabel(supplementTarget)}</span></span>
                 </button>;
-              })}
+                }}
+              />
             </div> : <div className="mt-3 rounded-[16px] border border-dashed border-[#5b4936] bg-[#211a14] p-4 text-sm leading-relaxed text-[#C8BDAE]">{supplementTarget === "whole" ? "Aucun supplément commun aux deux recettes. Sélectionnez une moitié pour voir les choix disponibles." : "Aucun supplément disponible pour cette moitié."}</div>}
-            {composition?.supplements?.length ? <div className="mt-5 rounded-[16px] border border-[#5b4630] bg-[#211a14] p-4"><h4 className="text-sm font-bold text-[#F6EEE1]">Sélection actuelle</h4><ul className="mt-2 space-y-1.5 text-sm text-[#DCCBB6]">{composition.supplements.map((item) => <li key={`${item.ingredientId}-${item.target}`} className="flex justify-between gap-3"><span>{item.ingredientName} · {pizzaDuoSupplementTargetLabel(item.target)}</span><span className="shrink-0 text-[#E8C078]">+ {formatPrice(item.priceDeltaCents)} €</span></li>)}</ul></div> : null}
+            {composition?.supplements?.length ? <details open={composition.supplements.length <= 4} className="mt-5 rounded-[16px] border border-[#5b4630] bg-[#211a14] p-4"><summary className="cursor-pointer text-sm font-bold text-[#F6EEE1]">Sélection actuelle ({composition.supplements.length})</summary><ul className="mt-2 space-y-1.5 text-sm text-[#DCCBB6]">{composition.supplements.map((item) => <li key={`${item.ingredientId}-${item.target}`} className="flex justify-between gap-3"><span>{item.ingredientName} · {pizzaDuoSupplementTargetLabel(item.target)}</span><span className="shrink-0 text-[#E8C078]">+ {formatPrice(item.priceDeltaCents)} €</span></li>)}</ul></details> : null}
           </section> : <section ref={summary} tabIndex={-1} className="outline-none" aria-label="Résumé de votre Pizza Duo">
             <h3 className="text-[clamp(1.7rem,3vw,2.4rem)] font-extrabold leading-tight tracking-[-.045em] text-[#FFF5E1]">Vérifiez votre pizza</h3>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-[#E7D8C5]">
