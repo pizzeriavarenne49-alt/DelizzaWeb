@@ -43,15 +43,14 @@ function Half({ recipe, side, single }: { recipe?: Product; side: "left" | "righ
   </div>;
 }
 
-/** Fixed plate composition used only by the Duo configuration flow. */
+/** Fixed plate composition for the classic and Duo configurators. */
 export default function PizzaDuoVisual({ left, right, variant = "duo" }: { left?: Product; right?: Product; variant?: "duo" | "single" }) {
   const single = variant === "single";
   return <div className="mx-auto w-full max-w-[340px]" role="img" aria-label={single ? `Aperçu de ${left?.name ?? "votre pizza"}` : "Aperçu de votre Pizza Duo"}>
-    <div className="relative aspect-square overflow-hidden rounded-full border-[7px] border-[#c79b52] bg-[#130f0a] shadow-[0_18px_44px_rgba(0,0,0,.5),inset_0_0_0_3px_rgba(255,230,178,.35)]">
+    <div className="relative aspect-square overflow-hidden rounded-full border-[3px] border-[#ad824d] bg-[#130f0a] shadow-[0_18px_34px_#000a,0_0_0_9px_#e4b87c0d]">
       <Half recipe={left} side="left" single={single} />
       {!single && <Half recipe={right} side="right" single={single} />}
-      {!single && <div aria-hidden="true" className="absolute inset-y-[8%] left-1/2 w-px -translate-x-1/2 bg-[#f7dfa8]/80 shadow-[0_0_10px_rgba(255,220,156,.85)]" />}
-      <div aria-hidden="true" className="absolute inset-[9%] rounded-full border border-white/20" />
+      {!single && <div aria-hidden="true" className="absolute inset-y-[4%] left-1/2 border-l border-dashed border-[#ffe7bf]/90 before:absolute before:-left-[3px] before:top-0 before:size-[5px] before:rounded-full before:bg-[#ffe7bf] after:absolute after:-left-[3px] after:bottom-0 after:size-[5px] after:rounded-full after:bg-[#ffe7bf]" />}
     </div>
     {!single && <div className="mt-3 grid grid-cols-2 gap-2 text-center text-[11px] font-semibold uppercase tracking-[.13em] text-[#d9bd86]">
       <span className="truncate">{left?.name ?? "Première moitié"}</span>

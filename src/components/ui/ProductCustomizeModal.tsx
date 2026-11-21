@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import PizzaPlate from "@/components/ui/PizzaPlate";
+import PizzaWorkshop from "@/components/ui/PizzaWorkshop";
 import { isDelizzaPizzaCategory } from "@/lib/pizza-duo";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import type { Product, ProductIngredient } from "@/types";
@@ -129,6 +130,7 @@ export default function ProductCustomizeModal({
 }: ProductCustomizeModalProps) {
   const onlineOrdering = useOnlineOrderingStatus();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
   const confirmed = useRef(false);
   const { canAddProductQuantity, canReplaceProductQuantity } = useCart();
   const legacyOptionIds = useMemo(
@@ -145,6 +147,7 @@ export default function ProductCustomizeModal({
   const [removedIngredients, setRemovedIngredients] = useState<string[]>(() => initialCustomizations?.removedIngredients ?? []);
   const [addedSupplements, setAddedSupplements] = useState<string[]>(() => initialCustomizations?.addedSupplements ?? []);
   const [quantity, setQuantity] = useState(initialQuantity);
+  const [reviewing, setReviewing] = useState(false);
 
   const sortedOptions = useMemo(
     () => [...product.options].sort((a, b) => a.order - b.order),
@@ -202,6 +205,7 @@ export default function ProductCustomizeModal({
   const hasSupplements = supplementIngredients.length > 0;
   const hasCustomizations = hasOptions || hasRemovableIngredients || hasSupplements;
   const hasTags = product.tags.length > 0;
+  const showIngredientLabels = hasIngredients && (!isPizza || !hasRemovableIngredients);
   const effectiveRemovals = hasRemovableIngredients
     ? baseIngredients.filter((ingredient) => removedIngredients.includes(ingredient.id))
     : [];
@@ -293,86 +297,23 @@ export default function ProductCustomizeModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  return (
-    <AnimatePresence>
-      <>
-        {/* Backdrop */}
-        <motion.div
-          key="modal-backdrop"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm"
-          aria-hidden="true"
-        />
+  useEffect(() => {
+    if (!isPizza) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [isPizza]);
 
-        {/* Product detail sheet */}
-        <div className="fixed inset-0 z-[10001] flex items-end justify-center px-0 md:items-center md:px-4 pointer-events-none">
-        <motion.div
-          key="modal-sheet"
-          ref={dialogRef}
-          initial={{ opacity: 0, y: 32, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 32, scale: 0.98 }}
-          transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="relative pointer-events-auto flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-[#D4A053]/20 bg-[#13110F] shadow-[0_-8px_40px_rgba(0,0,0,0.6)] md:max-h-[88dvh] md:max-w-[720px] md:rounded-[22px] md:shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
-          aria-modal="true"
-          role="dialog"
-          aria-label={`Détail de ${product.name}`}
-        >
-          {/* Drag handle */}
-          <div className="flex justify-center pt-3 pb-1 shrink-0">
-            <div className="h-1 w-10 rounded-full bg-white/20" />
-          </div>
+  function changeStep(review: boolean) {
+    setReviewing(review);
+    requestAnimationFrame(() => stepHeading.current?.focus());
+  }
 
-          {/* Close button */}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer"
-            className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-[#252525] text-[#A0A0A0] hover:text-[#F5F5F5] transition-colors"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-
-          {/* Scrollable content */}
-          <div className="overflow-y-auto overscroll-contain flex-1 px-5 pb-4 md:px-6">
-            {/* The selected recipe stays visible while the customer edits its toppings. */}
-            <div className="grid items-center gap-4 border-b border-[#D4A053]/15 py-4 sm:grid-cols-[minmax(0,220px)_1fr] sm:gap-7">
-              {isPizza ? (
-                <div className="mx-auto w-full max-w-[184px] sm:max-w-[220px]">
-                  <PizzaPlate product={product} />
-                </div>
-              ) : (
-                <div className="relative mx-auto aspect-[4/3] w-full max-w-[260px] overflow-hidden rounded-[18px] bg-[#252525]">
-                  <Image src={product.image} alt={product.name} fill sizes="260px" className="object-cover" />
-                </div>
-              )}
-              <div className="flex min-w-0 flex-col items-center gap-2 text-center sm:items-start sm:text-left">
-                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#E6BB72]">
-                  {isPizza ? "Personnalisation classique" : "À la carte"}
-                </p>
-                <h2 className="text-[24px] font-bold leading-tight text-[#FFF5E1] md:text-[30px]">
-                  {product.name}
-                </h2>
-                <p className="text-[14px] font-semibold text-[#E6BB72]">
-                  {product.recipeBase && <>Base {product.recipeBase === "creme" ? "crème" : "tomate"} · </>}
-                  {hasCustomizations ? "À partir de " : ""}
-                  {formatPrice(product.price_cents)}&nbsp;€
-                </p>
-                {product.description_short && (
-                  <p className="max-w-[44ch] text-[14px] leading-relaxed text-[#CFC4B2]">
-                    {product.description_short}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {(hasIngredients || hasTags) && (
+  const customizationContent = (
+    <>
+            {(showIngredientLabels || hasTags) && (
               <div className="mt-5 flex flex-col gap-4 border-b border-white/5 pb-5">
-                {hasIngredients && (
+                {showIngredientLabels && (
                   <section aria-labelledby={`ingredients-${product.id}`}>
                     <h3 id={`ingredients-${product.id}`} className="text-[14px] font-bold text-[#F5F5F5]">
                       Ingrédients
@@ -488,14 +429,14 @@ export default function ProductCustomizeModal({
 
             {(hasRemovableIngredients || hasSupplements) && (
               <section className="mt-5">
-                <h3 className="text-[15px] font-bold text-[#F5F5F5]">
-                  Personnaliser
-                </h3>
+                {!isPizza && <h3 className="text-[15px] font-bold text-[#F5F5F5]">Personnaliser</h3>}
                 {hasRemovableIngredients && (
-                <div className="mt-3 flex flex-col gap-2">
-                  <h4 className="text-[13px] font-semibold text-[#CFCFCF]">
-                    Ingrédients
-                  </h4>
+                <div className={isPizza ? "rounded-2xl border border-[#493b2c] bg-[#211b16] p-4" : "mt-3 flex flex-col gap-2"}>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-[#F5F5F5]">Ingrédients de la recette</h4>
+                    {isPizza && <span className="text-xs text-[#C7B9A9]">Appuyez pour retirer</span>}
+                  </div>
+                  <div className={isPizza ? "flex flex-wrap gap-2" : "flex flex-col gap-2"}>
                   {baseIngredients.map((ingredient) => {
                     const isRemoved = removedIngredients.includes(ingredient.id);
                     const isKept = !isRemoved;
@@ -504,16 +445,18 @@ export default function ProductCustomizeModal({
                         key={ingredient.id}
                         type="button"
                         disabled={orderingBlocked}
-                        aria-pressed={isKept}
+                        aria-pressed={isPizza ? isRemoved : isKept}
                         aria-label={`${isRemoved ? "Remettre" : "Retirer"} ${ingredient.name}`}
                         onClick={() => toggleRemovedIngredient(ingredient.id)}
-                        className={`flex items-center justify-between rounded-[14px] border px-4 py-3 transition-colors ${
+                        className={`min-h-11 border transition-colors ${isPizza ? "inline-flex items-center gap-2 rounded-full px-3 text-left text-[13px]" : "flex items-center justify-between rounded-[14px] px-4 py-3"} ${
                           isRemoved
                             ? "border-[#E74C3C]/40 bg-[#E74C3C]/10"
                             : "border-[#D4A053]/50 bg-[#D4A053]/15"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
+                        {isPizza ? (
+                          <><span aria-hidden="true" className="font-bold text-[#E8C078]">{isRemoved ? "↶" : "×"}</span><span className={isRemoved ? "text-[#F59B90] line-through" : "text-[#F5F5F5]"}>{ingredient.name}</span></>
+                        ) : <><div className="flex items-center gap-3">
                           <div className={`h-5 w-5 rounded-[5px] border-2 flex items-center justify-center shrink-0 ${isKept ? "border-[#D4A053] bg-[#D4A053]" : "border-[#505050]"}`}>
                             {isKept && (
                               <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" aria-hidden="true">
@@ -527,17 +470,17 @@ export default function ProductCustomizeModal({
                         </div>
                         <span className="text-[13px] text-[#A0A0A0]">
                           {isRemoved ? "Retiré" : "Inclus"}
-                        </span>
+                        </span></>}
                       </button>
                     );
                   })}
+                  </div>
                 </div>
                 )}
                 {hasSupplements && (
-                <div className="mt-4 flex flex-col gap-2">
-                  <h4 className="text-[13px] font-semibold text-[#CFCFCF]">
-                    Suppléments
-                  </h4>
+                <div className="mt-5">
+                  <h4 className="mb-2 text-sm font-bold text-[#F5F5F5]">{isPizza ? "Un petit supplément ?" : "Suppléments"}</h4>
+                  <div className={isPizza ? "grid grid-cols-1 gap-2 sm:grid-cols-2" : "flex flex-col gap-2"}>
                   {supplementIngredients.map((ingredient) => {
                     const isAdded = addedSupplements.includes(ingredient.id);
                     const priceCents = ingredient.defaultPriceModifier.amountCents;
@@ -549,27 +492,32 @@ export default function ProductCustomizeModal({
                         onClick={() => toggleSupplement(ingredient.id)}
                         aria-pressed={isAdded}
                         aria-label={`${isAdded ? "Retirer" : "Ajouter"} le supplément ${ingredient.name}`}
-                        className={`flex items-center justify-between rounded-[14px] border px-4 py-3 transition-colors ${
+                        className={`flex min-h-12 gap-2 rounded-[14px] border px-3 py-2 text-left transition-colors ${isPizza ? "items-center" : "items-center justify-between"} ${
                           isAdded
                             ? "border-[#D4A053]/50 bg-[#D4A053]/15"
                             : "border-transparent bg-[#252525]"
                         }`}
                       >
-                        <span className="text-[14px] text-[#F5F5F5]">
-                          {ingredient.emoji ? `${ingredient.emoji} ` : ""}{ingredient.name}
+                        {isPizza && ingredient.emoji && <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-md bg-[#211b16]">{ingredient.emoji}</span>}
+                        <span className={isPizza ? "min-w-0 flex-1" : "contents"}>
+                          <span className="block text-sm font-medium text-[#F5F5F5]">{!isPizza && ingredient.emoji ? `${ingredient.emoji} ` : ""}{ingredient.name}</span>
+                          <span className="block text-xs text-[#DCC7AA]">{priceCents > 0 ? `+${formatPrice(priceCents)} €` : "Gratuit"}</span>
                         </span>
-                        <span className={`text-[13px] ${priceCents > 0 ? "text-[#A0A0A0]" : "text-[#6B6B6B]"}`}>
-                          {priceCents > 0 ? `+${formatPrice(priceCents)} €` : "Gratuit"}
-                        </span>
+                        {isPizza && <span aria-hidden="true" className={`grid size-6 shrink-0 place-items-center rounded-full border font-bold ${isAdded ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#6D5842] text-[#E8C078]"}`}>{isAdded ? "✓" : "+"}</span>}
                       </button>
                     );
                   })}
+                  </div>
                 </div>
                 )}
               </section>
             )}
 
-            {/* Quantity selector */}
+    </>
+  );
+
+  const reviewContent = (
+    <>
             <div className="mt-6 flex items-center justify-between">
               <span className="text-[14px] font-semibold text-[#F5F5F5]">Quantité</span>
               <div className="flex items-center gap-3">
@@ -609,6 +557,76 @@ export default function ProductCustomizeModal({
                 </ul>
               )}
             </section>
+    </>
+  );
+
+  if (isPizza) {
+    const recipeBase = product.recipeBase === "creme" ? "crème" : product.recipeBase;
+    const warning = orderingBlocked ? onlineOrdering.message ?? "Les commandes en ligne sont indisponibles."
+      : reviewing && !canAdd ? "Cette quantité n’est plus disponible." : undefined;
+
+    return (
+      <div ref={dialogRef} className="fixed inset-0 z-[10001]" role="dialog" aria-modal="true" aria-label={`Détail de ${product.name}`}>
+        <PizzaWorkshop
+          title="Pizza classique"
+          description={hasCustomizations ? "Personnalisez votre recette, puis vérifiez votre pizza avant de l’ajouter au panier." : "Vérifiez la composition de votre pizza et choisissez la quantité."}
+          preview={<PizzaPlate product={product} />}
+          previewTitle={product.name}
+          previewDetails={<>{recipeBase && <strong>Base {recipeBase}</strong>}{recipeBase && product.description_short && <br />}{product.description_short}</>}
+          unitPriceCents={unitPriceCents}
+          totalCents={totalTtcCents}
+          steps={hasCustomizations ? ["Personnaliser", "Vérifier"] : ["Vérifier"]}
+          activeStep={hasCustomizations && reviewing ? 1 : 0}
+          onClose={onClose}
+          returnLabel={initialCartKey ? "Retour au panier" : "Retour à la carte"}
+          onBack={hasCustomizations && reviewing ? () => changeStep(false) : undefined}
+          actionLabel={!hasCustomizations || reviewing ? confirmLabel : "Vérifier ma pizza"}
+          actionDisabled={orderingBlocked || (!hasCustomizations || reviewing ? !canAdd : !hasRequiredSelections)}
+          onAction={!hasCustomizations || reviewing ? handleConfirm : () => changeStep(true)}
+          warning={warning}
+        >
+          <h3 ref={stepHeading} tabIndex={-1} className="text-[clamp(1.65rem,3.3vw,2.2rem)] font-extrabold leading-tight tracking-tight outline-none">
+            {!hasCustomizations || reviewing ? "Vérifiez votre pizza" : "À votre goût, vraiment."}
+          </h3>
+          {!hasCustomizations ? <>{customizationContent}{reviewContent}</> : reviewing ? reviewContent : customizationContent}
+        </PizzaWorkshop>
+      </div>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      <>
+        <motion.div key="modal-backdrop" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm" aria-hidden="true" />
+        <div className="pointer-events-none fixed inset-0 z-[10001] flex items-end justify-center md:items-center md:px-4">
+        <motion.div
+          key="modal-sheet"
+          ref={dialogRef}
+          initial={{ opacity: 0, y: 32, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 32, scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+          className="relative pointer-events-auto flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-[#D4A053]/20 bg-[#13110F] shadow-[0_-8px_40px_rgba(0,0,0,0.6)] md:max-h-[88dvh] md:max-w-[720px] md:rounded-[22px] md:shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Détail de ${product.name}`}
+        >
+          <div className="flex shrink-0 justify-center pb-1 pt-3" aria-hidden="true"><div className="h-1 w-10 rounded-full bg-white/20" /></div>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="absolute right-3 top-3 z-10 grid size-11 place-items-center rounded-full bg-[#252525] text-xl text-[#F5F5F5]">×</button>
+          <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4 md:px-6">
+            <div className="grid items-center gap-4 border-b border-[#D4A053]/15 py-4 sm:grid-cols-[minmax(0,220px)_1fr] sm:gap-7">
+              <div className="relative mx-auto aspect-[4/3] w-full max-w-[260px] overflow-hidden rounded-[18px] bg-[#252525]">
+                <Image src={product.image} alt={product.name} fill sizes="260px" className="object-cover" />
+              </div>
+              <div className="flex min-w-0 flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#E6BB72]">À la carte</p>
+                <h2 className="text-[24px] font-bold leading-tight text-[#FFF5E1] md:text-[30px]">{product.name}</h2>
+                <p className="text-[14px] font-semibold text-[#E6BB72]">{hasCustomizations ? "À partir de " : ""}{formatPrice(product.price_cents)}&nbsp;€</p>
+                {product.description_short && <p className="max-w-[44ch] text-[14px] leading-relaxed text-[#CFC4B2]">{product.description_short}</p>}
+              </div>
+            </div>
+            {customizationContent}
+            {reviewContent}
           </div>
 
           {/* Sticky footer: Add button */}

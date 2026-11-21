@@ -4,13 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import type { Product } from "@/types";
 import type { CartItem, PizzaDuoComposition } from "@/types/cart";
-import { formatPrice } from "@/types";
 import { PIZZA_DUO_FIXED_PRICE_CENTS, createPizzaDuoComposition, getPizzaDuoIngredientNames, isPizzaDuoRecipe } from "@/lib/pizza-duo";
 import { useCart } from "@/contexts/CartContext";
 import { useCatalogAvailability } from "@/contexts/CatalogAvailabilityContext";
 import { isCartItemStockAvailable } from "@/lib/product-availability";
 import { useOnlineOrderingStatus } from "@/contexts/OnlineOrderingStatusContext";
 import PizzaDuoVisual from "@/components/ui/PizzaDuoVisual";
+import PizzaWorkshop from "@/components/ui/PizzaWorkshop";
 
 interface Props {
   product: Product; recipes: Product[]; initial?: PizzaDuoComposition;
@@ -38,6 +38,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   const [side, setSide] = useState<Side>("left");
   const [filter, setFilter] = useState<Base>("all");
   const [quantity, setQuantity] = useState(initialQuantity);
+  const [reviewing, setReviewing] = useState(Boolean(initial));
   const dialog = useRef<HTMLDivElement>(null);
   const summary = useRef<HTMLElement>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
@@ -51,6 +52,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   const isEditing = Boolean(initial);
   const itemsOutsideEditedLine = useMemo(() => editingCartKey ? items.filter((item) => item.cartKey !== editingCartKey) : items, [editingCartKey, items]);
   const hasCompleteSelection = Boolean(left && right);
+  const showReview = reviewing && hasCompleteSelection;
   const isQuantityAvailable = (nextQuantity: number) => {
     if (!left || !right) return false;
     const candidate: CartItem = {
@@ -78,6 +80,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   useEffect(() => { stepHeading.current?.focus({ preventScroll: true }); }, [side]);
 
   function edit(next: Side) {
+    setReviewing(false);
     setSide(next);
     const recipe = next === "left" ? left : right;
     setFilter(recipe ? normalizedBase(recipe.recipeBase) : "all");
@@ -98,18 +101,28 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
     else {
       setRightId(recipe.id);
       requestAnimationFrame(() => {
-        summary.current?.focus({ preventScroll: true });
-        summary.current?.scrollIntoView({ block: "nearest" });
+        dialog.current?.querySelector<HTMLButtonElement>('[data-testid="pizza-duo-review"]')?.focus({ preventScroll: true });
       });
     }
+  }
+  function review() {
+    if (!canConfirm) return;
+    setReviewing(true);
+    requestAnimationFrame(() => summary.current?.focus());
   }
   function confirm() {
     if (confirmLock.current || !left || !right || !canConfirm) return;
     confirmLock.current = true;
     onConfirm(createPizzaDuoComposition(left, right), quantity);
   }
+  const previewTitle = left && right ? `${left.name} × ${right.name}` : product.name;
+  const warning = !onlineOrdering.canStartOrder
+    ? (onlineOrdering.message ?? "Les commandes en ligne sont indisponibles.")
+    : !stockAvailable && hasCompleteSelection
+      ? "Stock insuffisant pour cette composition ou cette quantité."
+      : undefined;
   return (
-    <div ref={dialog} className="fixed inset-0 z-[10001] flex items-end justify-center bg-black/70 backdrop-blur-sm md:items-center" role="dialog" aria-modal="true" aria-labelledby="pizza-duo-title"
+    <div ref={dialog} className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="pizza-duo-title"
       onKeyDown={(event) => {
         if (event.key === "Escape") { event.stopPropagation(); onClose(); return; }
         if (event.key !== "Tab") return;
@@ -119,62 +132,71 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
       }}>
-      <div className="flex max-h-[94dvh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[28px] border border-[#d4a053]/25 bg-[#15110d] shadow-2xl md:rounded-[28px]">
-        <header className="flex items-center justify-between border-b border-[#d4a053]/20 px-5 py-4">
-          <div>
-            <h2 id="pizza-duo-title" className="text-[20px] font-bold text-[#F5F5F5]">{product.name}</h2>
-            <p className="text-[14px] text-[#D4A053]">{formatPrice(PIZZA_DUO_FIXED_PRICE_CENTS)} € la pizza</p>
-          </div>
-          <button type="button" onClick={onClose} className="size-11 shrink-0 rounded-full bg-[#252525] text-xl text-[#F5F5F5]" aria-label="Fermer le configurateur">×</button>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-          <p className="mb-2 text-[13px] text-[#d8cfbf]">Choisissez une recette par moitié. Vous pouvez mélanger les bases ou choisir deux fois la même recette.</p>
-          <p className="mb-4 text-[12px] text-[#b9a88d]">La Pizza Duo est proposée sans supplément ni autre modification.</p>
-          <div className="mb-5 rounded-[22px] border border-[#d4a053]/20 bg-[#211911] px-5 py-5">
-            <PizzaDuoVisual left={left} right={right} />
-          </div>
-          <div className="mb-4 grid grid-cols-2 gap-2" aria-label="Étapes de composition">
+      <PizzaWorkshop
+        title="Pizza Duo · 2 moitiés"
+        titleId="pizza-duo-title"
+        description="Choisissez deux recettes parmi vos pizzas préférées. Deux recettes réunies dans une seule pizza, au prix fixe de 14,90 €."
+        preview={<PizzaDuoVisual left={left} right={right} />}
+        previewTitle={previewTitle}
+        previewDetails={<><span className="block">{left ? `Moitié 1 · Base ${baseLabel(left.recipeBase)}` : "Choisissez votre première moitié"}</span><span className="block">{right ? `Moitié 2 · Base ${baseLabel(right.recipeBase)}` : "Choisissez votre deuxième moitié"}</span></>}
+        unitPriceCents={PIZZA_DUO_FIXED_PRICE_CENTS}
+        totalCents={PIZZA_DUO_FIXED_PRICE_CENTS * quantity}
+        steps={["Recettes", "Vérifier"]}
+        activeStep={showReview ? 1 : 0}
+        onClose={onClose}
+        returnLabel={isEditing ? "Retour au panier" : "Retour à la carte"}
+        onBack={showReview ? () => edit("left") : undefined}
+        actionLabel={showReview ? (isEditing ? "Enregistrer les modifications" : "Ajouter au panier") : "Vérifier ma pizza"}
+        actionDisabled={!canConfirm}
+        actionTestId={showReview ? "pizza-duo-confirm" : "pizza-duo-review"}
+        onAction={showReview ? confirm : review}
+        warning={warning}
+      >
+        {!showReview ? <section aria-labelledby="duo-step">
+          <h3 id="duo-step" ref={stepHeading} tabIndex={-1} className="text-[clamp(1.7rem,3vw,2.4rem)] font-extrabold leading-tight tracking-[-.045em] text-[#FFF5E1] outline-none">Deux envies. Une pizza.</h3>
+          <p className="mt-2 text-sm leading-relaxed text-[#C8BDAE]">Choisissez une recette pour chaque moitié. Vous pouvez mélanger les bases ou choisir deux fois la même recette.</p>
+          <p className="mt-2 text-xs font-medium text-[#D9C6A9]">La Pizza Duo est proposée sans supplément ni autre modification.</p>
+
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3" aria-label="Choix des moitiés">
             {(["left", "right"] as const).map((item, index) => {
               const recipe = item === "left" ? left : right;
-              return <button key={item} type="button" onClick={() => edit(item)} aria-current={side === item ? "step" : undefined} className={`rounded-[14px] border px-3 py-3 text-left transition-colors ${side === item ? "border-[#D4A053] bg-[#D4A053]/15" : "border-[#d4a053]/15 bg-[#211a13] hover:border-[#d4a053]/45"}`}>
-                <span className="block text-[11px] font-bold uppercase text-[#D4A053]">Étape {index + 1}</span>
-                <span className="block text-[14px] font-semibold text-[#F5F5F5]">{recipe?.name ?? `Choisir ma ${index === 0 ? "première" : "deuxième"} moitié`}</span>
-                {recipe && <span className="block text-[12px] text-[#A0A0A0]">Base {baseLabel(recipe.recipeBase)} · Modifier</span>}
+              return <button key={item} type="button" onClick={() => edit(item)} aria-current={side === item ? "step" : undefined} className={`flex min-w-0 items-center gap-2 rounded-[16px] border p-2 text-left transition-colors sm:gap-3 sm:p-3 ${side === item ? "border-[#D6A657] bg-[#302517] shadow-[0_0_0_3px_rgba(214,166,87,.1)]" : "border-[#4c3a29] bg-[#211a14] hover:border-[#89623a]"}`}>
+                {recipe ? <Image src={recipe.image} alt="" width={48} height={48} className="size-10 shrink-0 rounded-[10px] object-cover sm:size-12" /> : <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-[#342719] text-[#E8C078] sm:size-12">{index + 1}</span>}
+                <span className="min-w-0 flex-1"><span className="block text-[9px] font-extrabold uppercase tracking-[.1em] text-[#D9AF6B]">Moitié {index + 1}</span><span className="block truncate text-xs font-bold text-[#F6EEE1] sm:text-sm">{recipe?.name ?? "À choisir"}</span>{recipe && <span className="block truncate text-[10px] text-[#C7B498]">Base {baseLabel(recipe.recipeBase)}</span>}</span>
+                <span aria-hidden="true" className="text-[#D9AF6B]">›</span>
               </button>;
             })}
           </div>
-          <section aria-labelledby="duo-step">
-            <h3 id="duo-step" ref={stepHeading} tabIndex={-1} className="mb-3 text-[17px] font-bold text-[#F5F5F5]">{side === "left" ? "Choisir ma première moitié" : "Choisir ma deuxième moitié"}</h3>
-            <div className="mb-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrer par base">
-              {bases.map((base) => <button key={base} type="button" onClick={() => setFilter(base)} aria-pressed={activeFilter === base} className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold ${activeFilter === base ? "bg-[#D4A053] text-[#0D0D0D]" : "bg-[#252525] text-[#F5F5F5]"}`}>{base === "all" ? "Toutes" : baseLabel(base)}</button>)}
+
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <h4 className="text-sm font-bold text-[#F6EEE1]">{side === "left" ? "Choisir la moitié 1" : "Choisir la moitié 2"}</h4>
+            <span className="text-[11px] text-[#D4C0A1]">Inclus dans le prix Duo</span>
+          </div>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrer par base">
+            {bases.map((base) => <button key={base} type="button" onClick={() => setFilter(base)} aria-pressed={activeFilter === base} className={`min-h-10 shrink-0 rounded-full px-3 text-xs font-bold ${activeFilter === base ? "bg-[#E8C078] text-[#21150a]" : "border border-[#4c3b2c] bg-[#211a14] text-[#E4D5C1]"}`}>{base === "all" ? "Toutes" : baseLabel(base)}</button>)}
+          </div>
+          {selectionRemoved && <p role="status" className="mt-3 rounded-xl bg-[#392825] px-3 py-2 text-sm text-[#FFC3B9]">Une recette sélectionnée n’est plus disponible. Choisissez-en une autre.</p>}
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {visible.map((recipe) => {
+              const selected = current?.id === recipe.id;
+              return <button key={recipe.id} data-duo-recipe={recipe.id} type="button" onClick={() => choose(recipe)} aria-pressed={selected} className={`group flex min-h-[72px] min-w-0 items-center gap-3 rounded-[15px] border p-2.5 text-left transition-colors ${selected ? "border-[#D7A95C] bg-[#352817] shadow-[inset_0_0_0_1px_rgba(232,192,120,.18)]" : "border-[#46382b] bg-[#211a14] hover:border-[#8b663d]"}`}>
+                <Image src={recipe.image} alt="" width={56} height={56} sizes="56px" className="size-14 shrink-0 rounded-[11px] object-cover" />
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[#F6EEE1]">{recipe.name}</span><span className="mt-0.5 block text-[11px] text-[#E4BB78]">Base {baseLabel(recipe.recipeBase)}</span><span className="mt-1 block truncate text-[10px] text-[#C7BBAA]">{getPizzaDuoIngredientNames(recipe).join(", ")}</span></span>
+                <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border text-[11px] ${selected ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#806646] text-transparent"}`}>✓</span>
+              </button>;
+            })}
+          </div>
+          {noRecipes && <p className="mt-3 text-sm text-[#F4B6A2]">Aucune recette disponible pour une Pizza Duo.</p>}
+
+        </section> : <section ref={summary} tabIndex={-1} className="outline-none" aria-label="Résumé de votre Pizza Duo">
+            <h3 className="text-[clamp(1.7rem,3vw,2.4rem)] font-extrabold leading-tight tracking-[-.045em] text-[#FFF5E1]">Vérifiez votre pizza</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-[#E7D8C5]">
+              <button type="button" onClick={() => edit("left")} className="rounded-xl border border-[#45362a] bg-[#191511] p-3 text-left hover:border-[#89623a]"><span className="block text-[10px] font-bold uppercase tracking-[.1em] text-[#D9AF6B]">Moitié 1</span><span className="mt-1 block truncate font-semibold">{left?.name}</span><span className="text-xs text-[#C7B498]">Base {baseLabel(left?.recipeBase)}</span></button>
+              <button type="button" onClick={() => edit("right")} className="rounded-xl border border-[#45362a] bg-[#191511] p-3 text-left hover:border-[#89623a]"><span className="block text-[10px] font-bold uppercase tracking-[.1em] text-[#D9AF6B]">Moitié 2</span><span className="mt-1 block truncate font-semibold">{right?.name}</span><span className="text-xs text-[#C7B498]">Base {baseLabel(right?.recipeBase)}</span></button>
             </div>
-            {selectionRemoved && <p role="status" className="mb-3 rounded-lg bg-[#392825] px-3 py-2 text-sm text-[#FFC3B9]">Une recette sélectionnée n’est plus disponible. Choisissez-en une autre.</p>}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {visible.map((recipe) => <button key={recipe.id} data-duo-recipe={recipe.id} type="button" onClick={() => choose(recipe)} aria-pressed={current?.id === recipe.id} className={`group overflow-hidden rounded-[16px] border text-left transition-colors ${current?.id === recipe.id ? "border-[#D4A053] bg-[#D4A053]/15" : "border-[#d4a053]/15 bg-[#211a13] hover:border-[#d4a053]/45"}`}>
-                <div className="relative aspect-[2.6] overflow-hidden"><Image src={recipe.image} alt="" fill sizes="(max-width: 640px) 100vw, 300px" className="object-cover transition-transform duration-300 group-hover:scale-105" /></div>
-                <span className="block px-3 pt-3 text-[14px] font-semibold text-[#F5F5F5]">{recipe.name}</span>
-                <span className="block px-3 text-[12px] text-[#D4A053]">Base {baseLabel(recipe.recipeBase)}</span>
-                <span className="mt-1 block px-3 pb-3 text-[12px] text-[#CFCFCF]">{getPizzaDuoIngredientNames(recipe).join(", ")}</span>
-              </button>)}
-            </div>
-            {noRecipes && <p className="mt-3 text-[13px] text-[#E8A0A0]">Aucune recette disponible pour une Pizza Duo.</p>}
-          </section>
-          {hasCompleteSelection && <section ref={summary} tabIndex={-1} className="mt-5 rounded-[14px] border border-white/10 bg-[#252525] p-4 outline-none" aria-label="Résumé de votre Pizza Duo">
-            <h3 className="text-[15px] font-bold text-[#F5F5F5]">Votre Pizza Duo</h3>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-[13px] text-[#CFCFCF]">
-              <button type="button" onClick={() => edit("left")} className="rounded-lg bg-[#1A1A1A] p-2 text-left"><span className="block text-[#D4A053]">Moitié 1</span>{left?.name}</button>
-              <button type="button" onClick={() => edit("right")} className="rounded-lg bg-[#1A1A1A] p-2 text-left"><span className="block text-[#D4A053]">Moitié 2</span>{right?.name}</button>
-            </div>
-            <div className="mt-3 flex items-center justify-between"><span className="text-[14px] text-[#F5F5F5]">Quantité</span><div className="flex items-center gap-2">
-              <button type="button" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))} className="size-11 rounded-full bg-[#1A1A1A] text-[#F5F5F5] disabled:opacity-50" aria-label="Retirer une Pizza Duo">−</button>
-              <span className="w-5 text-center text-[#F5F5F5]" aria-live="polite">{quantity}</span>
-              <button type="button" disabled={quantity >= 99 || !isQuantityAvailable(quantity + 1)} onClick={() => setQuantity((value) => value < 99 && isQuantityAvailable(value + 1) ? value + 1 : value)} className="size-11 rounded-full bg-[#D4A053] text-[#0D0D0D] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Ajouter une Pizza Duo">+</button>
-            </div></div>
-            {!stockAvailable && <p className="mt-2 text-[13px] text-[#E8A0A0]">Stock insuffisant pour cette composition ou cette quantité.</p>}
+            <div className="mt-4 flex items-center justify-between"><span className="text-sm font-semibold text-[#F6EEE1]">Quantité</span><div className="flex items-center gap-2"><button type="button" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))} className="size-11 rounded-full bg-[#17130f] text-lg text-[#F6EEE1] disabled:opacity-40" aria-label="Retirer une Pizza Duo">−</button><span className="w-5 text-center font-bold text-[#F6EEE1]" aria-live="polite">{quantity}</span><button type="button" disabled={quantity >= 99 || !isQuantityAvailable(quantity + 1)} onClick={() => setQuantity((value) => value < 99 && isQuantityAvailable(value + 1) ? value + 1 : value)} className="size-11 rounded-full bg-[#E8C078] text-lg font-bold text-[#21150a] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Ajouter une Pizza Duo">+</button></div></div>
           </section>}
-        </div>
-        <footer className="border-t border-white/10 p-5">{!onlineOrdering.canStartOrder && <p className="mb-2 text-center text-[13px] text-[#E8A0A0]">{onlineOrdering.message ?? "Les commandes en ligne sont indisponibles."}</p>}<button data-testid="pizza-duo-confirm" type="button" disabled={!canConfirm} onClick={confirm} className="w-full rounded-[18px] bg-[#D4A053] py-4 text-[16px] font-bold text-[#0D0D0D] disabled:cursor-not-allowed disabled:opacity-50">{isEditing ? "Enregistrer les modifications" : "Ajouter au panier"} · {formatPrice(PIZZA_DUO_FIXED_PRICE_CENTS * quantity)} €</button></footer>
-      </div>
+      </PizzaWorkshop>
     </div>
   );
 }
