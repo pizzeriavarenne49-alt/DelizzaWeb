@@ -262,7 +262,11 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
             aria-pressed={editingWhole ? selected : undefined} aria-expanded={editingWhole ? undefined : expanded}
             aria-controls={expanded ? choiceId : undefined}
             className="flex min-h-12 w-full items-center gap-2 rounded-xl p-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#E8C078] sm:px-3">
-            <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border text-xs ${selected ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#806646] text-[#E8C078]"}`}>{selected ? "✓" : expanded ? "−" : "+"}</span>
+            <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border ${selected ? "border-[#E8C078] bg-[#E8C078] text-[#21150a]" : "border-[#806646] text-[#E8C078]"}`}>
+              <svg className="size-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+                <path d={selected ? "m2.5 6 2.25 2.25 4.75-4.5" : expanded ? "M3 6h6" : "M3 6h6M6 3v6"} />
+              </svg>
+            </span>
             <span className="min-w-0 flex-1">
               <span className="block break-words text-xs font-bold text-[#F6EEE1] sm:text-sm">{ingredient.name}</span>
               <span className="block text-[11px] text-[#D7C0A2]">{selectionLabel ?? price(supplementTarget)}</span>
