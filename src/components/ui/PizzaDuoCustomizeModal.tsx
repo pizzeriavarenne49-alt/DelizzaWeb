@@ -41,6 +41,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
   const dialog = useRef<HTMLDivElement>(null);
   const summary = useRef<HTMLElement>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
+  const confirmLock = useRef(false);
   const left = eligible.find((recipe) => recipe.id === leftId);
   const right = eligible.find((recipe) => recipe.id === rightId);
   const current = side === "left" ? left : right;
@@ -102,6 +103,11 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
       });
     }
   }
+  function confirm() {
+    if (confirmLock.current || !left || !right || !canConfirm) return;
+    confirmLock.current = true;
+    onConfirm(createPizzaDuoComposition(left, right), quantity);
+  }
   return (
     <div ref={dialog} className="fixed inset-0 z-[9991] flex items-end justify-center bg-black/70 backdrop-blur-sm md:items-center" role="dialog" aria-modal="true" aria-labelledby="pizza-duo-title"
       onKeyDown={(event) => {
@@ -122,7 +128,8 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
           <button type="button" onClick={onClose} className="size-11 shrink-0 rounded-full bg-[#252525] text-xl text-[#F5F5F5]" aria-label="Fermer le configurateur">×</button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-          <p className="mb-4 text-[13px] text-[#d8cfbf]">Choisissez une recette par moitié. Vous pouvez mélanger les bases ou choisir deux fois la même recette.</p>
+          <p className="mb-2 text-[13px] text-[#d8cfbf]">Choisissez une recette par moitié. Vous pouvez mélanger les bases ou choisir deux fois la même recette.</p>
+          <p className="mb-4 text-[12px] text-[#b9a88d]">La Pizza Duo est proposée sans supplément ni autre modification.</p>
           <div className="mb-5 rounded-[22px] border border-[#d4a053]/20 bg-[#211911] px-5 py-5">
             <PizzaDuoVisual left={left} right={right} />
           </div>
@@ -143,7 +150,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
             </div>
             {selectionRemoved && <p role="status" className="mb-3 rounded-lg bg-[#392825] px-3 py-2 text-sm text-[#FFC3B9]">Une recette sélectionnée n’est plus disponible. Choisissez-en une autre.</p>}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {visible.map((recipe) => <button key={recipe.id} type="button" onClick={() => choose(recipe)} aria-pressed={current?.id === recipe.id} className={`group overflow-hidden rounded-[16px] border text-left transition-colors ${current?.id === recipe.id ? "border-[#D4A053] bg-[#D4A053]/15" : "border-[#d4a053]/15 bg-[#211a13] hover:border-[#d4a053]/45"}`}>
+              {visible.map((recipe) => <button key={recipe.id} data-duo-recipe={recipe.id} type="button" onClick={() => choose(recipe)} aria-pressed={current?.id === recipe.id} className={`group overflow-hidden rounded-[16px] border text-left transition-colors ${current?.id === recipe.id ? "border-[#D4A053] bg-[#D4A053]/15" : "border-[#d4a053]/15 bg-[#211a13] hover:border-[#d4a053]/45"}`}>
                 <div className="relative aspect-[2.6] overflow-hidden"><Image src={recipe.image} alt="" fill sizes="(max-width: 640px) 100vw, 300px" className="object-cover transition-transform duration-300 group-hover:scale-105" /></div>
                 <span className="block px-3 pt-3 text-[14px] font-semibold text-[#F5F5F5]">{recipe.name}</span>
                 <span className="block px-3 text-[12px] text-[#D4A053]">Base {baseLabel(recipe.recipeBase)}</span>
@@ -166,7 +173,7 @@ export default function PizzaDuoCustomizeModal({ product, recipes, initial, init
             {!stockAvailable && <p className="mt-2 text-[13px] text-[#E8A0A0]">Stock insuffisant pour cette composition ou cette quantité.</p>}
           </section>}
         </div>
-        <footer className="border-t border-white/10 p-5">{!onlineOrdering.canStartOrder && <p className="mb-2 text-center text-[13px] text-[#E8A0A0]">{onlineOrdering.message ?? "Les commandes en ligne sont indisponibles."}</p>}<button type="button" disabled={!canConfirm} onClick={() => left && right && canConfirm && onConfirm(createPizzaDuoComposition(left, right), quantity)} className="w-full rounded-[18px] bg-[#D4A053] py-4 text-[16px] font-bold text-[#0D0D0D] disabled:cursor-not-allowed disabled:opacity-50">{isEditing ? "Enregistrer les modifications" : "Ajouter au panier"} · {formatPrice(PIZZA_DUO_FIXED_PRICE_CENTS * quantity)} €</button></footer>
+        <footer className="border-t border-white/10 p-5">{!onlineOrdering.canStartOrder && <p className="mb-2 text-center text-[13px] text-[#E8A0A0]">{onlineOrdering.message ?? "Les commandes en ligne sont indisponibles."}</p>}<button data-testid="pizza-duo-confirm" type="button" disabled={!canConfirm} onClick={confirm} className="w-full rounded-[18px] bg-[#D4A053] py-4 text-[16px] font-bold text-[#0D0D0D] disabled:cursor-not-allowed disabled:opacity-50">{isEditing ? "Enregistrer les modifications" : "Ajouter au panier"} · {formatPrice(PIZZA_DUO_FIXED_PRICE_CENTS * quantity)} €</button></footer>
       </div>
     </div>
   );
